@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facturación Electrónica SV</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h2>📄 Facturación SV</h2>
+      </div>
+      <nav class="nav-menu">
+        <button class="nav-item active" data-view="dashboard">
+          <span class="icon">📊</span>
+          Dashboard
+        </button>
+        <button class="nav-item" data-view="nueva-factura">
+          <span class="icon">➕</span>
+          Nueva Factura
+        </button>
+        <button class="nav-item" data-view="facturas">
+          <span class="icon">📋</span>
+          Facturas
+        </button>
+        <button class="nav-item" data-view="clientes">
+          <span class="icon">👥</span>
+          Clientes
+        </button>
+        <button class="nav-item" data-view="productos">
+          <span class="icon">📦</span>
+          Productos
+        </button>
+        <button class="nav-item" data-view="configuracion">
+          <span class="icon">⚙️</span>
+          Configuración
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="header">
+        <h1 id="view-title">Dashboard</h1>
+        <div class="header-actions">
+          <span id="estado-conexion" class="badge badge-warning">Sin conexión</span>
+          <span id="usuario-actual">Usuario</span>
+        </div>
+      </header>
+
+      <div class="content-area">
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view active">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon">📄</div>
+              <div class="stat-info">
+                <h3>Facturas Hoy</h3>
+                <p class="stat-value" id="facturas-hoy">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">💰</div>
+              <div class="stat-info">
+                <h3>Total Hoy</h3>
+                <p class="stat-value" id="total-hoy">$0.00</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">✅</div>
+              <div class="stat-info">
+                <h3>Enviadas a Hacienda</h3>
+                <p class="stat-value" id="enviadas-hacienda">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">⏳</div>
+              <div class="stat-info">
+                <h3>Pendientes</h3>
+                <p class="stat-value" id="pendientes">0</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="recent-section">
+            <h2>Facturas Recientes</h2>
+            <table class="data-table" id="tabla-recientes">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>No. Control</th>
+                  <th>Cliente</th>
+                  <th>Total</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="5" class="text-center">No hay facturas recientes</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Nueva Factura View -->
+        <div id="nueva-factura-view" class="view">
+          <form id="form-factura" class="factura-form">
+            <div class="form-section">
+              <h3>Información del Cliente</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Cliente</label>
+                  <select id="cliente-select" required>
+                    <option value="">Seleccionar cliente...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tipo de Documento</label>
+                  <select id="tipo-dte" required>
+                    <option value="01">Factura</option>
+                    <option value="03">Comprobante Crédito Fiscal</option>
+                    <option value="14">Nota de Crédito</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Condición de Operación</label>
+                  <select id="condicion-operacion">
+                    <option value="1">Contado</option>
+                    <option value="2">Crédito</option>
+                    <option value="3">Otro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3>Items de la Factura</h3>
+              <div class="items-header">
+                <button type="button" class="btn btn-secondary" id="btn-agregar-item">
+                  ➕ Agregar Item
+                </button>
+              </div>
+              <table class="data-table" id="tabla-items">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unit.</th>
+                    <th>Subtotal</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="items-body">
+                  <tr>
+                    <td colspan="5" class="text-center">No hay items agregados</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="form-section">
+              <h3>Resumen</h3>
+              <div class="resumen-grid">
+                <div class="resumen-row">
+                  <span>Subtotal:</span>
+                  <span id="resumen-subtotal">$0.00</span>
+                </div>
+                <div class="resumen-row">
+                  <span>IVA (13%):</span>
+                  <span id="resumen-iva">$0.00</span>
+                </div>
+                <div class="resumen-row total">
+                  <span>Total:</span>
+                  <span id="resumen-total">$0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Generar Factura</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Facturas View -->
+        <div id="facturas-view" class="view">
+          <div class="view-header">
+            <div class="filters">
+              <input type="date" id="fecha-desde" class="form-control">
+              <input type="date" id="fecha-hasta" class="form-control">
+              <select id="filtro-estado" class="form-control">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="FIRMADO">Firmado</option>
+                <option value="ENVIADO">Enviado</option>
+                <option value="ACEPTADO">Aceptado</option>
+                <option value="RECHAZADO">Rechazado</option>
+              </select>
+              <button class="btn btn-primary" id="btn-filtrar">Filtrar</button>
+            </div>
+          </div>
+          <table class="data-table" id="tabla-facturas">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>No. Control</th>
+                <th>Cliente</th>
+                <th>Total</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="6" class="text-center">No hay facturas</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Clientes View -->
+        <div id="clientes-view" class="view">
+          <div class="view-header">
+            <button class="btn btn-primary" id="btn-nuevo-cliente">➕ Nuevo Cliente</button>
+          </div>
+          <table class="data-table" id="tabla-clientes">
+            <thead>
+              <tr>
+                <th>Documento</th>
+                <th>Nombre</th>
+                <th>Teléfono</th>
+                <th>Email</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="5" class="text-center">No hay clientes</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Productos View -->
+        <div id="productos-view" class="view">
+          <div class="view-header">
+            <button class="btn btn-primary" id="btn-nuevo-producto">➕ Nuevo Producto</button>
+          </div>
+          <table class="data-table" id="tabla-productos">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descripción</th>
+                <th>Tipo</th>
+                <th>Precio</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="5" class="text-center">No hay productos</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Configuración View -->
+        <div id="configuracion-view" class="view">
+          <form id="form-configuracion" class="config-form">
+            <div class="form-section">
+              <h3>Información de la Empresa</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>NIT *</label>
+                  <input type="text" id="config-nit" placeholder="0000-000000-000-0" required>
+                </div>
+                <div class="form-group">
+                  <label>Nombre de la Empresa *</label>
+                  <input type="text" id="config-nombre" required>
+                </div>
+                <div class="form-group">
+                  <label>Nombre Comercial</label>
+                  <input type="text" id="config-nombre-comercial">
+                </div>
+                <div class="form-group">
+                  <label>Actividad Económica *</label>
+                  <input type="text" id="config-actividad">
+                </div>
+                <div class="form-group">
+                  <label>Teléfono</label>
+                  <input type="tel" id="config-telefono">
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input type="email" id="config-email">
+                </div>
+                <div class="form-group full-width">
+                  <label>Dirección</label>
+                  <textarea id="config-direccion" rows="2"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h3>Configuración de Hacienda</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Usuario Hacienda</label>
+                  <input type="text" id="config-hacienda-usuario">
+                </div>
+                <div class="form-group">
+                  <label>Contraseña Hacienda</label>
+                  <input type="password" id="config-hacienda-password">
+                </div>
+                <div class="form-group">
+                  <label>Ambiente</label>
+                  <select id="config-hacienda-ambiente">
+                    <option value="pruebas">Pruebas</option>
+                    <option value="produccion">Producción</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Código Establecimiento</label>
+                  <input type="text" id="config-establecimiento">
+                </div>
+                <div class="form-group">
+                  <label>Punto de Venta</label>
+                  <input type="text" id="config-punto-venta">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" id="btn-test-conexion">
+                Probar Conexión
+              </button>
+              <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
