@@ -347,19 +347,79 @@ async function guardarConfiguracion() {
 
 // Agregar item a factura
 function agregarItem() {
-  showNotification('Use el formulario para agregar productos manualmente', 'info');
-  // Aquí se implementaría un modal o formulario para agregar items
+  abrirModalItem();
 }
 
 // Generar factura
 async function generarFactura() {
   try {
-    showNotification('Generando factura...', 'info');
-    // Implementar lógica de generación de factura
-    showNotification('Funcionalidad en desarrollo', 'info');
+    // Validar que haya cliente seleccionado
+    const clienteId = document.getElementById('cliente-select').value;
+    if (!clienteId) {
+      showNotification('Por favor seleccione un cliente', 'error');
+      return;
+    }
+
+    // Validar que haya items
+    if (state.currentFactura.items.length === 0) {
+      showNotification('Por favor agregue al menos un producto', 'error');
+      return;
+    }
+
+    // Obtener datos del cliente
+    const cliente = state.clientes.find(c => c.id === parseInt(clienteId));
+    if (!cliente) {
+      showNotification('Cliente no encontrado', 'error');
+      return;
+    }
+
+    // Calcular totales
+    const resumen = calcularResumenFactura();
+    
+    // Crear objeto de factura
+    const factura = {
+      numero_control: generarNumeroControl(),
+      codigo_generacion: generarCodigoGeneracion(),
+      tipo_dte: document.getElementById('tipo-dte').value,
+      fecha_emision: new Date().toISOString(),
+      cliente_id: cliente.id,
+      cliente_datos: {
+        tipo_documento: cliente.tipo_documento,
+        numero_documento: cliente.numero_documento,
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+        email: cliente.email,
+        direccion: cliente.direccion,
+        municipio: cliente.municipio,
+        departamento: cliente.departamento
+      },
+      items: state.currentFactura.items,
+      subtotal: resumen.subtotalTotal,
+      iva: resumen.totalIva,
+      total: resumen.total,
+      descuento: resumen.totalDescuento,
+      condicion_operacion: document.getElementById('condicion-operacion').value,
+      estado: 'PENDIENTE',
+      json_dte: null // Se generará al firmar
+    };
+
+    // Guardar en base de datos
+    const result = await window.electronAPI.addFactura(factura);
+    
+    if (result) {
+      showNotification('Factura generada exitosamente', 'success');
+      limpiarFormularioFactura();
+      
+      // Actualizar estadísticas
+      await loadInitialData();
+      updateDashboard();
+      
+      // Cambiar a vista de facturas
+      switchView('facturas');
+    }
   } catch (error) {
     console.error('Error generando factura:', error);
-    showNotification('Error al generar factura', 'error');
+    showNotification('Error al generar factura: ' + error.message, 'error');
   }
 }
 
@@ -367,19 +427,126 @@ async function generarFactura() {
 function limpiarFormularioFactura() {
   document.getElementById('form-factura').reset();
   state.currentFactura = { items: [], cliente: null };
-  document.getElementById('items-body').innerHTML = '<tr><td colspan="5" class="text-center">No hay items agregados</td></tr>';
+  document.getElementById('items-body').innerHTML = '<tr><td colspan="6" class="text-center">No hay items agregados</td></tr>';
   actualizarResumenFactura();
 }
 
 // Actualizar resumen de factura
 function actualizarResumenFactura() {
-  const subtotal = state.currentFactura.items.reduce((sum, item) => sum + item.subtotal, 0);
-  const iva = subtotal * 0.13;
-  const total = subtotal + iva;
+  const resumen = calcularResumenFactura();
   
-  document.getElementById('resumen-subtotal').textContent = formatCurrency(subtotal);
-  document.getElementById('resumen-iva').textContent = formatCurrency(iva);
-  document.getElementById('resumen-total').textContent = formatCurrency(total);
+  document.getElementById('resumen-subtotal-gravado').textContent = formatCurrency(resumen.subtotalGravado);
+  document.getElementById('resumen-subtotal-exento').textContent = formatCurrency(resumen.subtotalExento);
+  document.getElementById('resumen-subtotal').textContent = formatCurrency(resumen.subtotalTotal);
+  document.getElementById('resumen-iva').textContent = formatCurrency(resumen.totalIva);
+  document.getElementById('resumen-total').textContent = formatCurrency(resumen.total);
+  document.getElementById('resumen-letras').textContent = numeroALetras(resumen.total);
+}
+
+// Calcular resumen de factura
+function calcularResumenFactura() {
+  let subtotalGravado = 0;
+  let subtotalExento = 0;
+  let totalIva = 0;
+  let totalDescuento = 0;
+
+  state.currentFactura.items.forEach(item => {
+    const subtotal = (item.cantidad * item.precioUnitario) - item.descuento;
+    
+    if (item.exento) {
+      subtotalExento += subtotal;
+    } else {
+      subtotalGravado += subtotal;
+      totalIva += subtotal * 0.13;
+    }
+    
+    totalDescuento += item.descuento;
+  });
+
+  const subtotalTotal = subtotalGravado + subtotalExento;
+  const total = subtotalTotal + totalIva;
+
+  return {
+    subtotalGravado,
+    subtotalExento,
+    subtotalTotal,
+    totalIva,
+    total,
+    totalDescuento
+  };
+}
+
+// Generar número de control
+function generarNumeroControl() {
+  const config = state.configuracion || {};
+  const tipoDoc = document.getElementById('tipo-dte').value;
+  const establecimiento = config.codigo_establecimiento || '0001';
+  const puntoVenta = config.punto_venta || '001';
+  const numero = String(state.facturas.length + 1).padStart(15, '0');
+  
+  return `DTE-${tipoDoc}-${establecimiento}-${puntoVenta}-${numero}`;
+}
+
+// Generar código de generación (UUID)
+function generarCodigoGeneracion() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16).toUpperCase();
+  });
+}
+
+// Convertir número a letras (implementación del helper)
+function numeroALetras(numero) {
+  const unidades = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'];
+  const decenas = ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const especiales = ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE'];
+  const centenas = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+
+  function convertirGrupo(n) {
+    let texto = '';
+    const c = Math.floor(n / 100);
+    const d = Math.floor((n % 100) / 10);
+    const u = n % 10;
+
+    if (c > 0) {
+      texto += (c === 1 && d === 0 && u === 0) ? 'CIEN' : centenas[c];
+    }
+
+    if (d === 1 && u > 0) {
+      if (texto) texto += ' ';
+      texto += especiales[u];
+    } else {
+      if (d > 0) {
+        if (texto) texto += ' ';
+        texto += decenas[d];
+      }
+      if (u > 0) {
+        if (texto) texto += ' Y ';
+        texto += unidades[u];
+      }
+    }
+
+    return texto;
+  }
+
+  const entero = Math.floor(numero);
+  const decimales = Math.round((numero - entero) * 100);
+
+  let resultado = '';
+
+  if (entero === 0) {
+    resultado = 'CERO';
+  } else if (entero < 1000) {
+    resultado = convertirGrupo(entero);
+  } else if (entero < 1000000) {
+    const miles = Math.floor(entero / 1000);
+    const resto = entero % 1000;
+    resultado = (miles === 1 ? 'MIL' : convertirGrupo(miles) + ' MIL');
+    if (resto > 0) resultado += ' ' + convertirGrupo(resto);
+  }
+
+  return `${resultado} DÓLARES CON ${decimales}/100`;
 }
 
 // Utilidades
@@ -764,3 +931,149 @@ window.eliminarProducto = async function(id) {
     showNotification('Error al eliminar producto: ' + error.message, 'error');
   }
 };
+
+// ========== CONTROLADOR DE ITEMS DE FACTURA ==========
+
+// Abrir modal para agregar item
+function abrirModalItem() {
+  const modal = document.getElementById('modal-item');
+  const select = document.getElementById('item-producto');
+  
+  // Limpiar y cargar productos
+  select.innerHTML = '<option value="">Seleccionar producto...</option>';
+  state.productos.forEach(p => {
+    const option = document.createElement('option');
+    option.value = p.id;
+    option.textContent = `${p.codigo} - ${p.descripcion} - ${formatCurrency(p.precio)}`;
+    option.dataset.precio = p.precio;
+    option.dataset.exento = p.exento;
+    option.dataset.descripcion = p.descripcion;
+    option.dataset.codigo = p.codigo;
+    option.dataset.unidadMedida = p.unidad_medida;
+    select.appendChild(option);
+  });
+  
+  // Limpiar formulario
+  document.getElementById('form-item').reset();
+  document.getElementById('item-precio').value = '';
+  document.getElementById('item-cantidad').value = '1';
+  document.getElementById('item-descuento').value = '0';
+  
+  modal.classList.add('active');
+}
+
+// Cerrar modal de item
+function cerrarModalItem() {
+  const modal = document.getElementById('modal-item');
+  modal.classList.remove('active');
+}
+
+// Cuando se selecciona un producto, mostrar su precio
+document.addEventListener('DOMContentLoaded', () => {
+  const productoSelect = document.getElementById('item-producto');
+  const precioInput = document.getElementById('item-precio');
+  
+  if (productoSelect && precioInput) {
+    productoSelect.addEventListener('change', (e) => {
+      const selectedOption = e.target.options[e.target.selectedIndex];
+      if (selectedOption.value) {
+        precioInput.value = selectedOption.dataset.precio;
+      } else {
+        precioInput.value = '';
+      }
+    });
+  }
+  
+  // Manejar envío del formulario de item
+  const formItem = document.getElementById('form-item');
+  if (formItem) {
+    formItem.addEventListener('submit', (e) => {
+      e.preventDefault();
+      agregarItemAFactura();
+    });
+  }
+});
+
+// Agregar item a la factura
+function agregarItemAFactura() {
+  const productoSelect = document.getElementById('item-producto');
+  const selectedOption = productoSelect.options[productoSelect.selectedIndex];
+  
+  if (!selectedOption.value) {
+    showNotification('Por favor seleccione un producto', 'error');
+    return;
+  }
+  
+  const cantidad = parseFloat(document.getElementById('item-cantidad').value);
+  const precio = parseFloat(document.getElementById('item-precio').value);
+  const descuento = parseFloat(document.getElementById('item-descuento').value) || 0;
+  
+  const item = {
+    id: Date.now(), // ID temporal para el item
+    productoId: parseInt(selectedOption.value),
+    codigo: selectedOption.dataset.codigo,
+    descripcion: selectedOption.dataset.descripcion,
+    cantidad: cantidad,
+    precioUnitario: precio,
+    descuento: descuento,
+    exento: selectedOption.dataset.exento === '1',
+    unidadMedida: selectedOption.dataset.unidadMedida
+  };
+  
+  // Agregar a la lista de items
+  state.currentFactura.items.push(item);
+  
+  // Actualizar tabla
+  actualizarTablaItems();
+  
+  // Actualizar resumen
+  actualizarResumenFactura();
+  
+  // Cerrar modal
+  cerrarModalItem();
+  
+  showNotification('Producto agregado a la factura', 'success');
+}
+
+// Actualizar tabla de items
+function actualizarTablaItems() {
+  const tbody = document.getElementById('items-body');
+  
+  if (state.currentFactura.items.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay items agregados</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = state.currentFactura.items.map(item => {
+    const subtotal = (item.cantidad * item.precioUnitario) - item.descuento;
+    const iva = item.exento ? 0 : subtotal * 0.13;
+    
+    return `
+      <tr>
+        <td>
+          <strong>${item.codigo}</strong><br>
+          <small>${item.descripcion}</small>
+        </td>
+        <td>${item.cantidad}</td>
+        <td>${formatCurrency(item.precioUnitario)}</td>
+        <td>${item.exento ? '<span class="badge badge-warning">Exento</span>' : formatCurrency(iva)}</td>
+        <td><strong>${formatCurrency(subtotal)}</strong></td>
+        <td>
+          <button class="btn btn-small btn-danger" onclick="eliminarItemFactura(${item.id})">×</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Eliminar item de la factura
+window.eliminarItemFactura = function(itemId) {
+  state.currentFactura.items = state.currentFactura.items.filter(item => item.id !== itemId);
+  actualizarTablaItems();
+  actualizarResumenFactura();
+  showNotification('Producto eliminado de la factura', 'info');
+};
+
+// Hacer funciones globales
+window.cerrarModalItem = cerrarModalItem;
+window.abrirModalItem = abrirModalItem;
