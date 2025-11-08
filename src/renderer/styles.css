@@ -123,6 +123,7 @@ body {
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
+  display: inline-block;
 }
 
 .badge-warning {
@@ -133,6 +134,16 @@ body {
 .badge-success {
   background-color: #d1fae5;
   color: #065f46;
+}
+
+.badge-info {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
 }
 
 .content-area {

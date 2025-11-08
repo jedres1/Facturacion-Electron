@@ -227,6 +227,30 @@ class DatabaseManager {
     );
   }
 
+  updateProducto(id, producto) {
+    const stmt = this.db.prepare(`
+      UPDATE productos 
+      SET codigo = ?, descripcion = ?, tipo = ?, precio = ?, unidad_medida = ?,
+          tributos = ?, exento = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(
+      producto.codigo, producto.descripcion, producto.tipo, producto.precio,
+      producto.unidad_medida, JSON.stringify(producto.tributos || []),
+      producto.exento || 0, id
+    );
+  }
+
+  deleteProducto(id) {
+    const stmt = this.db.prepare('DELETE FROM productos WHERE id = ?');
+    return stmt.run(id);
+  }
+
+  getProductoById(id) {
+    const stmt = this.db.prepare('SELECT * FROM productos WHERE id = ?');
+    return stmt.get(id);
+  }
+
   // Métodos para Facturas
   getFacturas(filtros = {}) {
     let query = 'SELECT * FROM facturas WHERE 1=1';

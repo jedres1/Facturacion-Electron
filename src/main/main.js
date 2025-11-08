@@ -79,6 +79,18 @@ ipcMain.handle('db:addProducto', async (event, producto) => {
   return db.addProducto(producto);
 });
 
+ipcMain.handle('db:updateProducto', async (event, { id, producto }) => {
+  return db.updateProducto(id, producto);
+});
+
+ipcMain.handle('db:deleteProducto', async (event, id) => {
+  return db.deleteProducto(id);
+});
+
+ipcMain.handle('db:getProductoById', async (event, id) => {
+  return db.getProductoById(id);
+});
+
 ipcMain.handle('db:getFacturas', async (event, filtros) => {
   return db.getFacturas(filtros);
 });

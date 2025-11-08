@@ -211,19 +211,29 @@ async function loadProductos() {
     const tbody = document.querySelector('#tabla-productos tbody');
     
     if (state.productos.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay productos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center">No hay productos</td></tr>';
     } else {
-      tbody.innerHTML = state.productos.map(p => `
-        <tr>
-          <td>${p.codigo}</td>
-          <td>${p.descripcion}</td>
-          <td>${p.tipo}</td>
-          <td>${formatCurrency(p.precio)}</td>
-          <td>
-            <button class="btn btn-small btn-primary" onclick="editarProducto(${p.id})">Editar</button>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = state.productos.map(p => {
+        const tipoNombre = getTipoProductoNombre(p.tipo);
+        const tieneIVA = !p.exento;
+        const precioFinal = tieneIVA ? p.precio * 1.13 : p.precio;
+        const ivaTexto = tieneIVA ? '13%' : 'Exento';
+        
+        return `
+          <tr>
+            <td><strong>${p.codigo}</strong></td>
+            <td>${p.descripcion}</td>
+            <td><span class="badge badge-info">${tipoNombre}</span></td>
+            <td>${formatCurrency(p.precio)}</td>
+            <td><span class="badge ${tieneIVA ? 'badge-success' : 'badge-warning'}">${ivaTexto}</span></td>
+            <td><strong>${formatCurrency(precioFinal)}</strong></td>
+            <td>
+              <button class="btn btn-small btn-primary" onclick="editarProducto(${p.id})">Editar</button>
+              <button class="btn btn-small btn-danger" onclick="eliminarProducto(${p.id})">Eliminar</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
   } catch (error) {
     console.error('Error cargando productos:', error);
@@ -298,7 +308,13 @@ function setupEventListeners() {
   
   // Nuevo producto
   document.getElementById('btn-nuevo-producto')?.addEventListener('click', () => {
-    showNotification('Funcionalidad en desarrollo', 'info');
+    abrirModalProducto();
+  });
+  
+  // Form producto
+  document.getElementById('form-producto')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await guardarProducto();
   });
 }
 
@@ -395,6 +411,17 @@ function showNotification(message, type = 'info') {
   console.log(`[${type.toUpperCase()}] ${message}`);
   // Aquí se puede implementar un sistema de notificaciones toast
   alert(message);
+}
+
+// Obtener nombre del tipo de producto
+function getTipoProductoNombre(tipo) {
+  const tipos = {
+    '1': 'Bien',
+    '2': 'Servicio',
+    '3': 'Ambos',
+    '4': 'Otros'
+  };
+  return tipos[tipo] || 'Desconocido';
 }
 
 // Funciones globales para botones
@@ -559,5 +586,181 @@ window.abrirModalCliente = abrirModalCliente;
 
 window.editarProducto = function(id) {
   console.log('Editar producto:', id);
-  showNotification('Funcionalidad en desarrollo', 'info');
+  const producto = state.productos.find(p => p.id === id);
+  if (producto) {
+    abrirModalProducto(producto);
+  }
+};
+
+// ========== CONTROLADOR DE PRODUCTOS ==========
+
+// Abrir modal para nuevo producto o editar existente
+function abrirModalProducto(producto = null) {
+  const modal = document.getElementById('modal-producto');
+  const titulo = document.getElementById('modal-producto-titulo');
+  const form = document.getElementById('form-producto');
+  
+  // Limpiar formulario
+  form.reset();
+  
+  if (producto) {
+    // Modo edición
+    titulo.textContent = 'Editar Producto/Servicio';
+    document.getElementById('producto-id').value = producto.id;
+    document.getElementById('producto-tipo').value = producto.tipo;
+    document.getElementById('producto-codigo').value = producto.codigo;
+    document.getElementById('producto-descripcion').value = producto.descripcion;
+    document.getElementById('producto-precio').value = producto.precio;
+    document.getElementById('producto-unidad').value = producto.unidad_medida || '99';
+    document.getElementById('producto-iva').value = producto.exento ? '0' : '1';
+    
+    // Cargar tributos si existen
+    const tributos = producto.tributos ? JSON.parse(producto.tributos) : [];
+    document.getElementById('producto-notas').value = producto.notas || '';
+  } else {
+    // Modo nuevo
+    titulo.textContent = 'Nuevo Producto/Servicio';
+    document.getElementById('producto-id').value = '';
+    document.getElementById('producto-iva').value = '1'; // Por defecto con IVA
+  }
+  
+  modal.classList.add('active');
+}
+
+// Cerrar modal de producto
+function cerrarModalProducto() {
+  const modal = document.getElementById('modal-producto');
+  modal.classList.remove('active');
+  document.getElementById('form-producto').reset();
+}
+
+// Guardar producto (nuevo o editar)
+async function guardarProducto() {
+  try {
+    const productoId = document.getElementById('producto-id').value;
+    const tipoProducto = document.getElementById('producto-tipo').value;
+    const exento = document.getElementById('producto-iva').value === '0';
+    
+    // Preparar tributos
+    const tributos = [];
+    if (!exento) {
+      tributos.push({
+        codigo: '20',
+        descripcion: 'Impuesto al Valor Agregado 13%',
+        valor: 0.13
+      });
+    }
+    
+    const productoData = {
+      tipo: tipoProducto,
+      codigo: document.getElementById('producto-codigo').value,
+      descripcion: document.getElementById('producto-descripcion').value,
+      precio: parseFloat(document.getElementById('producto-precio').value),
+      unidad_medida: document.getElementById('producto-unidad').value,
+      tributos: tributos,
+      exento: exento ? 1 : 0,
+      notas: document.getElementById('producto-notas').value
+    };
+    
+    if (productoId) {
+      // Actualizar producto existente
+      const result = await window.electronAPI.updateProducto(productoId, productoData);
+      
+      if (result) {
+        showNotification('Producto actualizado exitosamente', 'success');
+        cerrarModalProducto();
+        
+        // Recargar lista de productos
+        await loadProductos();
+      }
+    } else {
+      // Crear nuevo producto
+      const result = await window.electronAPI.addProducto(productoData);
+      
+      if (result) {
+        showNotification('Producto guardado exitosamente', 'success');
+        cerrarModalProducto();
+        
+        // Recargar lista de productos
+        await loadProductos();
+      }
+    }
+  } catch (error) {
+    console.error('Error guardando producto:', error);
+    showNotification('Error al guardar producto: ' + error.message, 'error');
+  }
+}
+
+// Validar código de producto único
+async function validarCodigoProducto(codigo, productoId = null) {
+  const productos = await window.electronAPI.getProductos();
+  const existe = productos.some(p => 
+    p.codigo.toLowerCase() === codigo.toLowerCase() && 
+    (!productoId || p.id !== parseInt(productoId))
+  );
+  
+  if (existe) {
+    showNotification('El código de producto ya existe', 'error');
+    return false;
+  }
+  
+  return true;
+}
+
+// Calcular precio con IVA
+function calcularPrecioConIVA(precio, tieneIVA) {
+  if (tieneIVA) {
+    return precio * 1.13;
+  }
+  return precio;
+}
+
+// Listener para mostrar precio con IVA
+document.addEventListener('DOMContentLoaded', () => {
+  const precioInput = document.getElementById('producto-precio');
+  const ivaSelect = document.getElementById('producto-iva');
+  
+  if (precioInput && ivaSelect) {
+    const actualizarPreview = () => {
+      const precio = parseFloat(precioInput.value) || 0;
+      const tieneIVA = ivaSelect.value === '1';
+      const precioConIVA = calcularPrecioConIVA(precio, tieneIVA);
+      
+      // Puedes mostrar esto en algún lugar del formulario si lo deseas
+      console.log(`Precio base: $${precio.toFixed(2)}, Con IVA: $${precioConIVA.toFixed(2)}`);
+    };
+    
+    precioInput.addEventListener('input', actualizarPreview);
+    ivaSelect.addEventListener('change', actualizarPreview);
+  }
+});
+
+// Hacer funciones globales para el modal
+window.cerrarModalProducto = cerrarModalProducto;
+window.abrirModalProducto = abrirModalProducto;
+
+window.editarProducto = function(id) {
+  console.log('Editar producto:', id);
+  const producto = state.productos.find(p => p.id === id);
+  if (producto) {
+    abrirModalProducto(producto);
+  }
+};
+
+// Eliminar producto
+window.eliminarProducto = async function(id) {
+  const producto = state.productos.find(p => p.id === id);
+  if (!producto) return;
+  
+  const confirmacion = confirm(`¿Estás seguro de eliminar el producto "${producto.descripcion}"?`);
+  if (!confirmacion) return;
+  
+  try {
+    await window.electronAPI.deleteProducto(id);
+    showNotification('Producto eliminado exitosamente', 'success');
+    await loadProductos();
+  } catch (error) {
+    console.error('Error eliminando producto:', error);
+    showNotification('Error al eliminar producto: ' + error.message, 'error');
+  }
 };
