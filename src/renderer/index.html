@@ -362,6 +362,102 @@
     </main>
   </div>
 
+  <!-- Modal para ver detalle de factura -->
+  <div id="modal-ver-factura" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2>Detalle de Factura</h2>
+        <button class="close-modal" onclick="cerrarModalVerFactura()">×</button>
+      </div>
+      <div class="factura-detalle">
+        <!-- Información de la factura -->
+        <div class="factura-info">
+          <div class="info-row">
+            <span class="info-label">Número de Control:</span>
+            <span id="factura-numero-control" class="info-value"></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Código de Generación:</span>
+            <span id="factura-codigo-generacion" class="info-value"></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Fecha de Emisión:</span>
+            <span id="factura-fecha" class="info-value"></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Estado:</span>
+            <span id="factura-estado-badge" class="info-value"></span>
+          </div>
+        </div>
+
+        <!-- Información del cliente -->
+        <div class="factura-section">
+          <h3>Cliente</h3>
+          <div class="info-row">
+            <span class="info-label">Nombre:</span>
+            <span id="factura-cliente-nombre" class="info-value"></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Documento:</span>
+            <span id="factura-cliente-documento" class="info-value"></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Dirección:</span>
+            <span id="factura-cliente-direccion" class="info-value"></span>
+          </div>
+        </div>
+
+        <!-- Items de la factura -->
+        <div class="factura-section">
+          <h3>Detalle de Productos/Servicios</h3>
+          <table class="data-table" id="factura-items-tabla">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Precio Unit.</th>
+                <th>IVA</th>
+                <th>Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="factura-items-body">
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Resumen -->
+        <div class="factura-section">
+          <h3>Resumen</h3>
+          <div class="factura-resumen">
+            <div class="info-row">
+              <span class="info-label">Subtotal:</span>
+              <span id="factura-subtotal" class="info-value"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">IVA (13%):</span>
+              <span id="factura-iva" class="info-value"></span>
+            </div>
+            <div class="info-row total-row">
+              <span class="info-label">Total:</span>
+              <span id="factura-total" class="info-value"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="form-actions" style="margin-top: 2rem;">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalVerFactura()">Cerrar</button>
+          <button type="button" class="btn btn-success" id="btn-firmar-factura" style="display: none;">
+            🔐 Firmar Documento
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-enviar-factura" style="display: none;">
+            📤 Enviar a Hacienda
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal para agregar item a factura -->
   <div id="modal-item" class="modal">
     <div class="modal-content" style="max-width: 500px;">
@@ -447,8 +543,8 @@
         </div>
 
         <div class="form-group">
-          <label>Departamento</label>
-          <select id="cliente-departamento">
+          <label>Departamento *</label>
+          <select id="cliente-departamento" required>
             <option value="">Seleccionar...</option>
             <option value="01">Ahuachapán</option>
             <option value="02">Santa Ana</option>
@@ -468,8 +564,10 @@
         </div>
 
         <div class="form-group">
-          <label>Municipio</label>
-          <input type="text" id="cliente-municipio">
+          <label>Municipio *</label>
+          <select id="cliente-municipio" required>
+            <option value="">Seleccione primero un departamento...</option>
+          </select>
         </div>
 
         <div class="form-group full-width">

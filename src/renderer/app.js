@@ -11,6 +11,300 @@ let state = {
   }
 };
 
+// Municipios de El Salvador por departamento (Actualizado 2025)
+const municipiosPorDepartamento = {
+  '01': [ // Ahuachapán
+    { codigo: '01', nombre: 'Ahuachapán' },
+    { codigo: '02', nombre: 'Apaneca' },
+    { codigo: '03', nombre: 'Atiquizaya' },
+    { codigo: '04', nombre: 'Concepción de Ataco' },
+    { codigo: '05', nombre: 'El Refugio' },
+    { codigo: '06', nombre: 'Guaymango' },
+    { codigo: '07', nombre: 'Jujutla' },
+    { codigo: '08', nombre: 'San Francisco Menéndez' },
+    { codigo: '09', nombre: 'San Lorenzo' },
+    { codigo: '10', nombre: 'San Pedro Puxtla' },
+    { codigo: '11', nombre: 'Tacuba' },
+    { codigo: '12', nombre: 'Turín' }
+  ],
+  '02': [ // Santa Ana
+    { codigo: '01', nombre: 'Candelaria de la Frontera' },
+    { codigo: '02', nombre: 'Chalchuapa' },
+    { codigo: '03', nombre: 'Coatepeque' },
+    { codigo: '04', nombre: 'El Congo' },
+    { codigo: '05', nombre: 'El Porvenir' },
+    { codigo: '06', nombre: 'Masahuat' },
+    { codigo: '07', nombre: 'Metapán' },
+    { codigo: '08', nombre: 'San Antonio Pajonal' },
+    { codigo: '09', nombre: 'San Sebastián Salitrillo' },
+    { codigo: '10', nombre: 'Santa Ana' },
+    { codigo: '11', nombre: 'Santa Rosa Guachipilín' },
+    { codigo: '12', nombre: 'Santiago de la Frontera' },
+    { codigo: '13', nombre: 'Texistepeque' }
+  ],
+  '03': [ // Sonsonate
+    { codigo: '01', nombre: 'Acajutla' },
+    { codigo: '02', nombre: 'Armenia' },
+    { codigo: '03', nombre: 'Caluco' },
+    { codigo: '04', nombre: 'Cuisnahuat' },
+    { codigo: '05', nombre: 'Izalco' },
+    { codigo: '06', nombre: 'Juayúa' },
+    { codigo: '07', nombre: 'Nahuizalco' },
+    { codigo: '08', nombre: 'Nahulingo' },
+    { codigo: '09', nombre: 'Salcoatitán' },
+    { codigo: '10', nombre: 'San Antonio del Monte' },
+    { codigo: '11', nombre: 'San Julián' },
+    { codigo: '12', nombre: 'Santa Catarina Masahuat' },
+    { codigo: '13', nombre: 'Santa Isabel Ishuatán' },
+    { codigo: '14', nombre: 'Santo Domingo de Guzmán' },
+    { codigo: '15', nombre: 'Sonsonate' },
+    { codigo: '16', nombre: 'Sonzacate' }
+  ],
+  '04': [ // Chalatenango
+    { codigo: '01', nombre: 'Agua Caliente' },
+    { codigo: '02', nombre: 'Arcatao' },
+    { codigo: '03', nombre: 'Azacualpa' },
+    { codigo: '04', nombre: 'Chalatenango' },
+    { codigo: '05', nombre: 'Citalá' },
+    { codigo: '06', nombre: 'Comalapa' },
+    { codigo: '07', nombre: 'Concepción Quezaltepeque' },
+    { codigo: '08', nombre: 'Dulce Nombre de María' },
+    { codigo: '09', nombre: 'El Carrizal' },
+    { codigo: '10', nombre: 'El Paraíso' },
+    { codigo: '11', nombre: 'La Laguna' },
+    { codigo: '12', nombre: 'La Palma' },
+    { codigo: '13', nombre: 'La Reina' },
+    { codigo: '14', nombre: 'Las Vueltas' },
+    { codigo: '15', nombre: 'Nueva Concepción' },
+    { codigo: '16', nombre: 'Nueva Trinidad' },
+    { codigo: '17', nombre: 'Nombre de Jesús' },
+    { codigo: '18', nombre: 'Ojos de Agua' },
+    { codigo: '19', nombre: 'Potonico' },
+    { codigo: '20', nombre: 'San Antonio de la Cruz' },
+    { codigo: '21', nombre: 'San Antonio Los Ranchos' },
+    { codigo: '22', nombre: 'San Fernando' },
+    { codigo: '23', nombre: 'San Francisco Lempa' },
+    { codigo: '24', nombre: 'San Francisco Morazán' },
+    { codigo: '25', nombre: 'San Ignacio' },
+    { codigo: '26', nombre: 'San Isidro Labrador' },
+    { codigo: '27', nombre: 'San José Cancasque' },
+    { codigo: '28', nombre: 'San José Las Flores' },
+    { codigo: '29', nombre: 'San Luis del Carmen' },
+    { codigo: '30', nombre: 'San Miguel de Mercedes' },
+    { codigo: '31', nombre: 'San Rafael' },
+    { codigo: '32', nombre: 'Santa Rita' },
+    { codigo: '33', nombre: 'Tejutla' }
+  ],
+  '05': [ // La Libertad
+    { codigo: '01', nombre: 'Antiguo Cuscatlán' },
+    { codigo: '02', nombre: 'Chiltiupán' },
+    { codigo: '03', nombre: 'Ciudad Arce' },
+    { codigo: '04', nombre: 'Colón' },
+    { codigo: '05', nombre: 'Comasagua' },
+    { codigo: '06', nombre: 'Huizúcar' },
+    { codigo: '07', nombre: 'Jayaque' },
+    { codigo: '08', nombre: 'Jicalapa' },
+    { codigo: '09', nombre: 'La Libertad' },
+    { codigo: '10', nombre: 'Santa Tecla' },
+    { codigo: '11', nombre: 'Nuevo Cuscatlán' },
+    { codigo: '12', nombre: 'San Juan Opico' },
+    { codigo: '13', nombre: 'Quezaltepeque' },
+    { codigo: '14', nombre: 'Sacacoyo' },
+    { codigo: '15', nombre: 'San José Villanueva' },
+    { codigo: '16', nombre: 'San Matías' },
+    { codigo: '17', nombre: 'San Pablo Tacachico' },
+    { codigo: '18', nombre: 'Talnique' },
+    { codigo: '19', nombre: 'Tamanique' },
+    { codigo: '20', nombre: 'Teotepeque' },
+    { codigo: '21', nombre: 'Tepecoyo' },
+    { codigo: '22', nombre: 'Zaragoza' }
+  ],
+  '06': [ // San Salvador
+    { codigo: '01', nombre: 'Aguilares' },
+    { codigo: '02', nombre: 'Apopa' },
+    { codigo: '03', nombre: 'Ayutuxtepeque' },
+    { codigo: '04', nombre: 'Cuscatancingo' },
+    { codigo: '05', nombre: 'Delgado' },
+    { codigo: '06', nombre: 'El Paisnal' },
+    { codigo: '07', nombre: 'Guazapa' },
+    { codigo: '08', nombre: 'Ilopango' },
+    { codigo: '09', nombre: 'Mejicanos' },
+    { codigo: '10', nombre: 'Nejapa' },
+    { codigo: '11', nombre: 'Panchimalco' },
+    { codigo: '12', nombre: 'Rosario de Mora' },
+    { codigo: '13', nombre: 'San Marcos' },
+    { codigo: '14', nombre: 'San Martín' },
+    { codigo: '15', nombre: 'San Salvador' },
+    { codigo: '16', nombre: 'Santiago Texacuangos' },
+    { codigo: '17', nombre: 'Santo Tomás' },
+    { codigo: '18', nombre: 'Soyapango' },
+    { codigo: '19', nombre: 'Tonacatepeque' }
+  ],
+  '07': [ // Cuscatlán
+    { codigo: '01', nombre: 'Candelaria' },
+    { codigo: '02', nombre: 'Cojutepeque' },
+    { codigo: '03', nombre: 'El Carmen' },
+    { codigo: '04', nombre: 'El Rosario' },
+    { codigo: '05', nombre: 'Monte San Juan' },
+    { codigo: '06', nombre: 'Oratorio de Concepción' },
+    { codigo: '07', nombre: 'San Bartolomé Perulapía' },
+    { codigo: '08', nombre: 'San Cristóbal' },
+    { codigo: '09', nombre: 'San José Guayabal' },
+    { codigo: '10', nombre: 'San Pedro Perulapán' },
+    { codigo: '11', nombre: 'San Rafael Cedros' },
+    { codigo: '12', nombre: 'San Ramón' },
+    { codigo: '13', nombre: 'Santa Cruz Analquito' },
+    { codigo: '14', nombre: 'Santa Cruz Michapa' },
+    { codigo: '15', nombre: 'Suchitoto' },
+    { codigo: '16', nombre: 'Tenancingo' }
+  ],
+  '08': [ // La Paz
+    { codigo: '01', nombre: 'Cuyultitán' },
+    { codigo: '02', nombre: 'El Rosario' },
+    { codigo: '03', nombre: 'Jerusalén' },
+    { codigo: '04', nombre: 'Mercedes La Ceiba' },
+    { codigo: '05', nombre: 'Olocuilta' },
+    { codigo: '06', nombre: 'Paraíso de Osorio' },
+    { codigo: '07', nombre: 'San Antonio Masahuat' },
+    { codigo: '08', nombre: 'San Emigdio' },
+    { codigo: '09', nombre: 'San Francisco Chinameca' },
+    { codigo: '10', nombre: 'San Juan Nonualco' },
+    { codigo: '11', nombre: 'San Juan Talpa' },
+    { codigo: '12', nombre: 'San Juan Tepezontes' },
+    { codigo: '13', nombre: 'San Luis La Herradura' },
+    { codigo: '14', nombre: 'San Luis Talpa' },
+    { codigo: '15', nombre: 'San Miguel Tepezontes' },
+    { codigo: '16', nombre: 'San Pedro Masahuat' },
+    { codigo: '17', nombre: 'San Pedro Nonualco' },
+    { codigo: '18', nombre: 'San Rafael Obrajuelo' },
+    { codigo: '19', nombre: 'Santa María Ostuma' },
+    { codigo: '20', nombre: 'Santiago Nonualco' },
+    { codigo: '21', nombre: 'Tapalhuaca' },
+    { codigo: '22', nombre: 'Zacatecoluca' }
+  ],
+  '09': [ // Cabañas
+    { codigo: '01', nombre: 'Cinquera' },
+    { codigo: '02', nombre: 'Dolores' },
+    { codigo: '03', nombre: 'Guacotecti' },
+    { codigo: '04', nombre: 'Ilobasco' },
+    { codigo: '05', nombre: 'Jutiapa' },
+    { codigo: '06', nombre: 'San Isidro' },
+    { codigo: '07', nombre: 'Sensuntepeque' },
+    { codigo: '08', nombre: 'Tejutepeque' },
+    { codigo: '09', nombre: 'Victoria' }
+  ],
+  '10': [ // San Vicente
+    { codigo: '01', nombre: 'Apastepeque' },
+    { codigo: '02', nombre: 'Guadalupe' },
+    { codigo: '03', nombre: 'San Cayetano Istepeque' },
+    { codigo: '04', nombre: 'San Esteban Catarina' },
+    { codigo: '05', nombre: 'San Ildefonso' },
+    { codigo: '06', nombre: 'San Lorenzo' },
+    { codigo: '07', nombre: 'San Sebastián' },
+    { codigo: '08', nombre: 'San Vicente' },
+    { codigo: '09', nombre: 'Santa Clara' },
+    { codigo: '10', nombre: 'Santo Domingo' },
+    { codigo: '11', nombre: 'Tecoluca' },
+    { codigo: '12', nombre: 'Tepetitán' },
+    { codigo: '13', nombre: 'Verapaz' }
+  ],
+  '11': [ // Usulután
+    { codigo: '01', nombre: 'Alegría' },
+    { codigo: '02', nombre: 'Berlín' },
+    { codigo: '03', nombre: 'California' },
+    { codigo: '04', nombre: 'Concepción Batres' },
+    { codigo: '05', nombre: 'El Triunfo' },
+    { codigo: '06', nombre: 'Ereguayquín' },
+    { codigo: '07', nombre: 'Estanzuelas' },
+    { codigo: '08', nombre: 'Jiquilisco' },
+    { codigo: '09', nombre: 'Jucuapa' },
+    { codigo: '10', nombre: 'Jucuarán' },
+    { codigo: '11', nombre: 'Mercedes Umaña' },
+    { codigo: '12', nombre: 'Nueva Granada' },
+    { codigo: '13', nombre: 'Ozatlán' },
+    { codigo: '14', nombre: 'Puerto El Triunfo' },
+    { codigo: '15', nombre: 'San Agustín' },
+    { codigo: '16', nombre: 'San Buenaventura' },
+    { codigo: '17', nombre: 'San Dionisio' },
+    { codigo: '18', nombre: 'San Francisco Javier' },
+    { codigo: '19', nombre: 'Santa Elena' },
+    { codigo: '20', nombre: 'Santa María' },
+    { codigo: '21', nombre: 'Santiago de María' },
+    { codigo: '22', nombre: 'Tecapán' },
+    { codigo: '23', nombre: 'Usulután' }
+  ],
+  '12': [ // San Miguel
+    { codigo: '01', nombre: 'Carolina' },
+    { codigo: '02', nombre: 'Chapeltique' },
+    { codigo: '03', nombre: 'Chinameca' },
+    { codigo: '04', nombre: 'Chirilagua' },
+    { codigo: '05', nombre: 'Ciudad Barrios' },
+    { codigo: '06', nombre: 'Comacarán' },
+    { codigo: '07', nombre: 'El Tránsito' },
+    { codigo: '08', nombre: 'Lolotique' },
+    { codigo: '09', nombre: 'Moncagua' },
+    { codigo: '10', nombre: 'Nueva Guadalupe' },
+    { codigo: '11', nombre: 'Nuevo Edén de San Juan' },
+    { codigo: '12', nombre: 'Quelepa' },
+    { codigo: '13', nombre: 'San Antonio' },
+    { codigo: '14', nombre: 'San Gerardo' },
+    { codigo: '15', nombre: 'San Jorge' },
+    { codigo: '16', nombre: 'San Luis de la Reina' },
+    { codigo: '17', nombre: 'San Miguel' },
+    { codigo: '18', nombre: 'San Rafael Oriente' },
+    { codigo: '19', nombre: 'Sesori' },
+    { codigo: '20', nombre: 'Uluazapa' }
+  ],
+  '13': [ // Morazán
+    { codigo: '01', nombre: 'Arambala' },
+    { codigo: '02', nombre: 'Cacaopera' },
+    { codigo: '03', nombre: 'Chilanga' },
+    { codigo: '04', nombre: 'Corinto' },
+    { codigo: '05', nombre: 'Delicias de Concepción' },
+    { codigo: '06', nombre: 'El Divisadero' },
+    { codigo: '07', nombre: 'El Rosario' },
+    { codigo: '08', nombre: 'Gualococti' },
+    { codigo: '09', nombre: 'Guatajiagua' },
+    { codigo: '10', nombre: 'Joateca' },
+    { codigo: '11', nombre: 'Jocoaitique' },
+    { codigo: '12', nombre: 'Jocoro' },
+    { codigo: '13', nombre: 'Lolotiquillo' },
+    { codigo: '14', nombre: 'Meanguera' },
+    { codigo: '15', nombre: 'Osicala' },
+    { codigo: '16', nombre: 'Perquín' },
+    { codigo: '17', nombre: 'San Carlos' },
+    { codigo: '18', nombre: 'San Fernando' },
+    { codigo: '19', nombre: 'San Francisco Gotera' },
+    { codigo: '20', nombre: 'San Isidro' },
+    { codigo: '21', nombre: 'San Simón' },
+    { codigo: '22', nombre: 'Sensembra' },
+    { codigo: '23', nombre: 'Sociedad' },
+    { codigo: '24', nombre: 'Torola' },
+    { codigo: '25', nombre: 'Yamabal' },
+    { codigo: '26', nombre: 'Yoloaiquín' }
+  ],
+  '14': [ // La Unión
+    { codigo: '01', nombre: 'Anamorós' },
+    { codigo: '02', nombre: 'Bolívar' },
+    { codigo: '03', nombre: 'Concepción de Oriente' },
+    { codigo: '04', nombre: 'Conchagua' },
+    { codigo: '05', nombre: 'El Carmen' },
+    { codigo: '06', nombre: 'El Sauce' },
+    { codigo: '07', nombre: 'Intipucá' },
+    { codigo: '08', nombre: 'La Unión' },
+    { codigo: '09', nombre: 'Lislique' },
+    { codigo: '10', nombre: 'Meanguera del Golfo' },
+    { codigo: '11', nombre: 'Nueva Esparta' },
+    { codigo: '12', nombre: 'Pasaquina' },
+    { codigo: '13', nombre: 'Polorós' },
+    { codigo: '14', nombre: 'San Alejo' },
+    { codigo: '15', nombre: 'San José' },
+    { codigo: '16', nombre: 'Santa Rosa de Lima' },
+    { codigo: '17', nombre: 'Yayantique' },
+    { codigo: '18', nombre: 'Yucuaiquín' }
+  ]
+};
+
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Aplicación iniciada');
@@ -26,6 +320,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Actualizar dashboard
   updateDashboard();
+  
+  // Configurar cambio de departamento para cargar municipios
+  setupDepartamentoMunicipioHandler();
 });
 
 // Configurar navegación
@@ -194,6 +491,7 @@ async function loadClientes() {
           <td>${c.email || 'N/A'}</td>
           <td>
             <button class="btn btn-small btn-primary" onclick="editarCliente(${c.id})">Editar</button>
+            <button class="btn btn-small btn-danger" onclick="eliminarCliente(${c.id})">Eliminar</button>
           </td>
         </tr>
       `).join('');
@@ -316,6 +614,56 @@ function setupEventListeners() {
     e.preventDefault();
     await guardarProducto();
   });
+}
+
+// Configurar manejador de departamento-municipio
+function setupDepartamentoMunicipioHandler() {
+  const departamentoSelect = document.getElementById('cliente-departamento');
+  const municipioSelect = document.getElementById('cliente-municipio');
+  
+  if (departamentoSelect && municipioSelect) {
+    departamentoSelect.addEventListener('change', (e) => {
+      const departamento = e.target.value;
+      cargarMunicipios(departamento);
+    });
+  }
+}
+
+// Cargar municipios según departamento
+function cargarMunicipios(codigoDepartamento) {
+  const municipioSelect = document.getElementById('cliente-municipio');
+  
+  // Limpiar opciones actuales
+  municipioSelect.innerHTML = '<option value="">Seleccionar municipio...</option>';
+  
+  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+    municipioSelect.disabled = true;
+    return;
+  }
+  
+  municipioSelect.disabled = false;
+  
+  // Cargar municipios del departamento seleccionado
+  const municipios = municipiosPorDepartamento[codigoDepartamento];
+  municipios.forEach(municipio => {
+    const option = document.createElement('option');
+    option.value = municipio.codigo;
+    option.textContent = municipio.nombre;
+    municipioSelect.appendChild(option);
+  });
+}
+
+// Obtener nombre del municipio por código
+function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
+  if (!municipiosPorDepartamento[codigoDepartamento]) {
+    return codigoMunicipio;
+  }
+  
+  const municipio = municipiosPorDepartamento[codigoDepartamento].find(
+    m => m.codigo === codigoMunicipio
+  );
+  
+  return municipio ? municipio.nombre : codigoMunicipio;
 }
 
 // Guardar configuración
@@ -592,14 +940,29 @@ function getTipoProductoNombre(tipo) {
 }
 
 // Funciones globales para botones
-window.verFactura = function(id) {
-  console.log('Ver factura:', id);
-  showNotification('Funcionalidad en desarrollo', 'info');
+window.verFactura = async function(id) {
+  const factura = state.facturas.find(f => f.id === id);
+  if (!factura) {
+    showNotification('Factura no encontrada', 'error');
+    return;
+  }
+  
+  abrirModalVerFactura(factura);
 };
 
 window.enviarFactura = async function(id) {
-  console.log('Enviar factura:', id);
-  showNotification('Funcionalidad de envío en desarrollo', 'info');
+  const factura = state.facturas.find(f => f.id === id);
+  if (!factura) {
+    showNotification('Factura no encontrada', 'error');
+    return;
+  }
+  
+  if (factura.estado !== 'FIRMADO') {
+    showNotification('La factura debe estar firmada antes de enviarla', 'warning');
+    return;
+  }
+  
+  await enviarFacturaHacienda(factura);
 };
 
 window.editarCliente = function(id) {
@@ -637,7 +1000,16 @@ function abrirModalCliente(cliente = null) {
     document.getElementById('cliente-telefono').value = cliente.telefono || '';
     document.getElementById('cliente-email').value = cliente.email || '';
     document.getElementById('cliente-departamento').value = cliente.departamento || '';
-    document.getElementById('cliente-municipio').value = cliente.municipio || '';
+    
+    // Cargar municipios del departamento seleccionado
+    if (cliente.departamento) {
+      cargarMunicipios(cliente.departamento);
+      // Esperar un momento para que se carguen los municipios antes de seleccionar
+      setTimeout(() => {
+        document.getElementById('cliente-municipio').value = cliente.municipio || '';
+      }, 50);
+    }
+    
     document.getElementById('cliente-direccion').value = cliente.direccion || '';
     document.getElementById('cliente-giro').value = cliente.giro || '';
   } else {
@@ -675,8 +1047,21 @@ async function guardarCliente() {
     };
     
     if (clienteId) {
-      // Actualizar cliente existente (funcionalidad pendiente en backend)
-      showNotification('Actualización de clientes en desarrollo', 'info');
+      // Actualizar cliente existente
+      const result = await window.electronAPI.updateCliente(parseInt(clienteId), clienteData);
+      
+      if (result) {
+        showNotification('Cliente actualizado exitosamente', 'success');
+        cerrarModalCliente();
+        
+        // Recargar lista de clientes
+        await loadClientes();
+        
+        // Si estamos en vista de nueva factura, actualizar select
+        if (state.currentView === 'nueva-factura') {
+          await loadClientesSelect();
+        }
+      }
     } else {
       // Crear nuevo cliente
       const result = await window.electronAPI.addCliente(clienteData);
@@ -697,6 +1082,43 @@ async function guardarCliente() {
   } catch (error) {
     console.error('Error guardando cliente:', error);
     showNotification('Error al guardar cliente: ' + error.message, 'error');
+  }
+}
+
+// Editar cliente
+async function editarCliente(clienteId) {
+  try {
+    const cliente = state.clientes.find(c => c.id === clienteId);
+    if (cliente) {
+      abrirModalCliente(cliente);
+    } else {
+      showNotification('Cliente no encontrado', 'error');
+    }
+  } catch (error) {
+    console.error('Error al editar cliente:', error);
+    showNotification('Error al cargar cliente', 'error');
+  }
+}
+
+// Eliminar cliente
+async function eliminarCliente(clienteId) {
+  try {
+    const confirmacion = confirm('¿Está seguro de eliminar este cliente? Esta acción no se puede deshacer.');
+    if (!confirmacion) return;
+    
+    const result = await window.electronAPI.deleteCliente(clienteId);
+    
+    if (result) {
+      showNotification('Cliente eliminado exitosamente', 'success');
+      await loadClientes();
+      
+      if (state.currentView === 'nueva-factura') {
+        await loadClientesSelect();
+      }
+    }
+  } catch (error) {
+    console.error('Error eliminando cliente:', error);
+    showNotification('Error al eliminar cliente: ' + error.message, 'error');
   }
 }
 
@@ -1077,3 +1499,218 @@ window.eliminarItemFactura = function(itemId) {
 // Hacer funciones globales
 window.cerrarModalItem = cerrarModalItem;
 window.abrirModalItem = abrirModalItem;
+
+// ========== VISUALIZACIÓN Y ENVÍO DE FACTURAS ==========
+
+// Abrir modal para ver detalle de factura
+function abrirModalVerFactura(factura) {
+  const modal = document.getElementById('modal-ver-factura');
+  
+  // Información de la factura
+  document.getElementById('factura-numero-control').textContent = factura.numero_control || 'N/A';
+  document.getElementById('factura-codigo-generacion').textContent = factura.codigo_generacion || 'N/A';
+  document.getElementById('factura-fecha').textContent = formatDate(factura.fecha_emision);
+  
+  // Badge de estado
+  const estadoBadge = `<span class="badge badge-${getEstadoBadgeClass(factura.estado)}">${factura.estado}</span>`;
+  document.getElementById('factura-estado-badge').innerHTML = estadoBadge;
+  
+  // Información del cliente
+  const clienteData = typeof factura.cliente_datos === 'string' 
+    ? JSON.parse(factura.cliente_datos) 
+    : factura.cliente_datos;
+  
+  document.getElementById('factura-cliente-nombre').textContent = clienteData.nombre || 'N/A';
+  document.getElementById('factura-cliente-documento').textContent = clienteData.numero_documento || 'N/A';
+  document.getElementById('factura-cliente-direccion').textContent = clienteData.direccion || 'N/A';
+  
+  // Items de la factura
+  const items = typeof factura.items === 'string' ? JSON.parse(factura.items) : factura.items;
+  const tbody = document.getElementById('factura-items-body');
+  
+  tbody.innerHTML = items.map(item => {
+    const subtotal = (item.cantidad * item.precioUnitario) - (item.descuento || 0);
+    const iva = item.exento ? 0 : subtotal * 0.13;
+    
+    return `
+      <tr>
+        <td>
+          <strong>${item.codigo}</strong><br>
+          <small>${item.descripcion}</small>
+        </td>
+        <td>${item.cantidad}</td>
+        <td>${formatCurrency(item.precioUnitario)}</td>
+        <td>${item.exento ? '<span class="badge badge-warning">Exento</span>' : formatCurrency(iva)}</td>
+        <td><strong>${formatCurrency(subtotal)}</strong></td>
+      </tr>
+    `;
+  }).join('');
+  
+  // Resumen
+  document.getElementById('factura-subtotal').textContent = formatCurrency(factura.subtotal);
+  document.getElementById('factura-iva').textContent = formatCurrency(factura.iva);
+  document.getElementById('factura-total').textContent = formatCurrency(factura.total);
+  
+  // Mostrar botones según el estado
+  const btnFirmar = document.getElementById('btn-firmar-factura');
+  const btnEnviar = document.getElementById('btn-enviar-factura');
+  
+  btnFirmar.style.display = 'none';
+  btnEnviar.style.display = 'none';
+  
+  if (factura.estado === 'PENDIENTE') {
+    btnFirmar.style.display = 'inline-flex';
+    btnFirmar.onclick = () => firmarFactura(factura.id);
+  }
+  
+  if (factura.estado === 'FIRMADO') {
+    btnEnviar.style.display = 'inline-flex';
+    btnEnviar.onclick = () => enviarFacturaHacienda(factura.id);
+  }
+  
+  modal.classList.add('active');
+}
+
+// Cerrar modal de ver factura
+function cerrarModalVerFactura() {
+  const modal = document.getElementById('modal-ver-factura');
+  modal.classList.remove('active');
+}
+
+// Firmar factura con Puppeteer
+async function firmarFactura(facturaId) {
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    // Verificar configuración
+    if (!state.configuracion) {
+      showNotification('Por favor configure los datos de la empresa primero', 'error');
+      return;
+    }
+    
+    const pinCertificado = prompt('Ingrese el PIN del certificado digital:');
+    if (!pinCertificado) return;
+    
+    const usuarioFirmador = prompt('Ingrese el usuario del Firmador de Hacienda:');
+    if (!usuarioFirmador) return;
+    
+    const passwordFirmador = prompt('Ingrese la contraseña del Firmador de Hacienda:');
+    if (!passwordFirmador) return;
+    
+    showNotification('Firmando documento...', 'info');
+    
+    // Construir documento para firmar
+    const documento = {
+      identificacion: {
+        version: 1,
+        ambiente: state.configuracion.hacienda_ambiente === 'produccion' ? '00' : '01',
+        tipoDte: factura.tipo_dte,
+        numeroControl: factura.numero_control,
+        codigoGeneracion: factura.codigo_generacion,
+        tipoModelo: '1',
+        tipoOperacion: '1',
+        fecEmi: new Date(factura.fecha_emision).toISOString().split('T')[0],
+        horEmi: new Date(factura.fecha_emision).toTimeString().split(' ')[0],
+        tipoMoneda: 'USD'
+      }
+    };
+    
+    // Llamar al firmador
+    const result = await window.electronAPI.firmarDocumento({
+      documento: documento,
+      pin: pinCertificado,
+      usuario: usuarioFirmador,
+      password: passwordFirmador
+    });
+    
+    if (result.success) {
+      showNotification('Documento firmado exitosamente', 'success');
+      
+      // Actualizar estado en base de datos
+      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      
+      cerrarModalVerFactura();
+      await loadFacturas();
+    } else {
+      showNotification('Error al firmar: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error firmando factura:', error);
+    showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
+}
+
+// Enviar factura a Hacienda
+async function enviarFacturaHacienda(facturaId) {
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    if (!state.configuracion || !state.configuracion.hacienda_usuario) {
+      showNotification('Por favor configure las credenciales de Hacienda primero', 'error');
+      return;
+    }
+    
+    const confirmacion = confirm('¿Está seguro de enviar esta factura al Ministerio de Hacienda?');
+    if (!confirmacion) return;
+    
+    showNotification('Autenticando con Hacienda...', 'info');
+    
+    // Autenticar con Hacienda
+    const authResult = await window.electronAPI.autenticar({
+      usuario: state.configuracion.hacienda_usuario,
+      password: state.configuracion.hacienda_password,
+      ambiente: state.configuracion.hacienda_ambiente
+    });
+    
+    if (!authResult.success) {
+      showNotification('Error de autenticación: ' + authResult.error, 'error');
+      return;
+    }
+    
+    showNotification('Enviando DTE a Hacienda...', 'info');
+    
+    // Enviar DTE
+    const dteResult = await window.electronAPI.enviarDTE({
+      dte: {
+        emisor: {
+          nit: state.configuracion.nit
+        },
+        documento: JSON.parse(factura.json_dte || '{}')
+      },
+      token: authResult.token
+    });
+    
+    if (dteResult.success) {
+      showNotification('Factura enviada exitosamente a Hacienda', 'success');
+      
+      // Actualizar estado
+      await window.electronAPI.updateFacturaEstado(
+        facturaId, 
+        'ENVIADO', 
+        dteResult.resultado?.selloRecepcion || null
+      );
+      
+      cerrarModalVerFactura();
+      await loadFacturas();
+    } else {
+      showNotification('Error al enviar: ' + dteResult.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error enviando factura:', error);
+    showNotification('Error al enviar factura: ' + error.message, 'error');
+  }
+}
+
+// Hacer funciones globales
+window.cerrarModalVerFactura = cerrarModalVerFactura;
+window.editarCliente = editarCliente;
+window.eliminarCliente = eliminarCliente;
+window.cerrarModalCliente = cerrarModalCliente;

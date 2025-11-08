@@ -99,6 +99,10 @@ ipcMain.handle('db:addFactura', async (event, factura) => {
   return db.addFactura(factura);
 });
 
+ipcMain.handle('db:updateFacturaEstado', async (event, { id, estado, selloRecepcion }) => {
+  return db.updateFacturaEstado(id, estado, selloRecepcion);
+});
+
 ipcMain.handle('db:getConfiguracion', async () => {
   return db.getConfiguracion();
 });
