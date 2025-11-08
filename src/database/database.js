@@ -183,6 +183,31 @@ class DatabaseManager {
     );
   }
 
+  updateCliente(id, cliente) {
+    const stmt = this.db.prepare(`
+      UPDATE clientes 
+      SET tipo_documento = ?, numero_documento = ?, nombre = ?, nombre_comercial = ?,
+          telefono = ?, email = ?, direccion = ?, municipio = ?, departamento = ?,
+          giro = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(
+      cliente.tipo_documento, cliente.numero_documento, cliente.nombre,
+      cliente.nombre_comercial, cliente.telefono, cliente.email,
+      cliente.direccion, cliente.municipio, cliente.departamento, cliente.giro, id
+    );
+  }
+
+  deleteCliente(id) {
+    const stmt = this.db.prepare('DELETE FROM clientes WHERE id = ?');
+    return stmt.run(id);
+  }
+
+  getClienteById(id) {
+    const stmt = this.db.prepare('SELECT * FROM clientes WHERE id = ?');
+    return stmt.get(id);
+  }
+
   // Métodos para Productos
   getProductos() {
     const stmt = this.db.prepare('SELECT * FROM productos ORDER BY descripcion');

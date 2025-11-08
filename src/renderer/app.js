@@ -287,7 +287,13 @@ function setupEventListeners() {
   
   // Nuevo cliente
   document.getElementById('btn-nuevo-cliente')?.addEventListener('click', () => {
-    showNotification('Funcionalidad en desarrollo', 'info');
+    abrirModalCliente();
+  });
+  
+  // Form cliente
+  document.getElementById('form-cliente')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await guardarCliente();
   });
   
   // Nuevo producto
@@ -404,8 +410,152 @@ window.enviarFactura = async function(id) {
 
 window.editarCliente = function(id) {
   console.log('Editar cliente:', id);
+  const cliente = state.clientes.find(c => c.id === id);
+  if (cliente) {
+    abrirModalCliente(cliente);
+  }
+};
+
+window.editarProducto = function(id) {
+  console.log('Editar producto:', id);
   showNotification('Funcionalidad en desarrollo', 'info');
 };
+
+// ========== CONTROLADOR DE CLIENTES ==========
+
+// Abrir modal para nuevo cliente o editar existente
+function abrirModalCliente(cliente = null) {
+  const modal = document.getElementById('modal-cliente');
+  const titulo = document.getElementById('modal-cliente-titulo');
+  const form = document.getElementById('form-cliente');
+  
+  // Limpiar formulario
+  form.reset();
+  
+  if (cliente) {
+    // Modo edición
+    titulo.textContent = 'Editar Cliente';
+    document.getElementById('cliente-id').value = cliente.id;
+    document.getElementById('cliente-tipo-documento').value = cliente.tipo_documento;
+    document.getElementById('cliente-numero-documento').value = cliente.numero_documento;
+    document.getElementById('cliente-nombre').value = cliente.nombre;
+    document.getElementById('cliente-nombre-comercial').value = cliente.nombre_comercial || '';
+    document.getElementById('cliente-telefono').value = cliente.telefono || '';
+    document.getElementById('cliente-email').value = cliente.email || '';
+    document.getElementById('cliente-departamento').value = cliente.departamento || '';
+    document.getElementById('cliente-municipio').value = cliente.municipio || '';
+    document.getElementById('cliente-direccion').value = cliente.direccion || '';
+    document.getElementById('cliente-giro').value = cliente.giro || '';
+  } else {
+    // Modo nuevo
+    titulo.textContent = 'Nuevo Cliente';
+    document.getElementById('cliente-id').value = '';
+  }
+  
+  modal.classList.add('active');
+}
+
+// Cerrar modal de cliente
+function cerrarModalCliente() {
+  const modal = document.getElementById('modal-cliente');
+  modal.classList.remove('active');
+  document.getElementById('form-cliente').reset();
+}
+
+// Guardar cliente (nuevo o editar)
+async function guardarCliente() {
+  try {
+    const clienteId = document.getElementById('cliente-id').value;
+    
+    const clienteData = {
+      tipo_documento: document.getElementById('cliente-tipo-documento').value,
+      numero_documento: document.getElementById('cliente-numero-documento').value,
+      nombre: document.getElementById('cliente-nombre').value,
+      nombre_comercial: document.getElementById('cliente-nombre-comercial').value,
+      telefono: document.getElementById('cliente-telefono').value,
+      email: document.getElementById('cliente-email').value,
+      departamento: document.getElementById('cliente-departamento').value,
+      municipio: document.getElementById('cliente-municipio').value,
+      direccion: document.getElementById('cliente-direccion').value,
+      giro: document.getElementById('cliente-giro').value
+    };
+    
+    if (clienteId) {
+      // Actualizar cliente existente (funcionalidad pendiente en backend)
+      showNotification('Actualización de clientes en desarrollo', 'info');
+    } else {
+      // Crear nuevo cliente
+      const result = await window.electronAPI.addCliente(clienteData);
+      
+      if (result) {
+        showNotification('Cliente guardado exitosamente', 'success');
+        cerrarModalCliente();
+        
+        // Recargar lista de clientes
+        await loadClientes();
+        
+        // Si estamos en vista de nueva factura, actualizar select
+        if (state.currentView === 'nueva-factura') {
+          await loadClientesSelect();
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error guardando cliente:', error);
+    showNotification('Error al guardar cliente: ' + error.message, 'error');
+  }
+}
+
+// Validar documento según tipo
+function validarDocumento() {
+  const tipo = document.getElementById('cliente-tipo-documento').value;
+  const numero = document.getElementById('cliente-numero-documento').value;
+  
+  if (tipo === '13') { // NIT
+    const nitRegex = /^\d{4}-\d{6}-\d{3}-\d$/;
+    if (!nitRegex.test(numero)) {
+      showNotification('Formato de NIT inválido. Use: 0000-000000-000-0', 'error');
+      return false;
+    }
+  } else if (tipo === '36') { // DUI
+    const duiRegex = /^\d{8}-\d$/;
+    if (!duiRegex.test(numero)) {
+      showNotification('Formato de DUI inválido. Use: 00000000-0', 'error');
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+// Formatear número de documento mientras se escribe
+document.addEventListener('DOMContentLoaded', () => {
+  const numeroDocInput = document.getElementById('cliente-numero-documento');
+  const tipoDocSelect = document.getElementById('cliente-tipo-documento');
+  
+  if (numeroDocInput && tipoDocSelect) {
+    numeroDocInput.addEventListener('blur', () => {
+      validarDocumento();
+    });
+    
+    tipoDocSelect.addEventListener('change', () => {
+      numeroDocInput.value = '';
+      const tipo = tipoDocSelect.value;
+      
+      if (tipo === '13') {
+        numeroDocInput.placeholder = '0000-000000-000-0';
+      } else if (tipo === '36') {
+        numeroDocInput.placeholder = '00000000-0';
+      } else {
+        numeroDocInput.placeholder = 'Número de documento';
+      }
+    });
+  }
+});
+
+// Hacer funciones globales para el modal
+window.cerrarModalCliente = cerrarModalCliente;
+window.abrirModalCliente = abrirModalCliente;
 
 window.editarProducto = function(id) {
   console.log('Editar producto:', id);

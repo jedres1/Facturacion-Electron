@@ -347,6 +347,96 @@
     </main>
   </div>
 
+  <!-- Modal para Cliente -->
+  <div id="modal-cliente" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-cliente-titulo">Nuevo Cliente</h2>
+        <button class="close-modal" onclick="cerrarModalCliente()">×</button>
+      </div>
+      <form id="form-cliente" class="modal-form">
+        <input type="hidden" id="cliente-id">
+        
+        <div class="form-group">
+          <label>Tipo de Documento *</label>
+          <select id="cliente-tipo-documento" required>
+            <option value="13">NIT</option>
+            <option value="36">DUI</option>
+            <option value="37">Pasaporte</option>
+            <option value="03">Carnet de Residente</option>
+            <option value="02">Otro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Número de Documento *</label>
+          <input type="text" id="cliente-numero-documento" placeholder="0000-000000-000-0" required>
+        </div>
+
+        <div class="form-group">
+          <label>Nombre o Razón Social *</label>
+          <input type="text" id="cliente-nombre" required>
+        </div>
+
+        <div class="form-group">
+          <label>Nombre Comercial</label>
+          <input type="text" id="cliente-nombre-comercial">
+        </div>
+
+        <div class="form-group">
+          <label>Teléfono</label>
+          <input type="tel" id="cliente-telefono" placeholder="7000-0000">
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="cliente-email">
+        </div>
+
+        <div class="form-group">
+          <label>Departamento</label>
+          <select id="cliente-departamento">
+            <option value="">Seleccionar...</option>
+            <option value="01">Ahuachapán</option>
+            <option value="02">Santa Ana</option>
+            <option value="03">Sonsonate</option>
+            <option value="04">Chalatenango</option>
+            <option value="05">La Libertad</option>
+            <option value="06">San Salvador</option>
+            <option value="07">Cuscatlán</option>
+            <option value="08">La Paz</option>
+            <option value="09">Cabañas</option>
+            <option value="10">San Vicente</option>
+            <option value="11">Usulután</option>
+            <option value="12">San Miguel</option>
+            <option value="13">Morazán</option>
+            <option value="14">La Unión</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Municipio</label>
+          <input type="text" id="cliente-municipio">
+        </div>
+
+        <div class="form-group full-width">
+          <label>Dirección</label>
+          <textarea id="cliente-direccion" rows="2"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Giro o Actividad</label>
+          <input type="text" id="cliente-giro">
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalCliente()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

@@ -59,6 +59,18 @@ ipcMain.handle('db:addCliente', async (event, cliente) => {
   return db.addCliente(cliente);
 });
 
+ipcMain.handle('db:updateCliente', async (event, { id, cliente }) => {
+  return db.updateCliente(id, cliente);
+});
+
+ipcMain.handle('db:deleteCliente', async (event, id) => {
+  return db.deleteCliente(id);
+});
+
+ipcMain.handle('db:getClienteById', async (event, id) => {
+  return db.getClienteById(id);
+});
+
 ipcMain.handle('db:getProductos', async () => {
   return db.getProductos();
 });

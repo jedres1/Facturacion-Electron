@@ -447,9 +447,26 @@ textarea {
   background-color: var(--bg-primary);
   padding: 2rem;
   border-radius: 0.5rem;
-  max-width: 500px;
+  max-width: 600px;
   width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: var(--shadow-lg);
+}
+
+.modal-form .form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.modal-form .form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-form .form-group.full-width {
+  grid-column: 1 / -1;
 }
 
 .modal-header {

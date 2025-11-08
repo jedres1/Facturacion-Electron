@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Base de datos
   getClientes: () => ipcRenderer.invoke('db:getClientes'),
   addCliente: (cliente) => ipcRenderer.invoke('db:addCliente', cliente),
+  updateCliente: (id, cliente) => ipcRenderer.invoke('db:updateCliente', { id, cliente }),
+  deleteCliente: (id) => ipcRenderer.invoke('db:deleteCliente', id),
+  getClienteById: (id) => ipcRenderer.invoke('db:getClienteById', id),
   getProductos: () => ipcRenderer.invoke('db:getProductos'),
   addProducto: (producto) => ipcRenderer.invoke('db:addProducto', producto),
   getFacturas: (filtros) => ipcRenderer.invoke('db:getFacturas', filtros),
