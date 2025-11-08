@@ -9,9 +9,11 @@
 - ✅ Eliminar cliente
 - ✅ Validación de NIT y DUI
 - ✅ Modal con formulario completo
-- ✅ Selección de departamento y municipio (262 municipios actualizados)
+- ✅ Selección de departamento y municipio (263 municipios actualizados Nov 2025)
 - ✅ Carga dinámica de municipios según departamento
 - ✅ Códigos oficiales del Ministerio de Hacienda
+- ✅ Catálogo completo de actividades económicas CIIU-4 (88 códigos)
+- ✅ Nuevo municipio: Lourdes (La Libertad)
 
 ### 2. Gestión de Productos/Servicios
 - ✅ Listar todos los productos

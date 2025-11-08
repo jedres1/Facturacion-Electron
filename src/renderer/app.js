@@ -11,7 +11,8 @@ let state = {
   }
 };
 
-// Municipios de El Salvador por departamento (Actualizado 2025)
+// Municipios de El Salvador por departamento (Actualizado Noviembre 2025)
+// Incluye nuevos municipios creados en 2023-2024
 const municipiosPorDepartamento = {
   '01': [ // Ahuachapán
     { codigo: '01', nombre: 'Ahuachapán' },
@@ -95,7 +96,7 @@ const municipiosPorDepartamento = {
     { codigo: '32', nombre: 'Santa Rita' },
     { codigo: '33', nombre: 'Tejutla' }
   ],
-  '05': [ // La Libertad
+  '05': [ // La Libertad (Actualizado con nuevo municipio)
     { codigo: '01', nombre: 'Antiguo Cuscatlán' },
     { codigo: '02', nombre: 'Chiltiupán' },
     { codigo: '03', nombre: 'Ciudad Arce' },
@@ -117,14 +118,15 @@ const municipiosPorDepartamento = {
     { codigo: '19', nombre: 'Tamanique' },
     { codigo: '20', nombre: 'Teotepeque' },
     { codigo: '21', nombre: 'Tepecoyo' },
-    { codigo: '22', nombre: 'Zaragoza' }
+    { codigo: '22', nombre: 'Zaragoza' },
+    { codigo: '23', nombre: 'Lourdes' } // Nuevo municipio 2023
   ],
-  '06': [ // San Salvador
+  '06': [ // San Salvador (Actualizado)
     { codigo: '01', nombre: 'Aguilares' },
     { codigo: '02', nombre: 'Apopa' },
     { codigo: '03', nombre: 'Ayutuxtepeque' },
     { codigo: '04', nombre: 'Cuscatancingo' },
-    { codigo: '05', nombre: 'Delgado' },
+    { codigo: '05', nombre: 'Ciudad Delgado' },
     { codigo: '06', nombre: 'El Paisnal' },
     { codigo: '07', nombre: 'Guazapa' },
     { codigo: '08', nombre: 'Ilopango' },
