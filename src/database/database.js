@@ -24,7 +24,6 @@ class DatabaseManager {
         telefono TEXT,
         email TEXT,
         direccion TEXT,
-        direccion_complementaria TEXT,
         departamento TEXT,
         municipio TEXT,
         distrito TEXT,
@@ -92,12 +91,6 @@ class DatabaseManager {
     
     try {
       this.db.exec(`ALTER TABLE configuracion ADD COLUMN tipo_persona TEXT`);
-    } catch (error) {
-      // La columna ya existe, ignorar error
-    }
-    
-    try {
-      this.db.exec(`ALTER TABLE configuracion ADD COLUMN direccion_complementaria TEXT`);
     } catch (error) {
       // La columna ya existe, ignorar error
     }
@@ -200,7 +193,7 @@ class DatabaseManager {
         UPDATE configuracion 
         SET nit = ?, nrc = ?, nombre_empresa = ?, nombre_comercial = ?, tipo_persona = ?,
             actividad_economica = ?, telefono = ?, email = ?, direccion = ?,
-            direccion_complementaria = ?, departamento = ?, municipio = ?, distrito = ?,
+            departamento = ?, municipio = ?, distrito = ?,
             codigo_establecimiento = ?, punto_venta = ?, 
             hacienda_usuario = ?, hacienda_password = ?, hacienda_ambiente = ?,
             certificado_path = ?, pin_certificado = ?, updated_at = CURRENT_TIMESTAMP
@@ -209,7 +202,7 @@ class DatabaseManager {
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
         config.actividad_economica, config.telefono, config.email, config.direccion,
-        config.direccion_complementaria, config.departamento, config.municipio, config.distrito,
+        config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.certificado_path, config.pin_certificado, existing.id
@@ -218,15 +211,15 @@ class DatabaseManager {
       const stmt = this.db.prepare(`
         INSERT INTO configuracion 
         (nit, nrc, nombre_empresa, nombre_comercial, tipo_persona, actividad_economica, 
-         telefono, email, direccion, direccion_complementaria, departamento, municipio, 
+         telefono, email, direccion, departamento, municipio, 
          distrito, codigo_establecimiento, punto_venta, hacienda_usuario, 
          hacienda_password, hacienda_ambiente, certificado_path, pin_certificado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
         config.actividad_economica, config.telefono, config.email, config.direccion,
-        config.direccion_complementaria, config.departamento, config.municipio, config.distrito,
+        config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.certificado_path, config.pin_certificado

@@ -781,7 +781,6 @@ async function loadConfiguracion() {
       }
       
       document.getElementById('config-direccion').value = config.direccion || '';
-      document.getElementById('config-direccion-complementaria').value = config.direccion_complementaria || '';
       document.getElementById('config-hacienda-usuario').value = config.hacienda_usuario || '';
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
@@ -1043,7 +1042,6 @@ async function guardarConfiguracion() {
       municipio: document.getElementById('config-municipio').value,
       distrito: document.getElementById('config-distrito').value,
       direccion: document.getElementById('config-direccion').value,
-      direccion_complementaria: document.getElementById('config-direccion-complementaria').value,
       hacienda_usuario: document.getElementById('config-hacienda-usuario').value,
       hacienda_password: document.getElementById('config-hacienda-password').value,
       hacienda_ambiente: document.getElementById('config-hacienda-ambiente').value,
