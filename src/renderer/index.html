@@ -246,6 +246,7 @@
               <tr>
                 <th>Documento</th>
                 <th>Nombre</th>
+                <th>Ubicación</th>
                 <th>Teléfono</th>
                 <th>Email</th>
                 <th>Acciones</th>
@@ -253,7 +254,7 @@
             </thead>
             <tbody>
               <tr>
-                <td colspan="5" class="text-center">No hay clientes</td>
+                <td colspan="6" class="text-center">No hay clientes</td>
               </tr>
             </tbody>
           </table>
@@ -567,6 +568,13 @@
           <label>Municipio *</label>
           <select id="cliente-municipio" required>
             <option value="">Seleccione primero un departamento...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Distrito *</label>
+          <select id="cliente-distrito" required>
+            <option value="">Seleccione primero un municipio...</option>
           </select>
         </div>
 

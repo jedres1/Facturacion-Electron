@@ -45,13 +45,21 @@ class DatabaseManager {
         telefono TEXT,
         email TEXT,
         direccion TEXT,
-        municipio TEXT,
         departamento TEXT,
+        municipio TEXT,
+        distrito TEXT,
         giro TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    
+    // Agregar columna distrito si no existe (para bases de datos existentes)
+    try {
+      this.db.exec(`ALTER TABLE clientes ADD COLUMN distrito TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
 
     // Tabla de productos/servicios
     this.db.exec(`
@@ -173,13 +181,14 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT INTO clientes 
       (tipo_documento, numero_documento, nombre, nombre_comercial, telefono, 
-       email, direccion, municipio, departamento, giro)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       email, direccion, departamento, municipio, distrito, giro)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nombre,
       cliente.nombre_comercial, cliente.telefono, cliente.email,
-      cliente.direccion, cliente.municipio, cliente.departamento, cliente.giro
+      cliente.direccion, cliente.departamento, cliente.municipio, 
+      cliente.distrito, cliente.giro
     );
   }
 
@@ -187,14 +196,15 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       UPDATE clientes 
       SET tipo_documento = ?, numero_documento = ?, nombre = ?, nombre_comercial = ?,
-          telefono = ?, email = ?, direccion = ?, municipio = ?, departamento = ?,
-          giro = ?, updated_at = CURRENT_TIMESTAMP
+          telefono = ?, email = ?, direccion = ?, departamento = ?, municipio = ?,
+          distrito = ?, giro = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nombre,
       cliente.nombre_comercial, cliente.telefono, cliente.email,
-      cliente.direccion, cliente.municipio, cliente.departamento, cliente.giro, id
+      cliente.direccion, cliente.departamento, cliente.municipio, 
+      cliente.distrito, cliente.giro, id
     );
   }
 

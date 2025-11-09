@@ -665,20 +665,44 @@ async function loadClientes() {
     const tbody = document.querySelector('#tabla-clientes tbody');
     
     if (state.clientes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay clientes</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay clientes</td></tr>';
     } else {
-      tbody.innerHTML = state.clientes.map(c => `
-        <tr>
-          <td>${c.numero_documento}</td>
-          <td>${c.nombre}</td>
-          <td>${c.telefono || 'N/A'}</td>
-          <td>${c.email || 'N/A'}</td>
-          <td>
-            <button class="btn btn-small btn-primary" onclick="editarCliente(${c.id})">Editar</button>
-            <button class="btn btn-small btn-danger" onclick="eliminarCliente(${c.id})">Eliminar</button>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = state.clientes.map(c => {
+        // Construir información de ubicación
+        let ubicacion = '';
+        if (c.distrito) {
+          const nombreDistrito = obtenerNombreDistrito(c.distrito);
+          ubicacion = nombreDistrito;
+        } else if (c.municipio && c.departamento) {
+          const nombreMunicipio = obtenerNombreMunicipio(c.departamento, c.municipio);
+          ubicacion = nombreMunicipio;
+        } else if (c.departamento) {
+          const deptos = {
+            '01': 'Ahuachapán', '02': 'Santa Ana', '03': 'Sonsonate',
+            '04': 'Chalatenango', '05': 'La Libertad', '06': 'San Salvador',
+            '07': 'Cuscatlán', '08': 'La Paz', '09': 'Cabañas',
+            '10': 'San Vicente', '11': 'Usulután', '12': 'San Miguel',
+            '13': 'Morazán', '14': 'La Unión'
+          };
+          ubicacion = deptos[c.departamento] || c.departamento;
+        } else {
+          ubicacion = 'N/A';
+        }
+        
+        return `
+          <tr>
+            <td>${c.numero_documento}</td>
+            <td>${c.nombre}</td>
+            <td>${ubicacion}</td>
+            <td>${c.telefono || 'N/A'}</td>
+            <td>${c.email || 'N/A'}</td>
+            <td>
+              <button class="btn btn-small btn-primary" onclick="editarCliente(${c.id})">Editar</button>
+              <button class="btn btn-small btn-danger" onclick="eliminarCliente(${c.id})">Eliminar</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
   } catch (error) {
     console.error('Error cargando clientes:', error);
@@ -800,7 +824,7 @@ function setupEventListeners() {
   });
 }
 
-// Configurar manejador de departamento-municipio
+// Configurar manejador de departamento-municipio-distrito
 function setupDepartamentoMunicipioHandler() {
   const departamentoSelect = document.getElementById('cliente-departamento');
   const municipioSelect = document.getElementById('cliente-municipio');
@@ -810,15 +834,25 @@ function setupDepartamentoMunicipioHandler() {
       const departamento = e.target.value;
       cargarMunicipios(departamento);
     });
+    
+    municipioSelect.addEventListener('change', (e) => {
+      const municipio = e.target.value;
+      cargarDistritos(municipio);
+    });
   }
 }
 
 // Cargar municipios según departamento
 function cargarMunicipios(codigoDepartamento) {
   const municipioSelect = document.getElementById('cliente-municipio');
+  const distritoSelect = document.getElementById('cliente-distrito');
   
   // Limpiar opciones actuales
   municipioSelect.innerHTML = '<option value="">Seleccionar municipio...</option>';
+  if (distritoSelect) {
+    distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
+    distritoSelect.disabled = true;
+  }
   
   if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
     municipioSelect.disabled = true;
@@ -834,6 +868,32 @@ function cargarMunicipios(codigoDepartamento) {
     option.value = municipio.codigo;
     option.textContent = municipio.nombre;
     municipioSelect.appendChild(option);
+  });
+}
+
+// Cargar distritos según municipio
+function cargarDistritos(codigoMunicipio) {
+  const distritoSelect = document.getElementById('cliente-distrito');
+  
+  // Limpiar opciones actuales
+  distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
+  
+  if (!codigoMunicipio || !distritosPorMunicipio[codigoMunicipio]) {
+    distritoSelect.disabled = true;
+    return;
+  }
+  
+  distritoSelect.disabled = false;
+  
+  // Cargar distritos del municipio seleccionado
+  const distritos = distritosPorMunicipio[codigoMunicipio];
+  distritos.forEach(distrito => {
+    const option = document.createElement('option');
+    option.value = distrito.codigoDistrito; // Usar el código de 6 dígitos
+    option.textContent = distrito.nombre;
+    // Agregar el código de carga como atributo data para referencia
+    option.setAttribute('data-codigo-carga', distrito.codigoCarga);
+    distritoSelect.appendChild(option);
   });
 }
 
@@ -859,7 +919,7 @@ function obtenerDistritosPorMunicipio(codigoMunicipio) {
 function obtenerNombreDistrito(codigoDistrito) {
   // Buscar en todos los municipios
   for (const municipio in distritosPorMunicipio) {
-    const distrito = distritosPorMunicipio[municipio].find(d => d.codigo === codigoDistrito);
+    const distrito = distritosPorMunicipio[municipio].find(d => d.codigoDistrito === codigoDistrito);
     if (distrito) {
       return distrito.nombre;
     }
@@ -1213,6 +1273,15 @@ function abrirModalCliente(cliente = null) {
       // Esperar un momento para que se carguen los municipios antes de seleccionar
       setTimeout(() => {
         document.getElementById('cliente-municipio').value = cliente.municipio || '';
+        
+        // Cargar distritos del municipio seleccionado
+        if (cliente.municipio) {
+          cargarDistritos(cliente.municipio);
+          // Esperar para cargar el distrito
+          setTimeout(() => {
+            document.getElementById('cliente-distrito').value = cliente.distrito || '';
+          }, 50);
+        }
       }, 50);
     }
     
@@ -1248,6 +1317,7 @@ async function guardarCliente() {
       email: document.getElementById('cliente-email').value,
       departamento: document.getElementById('cliente-departamento').value,
       municipio: document.getElementById('cliente-municipio').value,
+      distrito: document.getElementById('cliente-distrito').value,
       direccion: document.getElementById('cliente-direccion').value,
       giro: document.getElementById('cliente-giro').value
     };
