@@ -665,7 +665,7 @@ async function loadClientes() {
     const tbody = document.querySelector('#tabla-clientes tbody');
     
     if (state.clientes.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay clientes</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center">No hay clientes</td></tr>';
     } else {
       tbody.innerHTML = state.clientes.map(c => {
         // Construir información de ubicación
@@ -692,7 +692,9 @@ async function loadClientes() {
         return `
           <tr>
             <td>${c.numero_documento}</td>
+            <td>${c.nrc || 'N/A'}</td>
             <td>${c.nombre}</td>
+            <td>${c.tipo_persona || 'N/A'}</td>
             <td>${ubicacion}</td>
             <td>${c.telefono || 'N/A'}</td>
             <td>${c.email || 'N/A'}</td>
@@ -1261,8 +1263,10 @@ function abrirModalCliente(cliente = null) {
     document.getElementById('cliente-id').value = cliente.id;
     document.getElementById('cliente-tipo-documento').value = cliente.tipo_documento;
     document.getElementById('cliente-numero-documento').value = cliente.numero_documento;
+    document.getElementById('cliente-nrc').value = cliente.nrc || '';
     document.getElementById('cliente-nombre').value = cliente.nombre;
     document.getElementById('cliente-nombre-comercial').value = cliente.nombre_comercial || '';
+    document.getElementById('cliente-tipo-persona').value = cliente.tipo_persona || '';
     document.getElementById('cliente-telefono').value = cliente.telefono || '';
     document.getElementById('cliente-email').value = cliente.email || '';
     document.getElementById('cliente-departamento').value = cliente.departamento || '';
@@ -1311,8 +1315,10 @@ async function guardarCliente() {
     const clienteData = {
       tipo_documento: document.getElementById('cliente-tipo-documento').value,
       numero_documento: document.getElementById('cliente-numero-documento').value,
+      nrc: document.getElementById('cliente-nrc').value,
       nombre: document.getElementById('cliente-nombre').value,
       nombre_comercial: document.getElementById('cliente-nombre-comercial').value,
+      tipo_persona: document.getElementById('cliente-tipo-persona').value,
       telefono: document.getElementById('cliente-telefono').value,
       email: document.getElementById('cliente-email').value,
       departamento: document.getElementById('cliente-departamento').value,

@@ -40,8 +40,10 @@ class DatabaseManager {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tipo_documento TEXT NOT NULL,
         numero_documento TEXT NOT NULL UNIQUE,
+        nrc TEXT,
         nombre TEXT NOT NULL,
         nombre_comercial TEXT,
+        tipo_persona TEXT,
         telefono TEXT,
         email TEXT,
         direccion TEXT,
@@ -57,6 +59,20 @@ class DatabaseManager {
     // Agregar columna distrito si no existe (para bases de datos existentes)
     try {
       this.db.exec(`ALTER TABLE clientes ADD COLUMN distrito TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    // Agregar columna nrc si no existe (para bases de datos existentes)
+    try {
+      this.db.exec(`ALTER TABLE clientes ADD COLUMN nrc TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    // Agregar columna tipo_persona si no existe (para bases de datos existentes)
+    try {
+      this.db.exec(`ALTER TABLE clientes ADD COLUMN tipo_persona TEXT`);
     } catch (error) {
       // La columna ya existe, ignorar error
     }
@@ -180,13 +196,13 @@ class DatabaseManager {
   addCliente(cliente) {
     const stmt = this.db.prepare(`
       INSERT INTO clientes 
-      (tipo_documento, numero_documento, nombre, nombre_comercial, telefono, 
-       email, direccion, departamento, municipio, distrito, giro)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tipo_documento, numero_documento, nrc, nombre, nombre_comercial, tipo_persona,
+       telefono, email, direccion, departamento, municipio, distrito, giro)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     return stmt.run(
-      cliente.tipo_documento, cliente.numero_documento, cliente.nombre,
-      cliente.nombre_comercial, cliente.telefono, cliente.email,
+      cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
+      cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
       cliente.distrito, cliente.giro
     );
@@ -195,14 +211,14 @@ class DatabaseManager {
   updateCliente(id, cliente) {
     const stmt = this.db.prepare(`
       UPDATE clientes 
-      SET tipo_documento = ?, numero_documento = ?, nombre = ?, nombre_comercial = ?,
-          telefono = ?, email = ?, direccion = ?, departamento = ?, municipio = ?,
-          distrito = ?, giro = ?, updated_at = CURRENT_TIMESTAMP
+      SET tipo_documento = ?, numero_documento = ?, nrc = ?, nombre = ?, nombre_comercial = ?,
+          tipo_persona = ?, telefono = ?, email = ?, direccion = ?, departamento = ?, 
+          municipio = ?, distrito = ?, giro = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
     return stmt.run(
-      cliente.tipo_documento, cliente.numero_documento, cliente.nombre,
-      cliente.nombre_comercial, cliente.telefono, cliente.email,
+      cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
+      cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
       cliente.distrito, cliente.giro, id
     );

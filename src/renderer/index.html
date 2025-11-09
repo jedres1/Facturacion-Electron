@@ -245,7 +245,9 @@
             <thead>
               <tr>
                 <th>Documento</th>
+                <th>NRC</th>
                 <th>Nombre</th>
+                <th>Tipo Persona</th>
                 <th>Ubicación</th>
                 <th>Teléfono</th>
                 <th>Email</th>
@@ -254,7 +256,7 @@
             </thead>
             <tbody>
               <tr>
-                <td colspan="6" class="text-center">No hay clientes</td>
+                <td colspan="8" class="text-center">No hay clientes</td>
               </tr>
             </tbody>
           </table>
@@ -521,6 +523,20 @@
         <div class="form-group">
           <label>Número de Documento *</label>
           <input type="text" id="cliente-numero-documento" placeholder="0000-000000-000-0" required>
+        </div>
+
+        <div class="form-group">
+          <label>NRC (Número de Registro de Contribuyente)</label>
+          <input type="text" id="cliente-nrc" placeholder="000000-0">
+        </div>
+
+        <div class="form-group">
+          <label>Tipo de Persona</label>
+          <select id="cliente-tipo-persona">
+            <option value="">Seleccionar...</option>
+            <option value="Natural">Natural</option>
+            <option value="Jurídica">Jurídica</option>
+          </select>
         </div>
 
         <div class="form-group">
