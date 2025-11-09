@@ -947,6 +947,11 @@ function setupEventListeners() {
     await guardarProducto();
   });
   
+  // Probar conexión con Hacienda
+  document.getElementById('btn-test-conexion')?.addEventListener('click', async () => {
+    await probarConexionHacienda();
+  });
+  
   // Inicializar autocomplete de actividades económicas
   setupActividadAutocomplete('cliente-giro', 'cliente-giro-dropdown');
   setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
@@ -2153,6 +2158,52 @@ async function firmarFactura(facturaId) {
   } catch (error) {
     console.error('Error firmando factura:', error);
     showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
+}
+
+// Probar conexión con Hacienda
+async function probarConexionHacienda() {
+  try {
+    const usuario = document.getElementById('config-hacienda-usuario').value;
+    const password = document.getElementById('config-hacienda-password').value;
+    const ambiente = document.getElementById('config-hacienda-ambiente').value;
+    
+    // Validar que se hayan ingresado las credenciales
+    if (!usuario || !password) {
+      showNotification('Por favor ingrese usuario y contraseña de Hacienda', 'error');
+      return;
+    }
+    
+    const btnTest = document.getElementById('btn-test-conexion');
+    btnTest.disabled = true;
+    btnTest.textContent = 'Probando...';
+    
+    showNotification('Probando conexión con Hacienda...', 'info');
+    
+    // Intentar autenticar
+    const authResult = await window.electronAPI.autenticar({
+      usuario: usuario,
+      password: password,
+      ambiente: ambiente
+    });
+    
+    btnTest.disabled = false;
+    btnTest.textContent = 'Probar Conexión';
+    
+    if (authResult.success) {
+      showNotification('✓ Conexión exitosa con el Ministerio de Hacienda', 'success');
+      console.log('Token recibido:', authResult.token);
+    } else {
+      showNotification('✗ Error de conexión: ' + authResult.error, 'error');
+      console.error('Error de autenticación:', authResult.error);
+    }
+  } catch (error) {
+    console.error('Error probando conexión:', error);
+    showNotification('Error al probar conexión: ' + error.message, 'error');
+    
+    const btnTest = document.getElementById('btn-test-conexion');
+    btnTest.disabled = false;
+    btnTest.textContent = 'Probar Conexión';
   }
 }
 
