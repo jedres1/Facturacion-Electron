@@ -11,348 +11,481 @@ let state = {
   }
 };
 
-// Catálogo de Distritos (Zonas Geográficas) - Ministerio de Hacienda
-// Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Distrito
-const distritosMunicipales = {
-  '0101': 'Ahuachapán Centro',
-  '0102': 'Ahuachapán Norte',
-  '0103': 'Ahuachapán Sur',
-  '0201': 'Santa Ana Centro',
-  '0202': 'Santa Ana Este',
-  '0203': 'Santa Ana Norte',
-  '0204': 'Santa Ana Oeste',
-  '0301': 'Sonsonate Centro',
-  '0302': 'Sonsonate Este',
-  '0303': 'Sonsonate Norte',
-  '0304': 'Sonsonate Oeste',
-  '0401': 'Chalatenango Centro',
-  '0402': 'Chalatenango Norte',
-  '0403': 'Chalatenango Sur',
-  '0501': 'La Libertad Centro',
-  '0502': 'La Libertad Costa',
-  '0503': 'La Libertad Este',
-  '0504': 'La Libertad Norte',
-  '0505': 'La Libertad Oeste',
-  '0506': 'La Libertad Sur',
-  '0601': 'San Salvador Centro',
-  '0602': 'San Salvador Este',
-  '0603': 'San Salvador Norte',
-  '0604': 'San Salvador Oeste',
-  '0605': 'San Salvador Sur',
-  '0701': 'Cuscatlán Norte',
-  '0702': 'Cuscatlán Sur',
-  '0801': 'La Paz Centro',
-  '0802': 'La Paz Este',
-  '0803': 'La Paz Oeste',
-  '0901': 'Cabañas Este',
-  '0902': 'Cabañas Oeste',
-  '1001': 'San Vicente Norte',
-  '1002': 'San Vicente Sur',
-  '1101': 'Usulután Este',
-  '1102': 'Usulután Norte',
-  '1103': 'Usulután Oeste',
-  '1201': 'San Miguel Centro',
-  '1202': 'San Miguel Norte',
-  '1203': 'San Miguel Oeste',
-  '1301': 'Morazán Norte',
-  '1302': 'Morazán Sur',
-  '1401': 'La Unión Norte',
-  '1402': 'La Unión Sur'
-};
-
-// Municipios de El Salvador por departamento (Actualizado Noviembre 2025)
-// Códigos oficiales según Ministerio de Hacienda - Catálogo Oficial
-// Estructura: Código Municipio (4 dígitos DDMM), Código Distrito (6 dígitos DDDDMM), Nombre
+// Municipios oficiales de El Salvador (Actualizado Noviembre 2025)
+// Estructura: Departamento → Municipio → Distritos
+// Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Municipio
 const municipiosPorDepartamento = {
   '01': [ // Ahuachapán
-    { codigo: '0101', distrito: '010101', nombre: 'Ahuachapán' },
-    { codigo: '0102', distrito: '010102', nombre: 'Apaneca' },
-    { codigo: '0103', distrito: '010203', nombre: 'Atiquizaya' },
-    { codigo: '0104', distrito: '010104', nombre: 'Concepción de Ataco' },
-    { codigo: '0105', distrito: '010205', nombre: 'El Refugio' },
-    { codigo: '0106', distrito: '010306', nombre: 'Guaymango' },
-    { codigo: '0107', distrito: '010307', nombre: 'Jujutla' },
-    { codigo: '0108', distrito: '010308', nombre: 'San Francisco Menéndez' },
-    { codigo: '0109', distrito: '010209', nombre: 'San Lorenzo' },
-    { codigo: '0110', distrito: '010310', nombre: 'San Pedro Puxtla' },
-    { codigo: '0111', distrito: '010111', nombre: 'Tacuba' },
-    { codigo: '0112', distrito: '010212', nombre: 'Turín' }
+    { codigo: '0101', nombre: 'Ahuachapán Centro' },
+    { codigo: '0102', nombre: 'Ahuachapán Norte' },
+    { codigo: '0103', nombre: 'Ahuachapán Sur' }
   ],
   '02': [ // Santa Ana
-    { codigo: '0201', distrito: '020401', nombre: 'Candelaria de la Frontera' },
-    { codigo: '0202', distrito: '020202', nombre: 'Coatepeque' },
-    { codigo: '0203', distrito: '020403', nombre: 'Chalchuapa' },
-    { codigo: '0204', distrito: '020204', nombre: 'El Congo' },
-    { codigo: '0205', distrito: '020405', nombre: 'El Porvenir' },
-    { codigo: '0206', distrito: '020306', nombre: 'Masahuat' },
-    { codigo: '0207', distrito: '020307', nombre: 'Metapán' },
-    { codigo: '0208', distrito: '020408', nombre: 'San Antonio Pajonal' },
-    { codigo: '0209', distrito: '020409', nombre: 'San Sebastián Salitrillo' },
-    { codigo: '0210', distrito: '020110', nombre: 'Santa Ana' },
-    { codigo: '0211', distrito: '020311', nombre: 'Santa Rosa Guachipilín' },
-    { codigo: '0212', distrito: '020412', nombre: 'Santiago de la Frontera' },
-    { codigo: '0213', distrito: '020313', nombre: 'Texistepeque' }
+    { codigo: '0201', nombre: 'Santa Ana Centro' },
+    { codigo: '0202', nombre: 'Santa Ana Este' },
+    { codigo: '0203', nombre: 'Santa Ana Norte' },
+    { codigo: '0204', nombre: 'Santa Ana Oeste' }
   ],
   '03': [ // Sonsonate
-    { codigo: '0301', distrito: '030401', nombre: 'Acajutla' },
-    { codigo: '0302', distrito: '030202', nombre: 'Armenia' },
-    { codigo: '0303', distrito: '030203', nombre: 'Caluco' },
-    { codigo: '0304', distrito: '030204', nombre: 'Cuisnahuat' },
-    { codigo: '0305', distrito: '030205', nombre: 'Santa Isabel Ishuatán' },
-    { codigo: '0306', distrito: '030206', nombre: 'Izalco' },
-    { codigo: '0307', distrito: '030307', nombre: 'Juayúa' },
-    { codigo: '0308', distrito: '030308', nombre: 'Nahuizalco' },
-    { codigo: '0309', distrito: '030109', nombre: 'Nahulingo' },
-    { codigo: '0310', distrito: '030310', nombre: 'Salcoatitán' },
-    { codigo: '0311', distrito: '030111', nombre: 'San Antonio del Monte' },
-    { codigo: '0312', distrito: '030212', nombre: 'San Julián' },
-    { codigo: '0313', distrito: '030313', nombre: 'Santa Catarina Masahuat' },
-    { codigo: '0314', distrito: '030114', nombre: 'Santo Domingo de Guzmán' },
-    { codigo: '0315', distrito: '030115', nombre: 'Sonsonate' },
-    { codigo: '0316', distrito: '030116', nombre: 'Sonzacate' }
+    { codigo: '0301', nombre: 'Sonsonate Centro' },
+    { codigo: '0302', nombre: 'Sonsonate Este' },
+    { codigo: '0303', nombre: 'Sonsonate Norte' },
+    { codigo: '0304', nombre: 'Sonsonate Oeste' }
   ],
   '04': [ // Chalatenango
-    { codigo: '0401', distrito: '040101', nombre: 'Agua Caliente' },
-    { codigo: '0402', distrito: '040302', nombre: 'Arcatao' },
-    { codigo: '0403', distrito: '040303', nombre: 'Azacualpa' },
-    { codigo: '0404', distrito: '040204', nombre: 'Citalá' },
-    { codigo: '0405', distrito: '040305', nombre: 'Comalapa' },
-    { codigo: '0406', distrito: '040306', nombre: 'Concepción Quezaltepeque' },
-    { codigo: '0407', distrito: '040307', nombre: 'Chalatenango' },
-    { codigo: '0408', distrito: '040108', nombre: 'Dulce Nombre de María' },
-    { codigo: '0409', distrito: '040309', nombre: 'El Carrizal' },
-    { codigo: '0410', distrito: '040110', nombre: 'El Paraíso' },
-    { codigo: '0411', distrito: '040311', nombre: 'La Laguna' },
-    { codigo: '0412', distrito: '040212', nombre: 'La Palma' },
-    { codigo: '0413', distrito: '040113', nombre: 'La Reina' },
-    { codigo: '0414', distrito: '040314', nombre: 'Las Vueltas' },
-    { codigo: '0415', distrito: '040315', nombre: 'Nombre de Jesús' },
-    { codigo: '0416', distrito: '040116', nombre: 'Nueva Concepción' },
-    { codigo: '0417', distrito: '040317', nombre: 'Nueva Trinidad' },
-    { codigo: '0418', distrito: '040318', nombre: 'Ojos de Agua' },
-    { codigo: '0419', distrito: '040319', nombre: 'Potonico' },
-    { codigo: '0420', distrito: '040320', nombre: 'San Antonio de la Cruz' },
-    { codigo: '0421', distrito: '040321', nombre: 'San Antonio Los Ranchos' },
-    { codigo: '0422', distrito: '040122', nombre: 'San Fernando' },
-    { codigo: '0423', distrito: '040323', nombre: 'San Francisco Lempa' },
-    { codigo: '0424', distrito: '040124', nombre: 'San Francisco Morazán' },
-    { codigo: '0425', distrito: '040225', nombre: 'San Ignacio' },
-    { codigo: '0426', distrito: '040326', nombre: 'San Isidro Labrador' },
-    { codigo: '0427', distrito: '040327', nombre: 'San José Cancasque' },
-    { codigo: '0428', distrito: '040328', nombre: 'San José Las Flores' },
-    { codigo: '0429', distrito: '040329', nombre: 'San Luis del Carmen' },
-    { codigo: '0430', distrito: '040330', nombre: 'San Miguel de Mercedes' },
-    { codigo: '0431', distrito: '040131', nombre: 'San Rafael' },
-    { codigo: '0432', distrito: '040132', nombre: 'Santa Rita' },
-    { codigo: '0433', distrito: '040133', nombre: 'Tejutla' }
+    { codigo: '0401', nombre: 'Chalatenango Centro' },
+    { codigo: '0402', nombre: 'Chalatenango Norte' },
+    { codigo: '0403', nombre: 'Chalatenango Sur' }
   ],
   '05': [ // La Libertad
-    { codigo: '0501', distrito: '050301', nombre: 'Antiguo Cuscatlán' },
-    { codigo: '0502', distrito: '050102', nombre: 'Ciudad Arce' },
-    { codigo: '0503', distrito: '050503', nombre: 'Colón' },
-    { codigo: '0504', distrito: '050604', nombre: 'Comasagua' },
-    { codigo: '0505', distrito: '050205', nombre: 'Chiltiupán' },
-    { codigo: '0506', distrito: '050306', nombre: 'Huizúcar' },
-    { codigo: '0507', distrito: '050507', nombre: 'Jayaque' },
-    { codigo: '0508', distrito: '050208', nombre: 'Jicalapa' },
-    { codigo: '0509', distrito: '050209', nombre: 'La Libertad' },
-    { codigo: '0510', distrito: '050310', nombre: 'Nuevo Cuscatlán' },
-    { codigo: '0511', distrito: '050611', nombre: 'Santa Tecla' },
-    { codigo: '0512', distrito: '050412', nombre: 'Quezaltepeque' },
-    { codigo: '0513', distrito: '050513', nombre: 'Sacacoyo' },
-    { codigo: '0514', distrito: '050314', nombre: 'San José Villanueva' },
-    { codigo: '0515', distrito: '050115', nombre: 'San Juan Opico' },
-    { codigo: '0516', distrito: '050416', nombre: 'San Matías' },
-    { codigo: '0517', distrito: '050417', nombre: 'San Pablo Tacachico' },
-    { codigo: '0518', distrito: '050218', nombre: 'Tamanique' },
-    { codigo: '0519', distrito: '050519', nombre: 'Talnique' },
-    { codigo: '0520', distrito: '050220', nombre: 'Teotepeque' },
-    { codigo: '0521', distrito: '050521', nombre: 'Tepecoyo' },
-    { codigo: '0522', distrito: '050322', nombre: 'Zaragoza' }
+    { codigo: '0501', nombre: 'La Libertad Centro' },
+    { codigo: '0502', nombre: 'La Libertad Costa' },
+    { codigo: '0503', nombre: 'La Libertad Este' },
+    { codigo: '0504', nombre: 'La Libertad Norte' },
+    { codigo: '0505', nombre: 'La Libertad Oeste' },
+    { codigo: '0506', nombre: 'La Libertad Sur' }
   ],
   '06': [ // San Salvador
-    { codigo: '0601', distrito: '060301', nombre: 'Aguilares' },
-    { codigo: '0602', distrito: '060402', nombre: 'Apopa' },
-    { codigo: '0603', distrito: '060103', nombre: 'Ayutuxtepeque' },
-    { codigo: '0604', distrito: '060104', nombre: 'Cuscatancingo' },
-    { codigo: '0605', distrito: '060305', nombre: 'El Paisnal' },
-    { codigo: '0606', distrito: '060306', nombre: 'Guazapa' },
-    { codigo: '0607', distrito: '060207', nombre: 'Ilopango' },
-    { codigo: '0608', distrito: '060108', nombre: 'Mejicanos' },
-    { codigo: '0609', distrito: '060409', nombre: 'Nejapa' },
-    { codigo: '0610', distrito: '060510', nombre: 'Panchimalco' },
-    { codigo: '0611', distrito: '060511', nombre: 'Rosario de Mora' },
-    { codigo: '0612', distrito: '060512', nombre: 'San Marcos' },
-    { codigo: '0613', distrito: '060213', nombre: 'San Martín' },
-    { codigo: '0614', distrito: '060114', nombre: 'San Salvador' },
-    { codigo: '0615', distrito: '060515', nombre: 'Santiago Texacuangos' },
-    { codigo: '0616', distrito: '060516', nombre: 'Santo Tomás' },
-    { codigo: '0617', distrito: '060217', nombre: 'Soyapango' },
-    { codigo: '0618', distrito: '060218', nombre: 'Tonacatepeque' },
-    { codigo: '0619', distrito: '060119', nombre: 'Ciudad Delgado' }
+    { codigo: '0601', nombre: 'San Salvador Centro' },
+    { codigo: '0602', nombre: 'San Salvador Este' },
+    { codigo: '0603', nombre: 'San Salvador Norte' },
+    { codigo: '0604', nombre: 'San Salvador Oeste' },
+    { codigo: '0605', nombre: 'San Salvador Sur' }
   ],
   '07': [ // Cuscatlán
-    { codigo: '0701', distrito: '070201', nombre: 'Candelaria' },
-    { codigo: '0702', distrito: '070202', nombre: 'Cojutepeque' },
-    { codigo: '0703', distrito: '070203', nombre: 'El Carmen' },
-    { codigo: '0704', distrito: '070204', nombre: 'El Rosario' },
-    { codigo: '0705', distrito: '070205', nombre: 'Monte San Juan' },
-    { codigo: '0706', distrito: '070106', nombre: 'Oratorio de Concepción' },
-    { codigo: '0707', distrito: '070107', nombre: 'San Bartolomé Perulapía' },
-    { codigo: '0708', distrito: '070208', nombre: 'San Cristóbal' },
-    { codigo: '0709', distrito: '070109', nombre: 'San José Guayabal' },
-    { codigo: '0710', distrito: '070110', nombre: 'San Pedro Perulapán' },
-    { codigo: '0711', distrito: '070211', nombre: 'San Rafael Cedros' },
-    { codigo: '0712', distrito: '070212', nombre: 'San Ramón' },
-    { codigo: '0713', distrito: '070213', nombre: 'Santa Cruz Analquito' },
-    { codigo: '0714', distrito: '070214', nombre: 'Santa Cruz Michapa' },
-    { codigo: '0715', distrito: '070115', nombre: 'Suchitoto' },
-    { codigo: '0716', distrito: '070216', nombre: 'Tenancingo' }
+    { codigo: '0701', nombre: 'Cuscatlán Norte' },
+    { codigo: '0702', nombre: 'Cuscatlán Sur' }
   ],
   '08': [ // La Paz
-    { codigo: '0801', distrito: '080301', nombre: 'Cuyultitán' },
-    { codigo: '0802', distrito: '080102', nombre: 'El Rosario' },
-    { codigo: '0803', distrito: '080103', nombre: 'Jerusalén' },
-    { codigo: '0804', distrito: '080104', nombre: 'Mercedes La Ceiba' },
-    { codigo: '0805', distrito: '080305', nombre: 'Olocuilta' },
-    { codigo: '0806', distrito: '080106', nombre: 'Paraíso de Osorio' },
-    { codigo: '0807', distrito: '080107', nombre: 'San Antonio Masahuat' },
-    { codigo: '0808', distrito: '080108', nombre: 'San Emigdio' },
-    { codigo: '0809', distrito: '080309', nombre: 'San Francisco Chinameca' },
-    { codigo: '0810', distrito: '080210', nombre: 'San Juan Nonualco' },
-    { codigo: '0811', distrito: '080311', nombre: 'San Juan Talpa' },
-    { codigo: '0812', distrito: '080112', nombre: 'San Juan Tepezontes' },
-    { codigo: '0813', distrito: '080313', nombre: 'San Luis Talpa' },
-    { codigo: '0814', distrito: '080114', nombre: 'San Miguel Tepezontes' },
-    { codigo: '0815', distrito: '080315', nombre: 'San Pedro Masahuat' },
-    { codigo: '0816', distrito: '080116', nombre: 'San Pedro Nonualco' },
-    { codigo: '0817', distrito: '080217', nombre: 'San Rafael Obrajuelo' },
-    { codigo: '0818', distrito: '080118', nombre: 'Santa María Ostuma' },
-    { codigo: '0819', distrito: '080119', nombre: 'Santiago Nonualco' },
-    { codigo: '0820', distrito: '080320', nombre: 'Tapalhuaca' },
-    { codigo: '0821', distrito: '080221', nombre: 'Zacatecoluca' },
-    { codigo: '0822', distrito: '080122', nombre: 'San Luis La Herradura' }
+    { codigo: '0801', nombre: 'La Paz Centro' },
+    { codigo: '0802', nombre: 'La Paz Este' },
+    { codigo: '0803', nombre: 'La Paz Oeste' }
   ],
   '09': [ // Cabañas
-    { codigo: '0901', distrito: '090201', nombre: 'Cinquera' },
-    { codigo: '0902', distrito: '090102', nombre: 'Guacotecti' },
-    { codigo: '0903', distrito: '090203', nombre: 'Ilobasco' },
-    { codigo: '0904', distrito: '090204', nombre: 'Jutiapa' },
-    { codigo: '0905', distrito: '090105', nombre: 'San Isidro' },
-    { codigo: '0906', distrito: '090106', nombre: 'Sensuntepeque' },
-    { codigo: '0907', distrito: '090207', nombre: 'Tejutepeque' },
-    { codigo: '0908', distrito: '090108', nombre: 'Victoria' },
-    { codigo: '0909', distrito: '090109', nombre: 'Dolores' }
+    { codigo: '0901', nombre: 'Cabañas Este' },
+    { codigo: '0902', nombre: 'Cabañas Oeste' }
   ],
   '10': [ // San Vicente
-    { codigo: '1001', distrito: '100101', nombre: 'Apastepeque' },
-    { codigo: '1002', distrito: '100202', nombre: 'Guadalupe' },
-    { codigo: '1003', distrito: '100203', nombre: 'San Cayetano Istepeque' },
-    { codigo: '1004', distrito: '100104', nombre: 'Santa Clara' },
-    { codigo: '1005', distrito: '100105', nombre: 'Santo Domingo' },
-    { codigo: '1006', distrito: '100106', nombre: 'San Esteban Catarina' },
-    { codigo: '1007', distrito: '100107', nombre: 'San Ildefonso' },
-    { codigo: '1008', distrito: '100108', nombre: 'San Lorenzo' },
-    { codigo: '1009', distrito: '100109', nombre: 'San Sebastián' },
-    { codigo: '1010', distrito: '100210', nombre: 'San Vicente' },
-    { codigo: '1011', distrito: '100211', nombre: 'Tecoluca' },
-    { codigo: '1012', distrito: '100212', nombre: 'Tepetitán' },
-    { codigo: '1013', distrito: '100213', nombre: 'Verapaz' }
+    { codigo: '1001', nombre: 'San Vicente Norte' },
+    { codigo: '1002', nombre: 'San Vicente Sur' }
   ],
   '11': [ // Usulután
-    { codigo: '1101', distrito: '110201', nombre: 'Alegría' },
-    { codigo: '1102', distrito: '110202', nombre: 'Berlín' },
-    { codigo: '1103', distrito: '110103', nombre: 'California' },
-    { codigo: '1104', distrito: '110104', nombre: 'Concepción Batres' },
-    { codigo: '1105', distrito: '110205', nombre: 'El Triunfo' },
-    { codigo: '1106', distrito: '110106', nombre: 'Ereguayquín' },
-    { codigo: '1107', distrito: '110207', nombre: 'Estanzuelas' },
-    { codigo: '1108', distrito: '110308', nombre: 'Jiquilisco' },
-    { codigo: '1109', distrito: '110209', nombre: 'Jucuapa' },
-    { codigo: '1110', distrito: '110110', nombre: 'Jucuarán' },
-    { codigo: '1111', distrito: '110211', nombre: 'Mercedes Umaña' },
-    { codigo: '1112', distrito: '110212', nombre: 'Nueva Granada' },
-    { codigo: '1113', distrito: '110113', nombre: 'Ozatlán' },
-    { codigo: '1114', distrito: '110314', nombre: 'Puerto El Triunfo' },
-    { codigo: '1115', distrito: '110315', nombre: 'San Agustín' },
-    { codigo: '1116', distrito: '110216', nombre: 'San Buenaventura' },
-    { codigo: '1117', distrito: '110117', nombre: 'San Dionisio' },
-    { codigo: '1118', distrito: '110118', nombre: 'Santa Elena' },
-    { codigo: '1119', distrito: '110319', nombre: 'San Francisco Javier' },
-    { codigo: '1120', distrito: '110120', nombre: 'Santa María' },
-    { codigo: '1121', distrito: '110221', nombre: 'Santiago de María' },
-    { codigo: '1122', distrito: '110122', nombre: 'Tecapán' },
-    { codigo: '1123', distrito: '110123', nombre: 'Usulután' }
+    { codigo: '1101', nombre: 'Usulután Este' },
+    { codigo: '1102', nombre: 'Usulután Norte' },
+    { codigo: '1103', nombre: 'Usulután Oeste' }
   ],
   '12': [ // San Miguel
-    { codigo: '1201', distrito: '120201', nombre: 'Carolina' },
-    { codigo: '1202', distrito: '120202', nombre: 'Ciudad Barrios' },
-    { codigo: '1203', distrito: '120103', nombre: 'Comacarán' },
-    { codigo: '1204', distrito: '120204', nombre: 'Chapeltique' },
-    { codigo: '1205', distrito: '120305', nombre: 'Chinameca' },
-    { codigo: '1206', distrito: '120106', nombre: 'Chirilagua' },
-    { codigo: '1207', distrito: '120307', nombre: 'El Tránsito' },
-    { codigo: '1208', distrito: '120308', nombre: 'Lolotique' },
-    { codigo: '1209', distrito: '120109', nombre: 'Moncagua' },
-    { codigo: '1210', distrito: '120310', nombre: 'Nueva Guadalupe' },
-    { codigo: '1211', distrito: '120211', nombre: 'Nuevo Edén de San Juan' },
-    { codigo: '1212', distrito: '120112', nombre: 'Quelepa' },
-    { codigo: '1213', distrito: '120213', nombre: 'San Antonio del Mosco' },
-    { codigo: '1214', distrito: '120214', nombre: 'San Gerardo' },
-    { codigo: '1215', distrito: '120315', nombre: 'San Jorge' },
-    { codigo: '1216', distrito: '120216', nombre: 'San Luis de la Reina' },
-    { codigo: '1217', distrito: '120117', nombre: 'San Miguel' },
-    { codigo: '1218', distrito: '120318', nombre: 'San Rafael Oriente' },
-    { codigo: '1219', distrito: '120219', nombre: 'Sesori' },
-    { codigo: '1220', distrito: '120120', nombre: 'Uluazapa' }
+    { codigo: '1201', nombre: 'San Miguel Centro' },
+    { codigo: '1202', nombre: 'San Miguel Norte' },
+    { codigo: '1203', nombre: 'San Miguel Oeste' }
   ],
   '13': [ // Morazán
-    { codigo: '1301', distrito: '130101', nombre: 'Arambala' },
-    { codigo: '1302', distrito: '130102', nombre: 'Cacaopera' },
-    { codigo: '1303', distrito: '130103', nombre: 'Corinto' },
-    { codigo: '1304', distrito: '130204', nombre: 'Chilanga' },
-    { codigo: '1305', distrito: '130205', nombre: 'Delicias de Concepción' },
-    { codigo: '1306', distrito: '130206', nombre: 'El Divisadero' },
-    { codigo: '1307', distrito: '130107', nombre: 'El Rosario' },
-    { codigo: '1308', distrito: '130208', nombre: 'Gualococti' },
-    { codigo: '1309', distrito: '130209', nombre: 'Guatajiagua' },
-    { codigo: '1310', distrito: '130110', nombre: 'Joateca' },
-    { codigo: '1311', distrito: '130111', nombre: 'Jocoaitique' },
-    { codigo: '1312', distrito: '130212', nombre: 'Jocoro' },
-    { codigo: '1313', distrito: '130213', nombre: 'Lolotiquillo' },
-    { codigo: '1314', distrito: '130114', nombre: 'Meanguera' },
-    { codigo: '1315', distrito: '130215', nombre: 'Osicala' },
-    { codigo: '1316', distrito: '130116', nombre: 'Perquín' },
-    { codigo: '1317', distrito: '130217', nombre: 'San Carlos' },
-    { codigo: '1318', distrito: '130118', nombre: 'San Fernando' },
-    { codigo: '1319', distrito: '130219', nombre: 'San Francisco Gotera' },
-    { codigo: '1320', distrito: '130120', nombre: 'San Isidro' },
-    { codigo: '1321', distrito: '130221', nombre: 'San Simón' },
-    { codigo: '1322', distrito: '130222', nombre: 'Sensembra' },
-    { codigo: '1323', distrito: '130223', nombre: 'Sociedad' },
-    { codigo: '1324', distrito: '130124', nombre: 'Torola' },
-    { codigo: '1325', distrito: '130225', nombre: 'Yamabal' },
-    { codigo: '1326', distrito: '130226', nombre: 'Yoloaiquín' }
+    { codigo: '1301', nombre: 'Morazán Norte' },
+    { codigo: '1302', nombre: 'Morazán Sur' }
   ],
   '14': [ // La Unión
-    { codigo: '1401', distrito: '140101', nombre: 'Anamorós' },
-    { codigo: '1402', distrito: '140102', nombre: 'Bolívar' },
-    { codigo: '1403', distrito: '140103', nombre: 'Concepción de Oriente' },
-    { codigo: '1404', distrito: '140204', nombre: 'Conchagua' },
-    { codigo: '1405', distrito: '140205', nombre: 'El Carmen' },
-    { codigo: '1406', distrito: '140106', nombre: 'El Sauce' },
-    { codigo: '1407', distrito: '140207', nombre: 'Intipucá' },
-    { codigo: '1408', distrito: '140208', nombre: 'La Unión' },
-    { codigo: '1409', distrito: '140109', nombre: 'Lislique' },
-    { codigo: '1410', distrito: '140210', nombre: 'Meanguera del Golfo' },
-    { codigo: '1411', distrito: '140111', nombre: 'Nueva Esparta' },
-    { codigo: '1412', distrito: '140112', nombre: 'Pasaquina' },
-    { codigo: '1413', distrito: '140113', nombre: 'Polorós' },
-    { codigo: '1414', distrito: '140214', nombre: 'San Alejo' },
-    { codigo: '1415', distrito: '140115', nombre: 'San José' },
-    { codigo: '1416', distrito: '140116', nombre: 'Santa Rosa de Lima' },
-    { codigo: '1417', distrito: '140217', nombre: 'Yayantique' },
-    { codigo: '1418', distrito: '140218', nombre: 'Yucuaiquín' }
+    { codigo: '1401', nombre: 'La Unión Norte' },
+    { codigo: '1402', nombre: 'La Unión Sur' }
+  ]
+};
+
+// Distritos por Municipio (Antiguos Municipios ahora son Distritos)
+// Estructura: Código Distrito (6 dígitos DDMMDD), Nombre del Distrito
+// DDMMDD donde DD=Departamento, MM=Municipio, DD=Distrito
+const distritosPorMunicipio = {
+  // Ahuachapán Centro (0101)
+  '0101': [
+    { codigo: '010101', nombre: 'Ahuachapán' },
+    { codigo: '010102', nombre: 'Apaneca' },
+    { codigo: '010104', nombre: 'Concepción de Ataco' },
+    { codigo: '010111', nombre: 'Tacuba' }
+  ],
+  // Ahuachapán Norte (0102)
+  '0102': [
+    { codigo: '010203', nombre: 'Atiquizaya' },
+    { codigo: '010205', nombre: 'El Refugio' },
+    { codigo: '010209', nombre: 'San Lorenzo' },
+    { codigo: '010212', nombre: 'Turín' }
+  ],
+  // Ahuachapán Sur (0103)
+  '0103': [
+    { codigo: '010306', nombre: 'Guaymango' },
+    { codigo: '010307', nombre: 'Jujutla' },
+    { codigo: '010308', nombre: 'San Francisco Menéndez' },
+    { codigo: '010310', nombre: 'San Pedro Puxtla' }
+  ],
+  // Santa Ana Centro (0201)
+  '0201': [
+    { codigo: '020110', nombre: 'Santa Ana' }
+  ],
+  // Santa Ana Este (0202)
+  '0202': [
+    { codigo: '020202', nombre: 'Coatepeque' },
+    { codigo: '020204', nombre: 'El Congo' }
+  ],
+  // Santa Ana Norte (0203)
+  '0203': [
+    { codigo: '020306', nombre: 'Masahuat' },
+    { codigo: '020307', nombre: 'Metapán' },
+    { codigo: '020311', nombre: 'Santa Rosa Guachipilín' },
+    { codigo: '020313', nombre: 'Texistepeque' }
+  ],
+  // Santa Ana Oeste (0204)
+  '0204': [
+    { codigo: '020401', nombre: 'Candelaria de la Frontera' },
+    { codigo: '020403', nombre: 'Chalchuapa' },
+    { codigo: '020405', nombre: 'El Porvenir' },
+    { codigo: '020408', nombre: 'San Antonio Pajonal' },
+    { codigo: '020409', nombre: 'San Sebastián Salitrillo' },
+    { codigo: '020412', nombre: 'Santiago de la Frontera' }
+  ],
+  // Sonsonate Centro (0301)
+  '0301': [
+    { codigo: '030109', nombre: 'Nahulingo' },
+    { codigo: '030111', nombre: 'San Antonio del Monte' },
+    { codigo: '030114', nombre: 'Santo Domingo de Guzmán' },
+    { codigo: '030115', nombre: 'Sonsonate' },
+    { codigo: '030116', nombre: 'Sonzacate' }
+  ],
+  // Sonsonate Este (0302)
+  '0302': [
+    { codigo: '030202', nombre: 'Armenia' },
+    { codigo: '030203', nombre: 'Caluco' },
+    { codigo: '030204', nombre: 'Cuisnahuat' },
+    { codigo: '030205', nombre: 'Santa Isabel Ishuatán' },
+    { codigo: '030206', nombre: 'Izalco' },
+    { codigo: '030212', nombre: 'San Julián' }
+  ],
+  // Sonsonate Norte (0303)
+  '0303': [
+    { codigo: '030307', nombre: 'Juayúa' },
+    { codigo: '030308', nombre: 'Nahuizalco' },
+    { codigo: '030310', nombre: 'Salcoatitán' },
+    { codigo: '030313', nombre: 'Santa Catarina Masahuat' }
+  ],
+  // Sonsonate Oeste (0304)
+  '0304': [
+    { codigo: '030401', nombre: 'Acajutla' }
+  ],
+  // Chalatenango Centro (0401)
+  '0401': [
+    { codigo: '040101', nombre: 'Agua Caliente' },
+    { codigo: '040108', nombre: 'Dulce Nombre de María' },
+    { codigo: '040110', nombre: 'El Paraíso' },
+    { codigo: '040113', nombre: 'La Reina' },
+    { codigo: '040116', nombre: 'Nueva Concepción' },
+    { codigo: '040122', nombre: 'San Fernando' },
+    { codigo: '040124', nombre: 'San Francisco Morazán' },
+    { codigo: '040131', nombre: 'San Rafael' },
+    { codigo: '040132', nombre: 'Santa Rita' },
+    { codigo: '040133', nombre: 'Tejutla' }
+  ],
+  // Chalatenango Norte (0402)
+  '0402': [
+    { codigo: '040204', nombre: 'Citalá' },
+    { codigo: '040225', nombre: 'San Ignacio' },
+    { codigo: '040212', nombre: 'La Palma' }
+  ],
+  // Chalatenango Sur (0403)
+  '0403': [
+    { codigo: '040302', nombre: 'Arcatao' },
+    { codigo: '040303', nombre: 'Azacualpa' },
+    { codigo: '040305', nombre: 'Comalapa' },
+    { codigo: '040306', nombre: 'Concepción Quezaltepeque' },
+    { codigo: '040307', nombre: 'Chalatenango' },
+    { codigo: '040309', nombre: 'El Carrizal' },
+    { codigo: '040311', nombre: 'La Laguna' },
+    { codigo: '040314', nombre: 'Las Vueltas' },
+    { codigo: '040315', nombre: 'Nombre de Jesús' },
+    { codigo: '040317', nombre: 'Nueva Trinidad' },
+    { codigo: '040318', nombre: 'Ojos de Agua' },
+    { codigo: '040319', nombre: 'Potonico' },
+    { codigo: '040320', nombre: 'San Antonio de la Cruz' },
+    { codigo: '040321', nombre: 'San Antonio Los Ranchos' },
+    { codigo: '040326', nombre: 'San Isidro Labrador' },
+    { codigo: '040323', nombre: 'San Francisco Lempa' },
+    { codigo: '040327', nombre: 'San José Cancasque' },
+    { codigo: '040328', nombre: 'San José Las Flores' },
+    { codigo: '040329', nombre: 'San Luis del Carmen' },
+    { codigo: '040330', nombre: 'San Miguel de Mercedes' }
+  ],
+  // La Libertad Centro (0501)
+  '0501': [
+    { codigo: '050102', nombre: 'Ciudad Arce' },
+    { codigo: '050115', nombre: 'San Juan Opico' }
+  ],
+  // La Libertad Costa (0502)
+  '0502': [
+    { codigo: '050205', nombre: 'Chiltiupán' },
+    { codigo: '050208', nombre: 'Jicalapa' },
+    { codigo: '050209', nombre: 'La Libertad' },
+    { codigo: '050218', nombre: 'Tamanique' },
+    { codigo: '050220', nombre: 'Teotepeque' }
+  ],
+  // La Libertad Este (0503)
+  '0503': [
+    { codigo: '050301', nombre: 'Antiguo Cuscatlán' },
+    { codigo: '050306', nombre: 'Huizúcar' },
+    { codigo: '050310', nombre: 'Nuevo Cuscatlán' },
+    { codigo: '050314', nombre: 'San José Villanueva' },
+    { codigo: '050322', nombre: 'Zaragoza' }
+  ],
+  // La Libertad Norte (0504)
+  '0504': [
+    { codigo: '050412', nombre: 'Quezaltepeque' },
+    { codigo: '050416', nombre: 'San Matías' },
+    { codigo: '050417', nombre: 'San Pablo Tacachico' }
+  ],
+  // La Libertad Oeste (0505)
+  '0505': [
+    { codigo: '050503', nombre: 'Colón' },
+    { codigo: '050507', nombre: 'Jayaque' },
+    { codigo: '050513', nombre: 'Sacacoyo' },
+    { codigo: '050519', nombre: 'Talnique' },
+    { codigo: '050521', nombre: 'Tepecoyo' }
+  ],
+  // La Libertad Sur (0506)
+  '0506': [
+    { codigo: '050604', nombre: 'Comasagua' },
+    { codigo: '050611', nombre: 'Santa Tecla' }
+  ],
+  // San Salvador Centro (0601)
+  '0601': [
+    { codigo: '060103', nombre: 'Ayutuxtepeque' },
+    { codigo: '060104', nombre: 'Cuscatancingo' },
+    { codigo: '060108', nombre: 'Mejicanos' },
+    { codigo: '060114', nombre: 'San Salvador' },
+    { codigo: '060119', nombre: 'Ciudad Delgado' }
+  ],
+  // San Salvador Este (0602)
+  '0602': [
+    { codigo: '060207', nombre: 'Ilopango' },
+    { codigo: '060213', nombre: 'San Martín' },
+    { codigo: '060217', nombre: 'Soyapango' },
+    { codigo: '060218', nombre: 'Tonacatepeque' }
+  ],
+  // San Salvador Norte (0603)
+  '0603': [
+    { codigo: '060301', nombre: 'Aguilares' },
+    { codigo: '060305', nombre: 'El Paisnal' },
+    { codigo: '060306', nombre: 'Guazapa' }
+  ],
+  // San Salvador Oeste (0604)
+  '0604': [
+    { codigo: '060402', nombre: 'Apopa' },
+    { codigo: '060409', nombre: 'Nejapa' }
+  ],
+  // San Salvador Sur (0605)
+  '0605': [
+    { codigo: '060510', nombre: 'Panchimalco' },
+    { codigo: '060511', nombre: 'Rosario de Mora' },
+    { codigo: '060512', nombre: 'San Marcos' },
+    { codigo: '060515', nombre: 'Santiago Texacuangos' },
+    { codigo: '060516', nombre: 'Santo Tomás' }
+  ],
+  // Cuscatlán Norte (0701)
+  '0701': [
+    { codigo: '070106', nombre: 'Oratorio de Concepción' },
+    { codigo: '070107', nombre: 'San Bartolomé Perulapía' },
+    { codigo: '070109', nombre: 'San José Guayabal' },
+    { codigo: '070110', nombre: 'San Pedro Perulapán' },
+    { codigo: '070115', nombre: 'Suchitoto' }
+  ],
+  // Cuscatlán Sur (0702)
+  '0702': [
+    { codigo: '070201', nombre: 'Candelaria' },
+    { codigo: '070202', nombre: 'Cojutepeque' },
+    { codigo: '070203', nombre: 'El Carmen' },
+    { codigo: '070204', nombre: 'El Rosario' },
+    { codigo: '070205', nombre: 'Monte San Juan' },
+    { codigo: '070208', nombre: 'San Cristóbal' },
+    { codigo: '070211', nombre: 'San Rafael Cedros' },
+    { codigo: '070212', nombre: 'San Ramón' },
+    { codigo: '070213', nombre: 'Santa Cruz Analquito' },
+    { codigo: '070214', nombre: 'Santa Cruz Michapa' },
+    { codigo: '070216', nombre: 'Tenancingo' }
+  ],
+  // La Paz Centro (0801)
+  '0801': [
+    { codigo: '080102', nombre: 'El Rosario' },
+    { codigo: '080103', nombre: 'Jerusalén' },
+    { codigo: '080104', nombre: 'Mercedes La Ceiba' },
+    { codigo: '080106', nombre: 'Paraíso de Osorio' },
+    { codigo: '080107', nombre: 'San Antonio Masahuat' },
+    { codigo: '080108', nombre: 'San Emigdio' },
+    { codigo: '080112', nombre: 'San Juan Tepezontes' },
+    { codigo: '080114', nombre: 'San Miguel Tepezontes' },
+    { codigo: '080116', nombre: 'San Pedro Nonualco' },
+    { codigo: '080118', nombre: 'Santa María Ostuma' },
+    { codigo: '080119', nombre: 'Santiago Nonualco' },
+    { codigo: '080122', nombre: 'San Luis La Herradura' }
+  ],
+  // La Paz Este (0802)
+  '0802': [
+    { codigo: '080210', nombre: 'San Juan Nonualco' },
+    { codigo: '080217', nombre: 'San Rafael Obrajuelo' },
+    { codigo: '080221', nombre: 'Zacatecoluca' }
+  ],
+  // La Paz Oeste (0803)
+  '0803': [
+    { codigo: '080301', nombre: 'Cuyultitán' },
+    { codigo: '080305', nombre: 'Olocuilta' },
+    { codigo: '080309', nombre: 'San Francisco Chinameca' },
+    { codigo: '080311', nombre: 'San Juan Talpa' },
+    { codigo: '080313', nombre: 'San Luis Talpa' },
+    { codigo: '080315', nombre: 'San Pedro Masahuat' },
+    { codigo: '080320', nombre: 'Tapalhuaca' }
+  ],
+  // Cabañas Este (0901)
+  '0901': [
+    { codigo: '090109', nombre: 'Dolores' },
+    { codigo: '090102', nombre: 'Guacotecti' },
+    { codigo: '090105', nombre: 'San Isidro' },
+    { codigo: '090106', nombre: 'Sensuntepeque' },
+    { codigo: '090108', nombre: 'Victoria' }
+  ],
+  // Cabañas Oeste (0902)
+  '0902': [
+    { codigo: '090201', nombre: 'Cinquera' },
+    { codigo: '090203', nombre: 'Ilobasco' },
+    { codigo: '090204', nombre: 'Jutiapa' },
+    { codigo: '090207', nombre: 'Tejutepeque' }
+  ],
+  // San Vicente Norte (1001)
+  '1001': [
+    { codigo: '100101', nombre: 'Apastepeque' },
+    { codigo: '100106', nombre: 'San Esteban Catarina' },
+    { codigo: '100107', nombre: 'San Ildefonso' },
+    { codigo: '100108', nombre: 'San Lorenzo' },
+    { codigo: '100109', nombre: 'San Sebastián' },
+    { codigo: '100104', nombre: 'Santa Clara' },
+    { codigo: '100105', nombre: 'Santo Domingo' }
+  ],
+  // San Vicente Sur (1002)
+  '1002': [
+    { codigo: '100202', nombre: 'Guadalupe' },
+    { codigo: '100203', nombre: 'San Cayetano Istepeque' },
+    { codigo: '100210', nombre: 'San Vicente' },
+    { codigo: '100211', nombre: 'Tecoluca' },
+    { codigo: '100212', nombre: 'Tepetitán' },
+    { codigo: '100213', nombre: 'Verapaz' }
+  ],
+  // Usulután Este (1101)
+  '1101': [
+    { codigo: '110103', nombre: 'California' },
+    { codigo: '110104', nombre: 'Concepción Batres' },
+    { codigo: '110106', nombre: 'Ereguayquín' },
+    { codigo: '110110', nombre: 'Jucuarán' },
+    { codigo: '110113', nombre: 'Ozatlán' },
+    { codigo: '110123', nombre: 'Usulután' },
+    { codigo: '110117', nombre: 'San Dionisio' },
+    { codigo: '110118', nombre: 'Santa Elena' },
+    { codigo: '110120', nombre: 'Santa María' },
+    { codigo: '110122', nombre: 'Tecapán' }
+  ],
+  // Usulután Norte (1102)
+  '1102': [
+    { codigo: '110201', nombre: 'Alegría' },
+    { codigo: '110202', nombre: 'Berlín' },
+    { codigo: '110205', nombre: 'El Triunfo' },
+    { codigo: '110207', nombre: 'Estanzuelas' },
+    { codigo: '110209', nombre: 'Jucuapa' },
+    { codigo: '110211', nombre: 'Mercedes Umaña' },
+    { codigo: '110212', nombre: 'Nueva Granada' },
+    { codigo: '110216', nombre: 'San Buenaventura' },
+    { codigo: '110221', nombre: 'Santiago de María' }
+  ],
+  // Usulután Oeste (1103)
+  '1103': [
+    { codigo: '110308', nombre: 'Jiquilisco' },
+    { codigo: '110314', nombre: 'Puerto El Triunfo' },
+    { codigo: '110315', nombre: 'San Agustín' },
+    { codigo: '110319', nombre: 'San Francisco Javier' }
+  ],
+  // San Miguel Centro (1201)
+  '1201': [
+    { codigo: '120103', nombre: 'Comacarán' },
+    { codigo: '120109', nombre: 'Moncagua' },
+    { codigo: '120106', nombre: 'Chirilagua' },
+    { codigo: '120112', nombre: 'Quelepa' },
+    { codigo: '120117', nombre: 'San Miguel' },
+    { codigo: '120120', nombre: 'Uluazapa' }
+  ],
+  // San Miguel Norte (1202)
+  '1202': [
+    { codigo: '120201', nombre: 'Carolina' },
+    { codigo: '120202', nombre: 'Ciudad Barrios' },
+    { codigo: '120204', nombre: 'Chapeltique' },
+    { codigo: '120211', nombre: 'Nuevo Edén de San Juan' },
+    { codigo: '120213', nombre: 'San Antonio del Mosco' },
+    { codigo: '120214', nombre: 'San Gerardo' },
+    { codigo: '120216', nombre: 'San Luis de la Reina' },
+    { codigo: '120219', nombre: 'Sesori' }
+  ],
+  // San Miguel Oeste (1203)
+  '1203': [
+    { codigo: '120305', nombre: 'Chinameca' },
+    { codigo: '120307', nombre: 'El Tránsito' },
+    { codigo: '120308', nombre: 'Lolotique' },
+    { codigo: '120310', nombre: 'Nueva Guadalupe' },
+    { codigo: '120315', nombre: 'San Jorge' },
+    { codigo: '120318', nombre: 'San Rafael Oriente' }
+  ],
+  // Morazán Norte (1301)
+  '1301': [
+    { codigo: '130101', nombre: 'Arambala' },
+    { codigo: '130102', nombre: 'Cacaopera' },
+    { codigo: '130103', nombre: 'Corinto' },
+    { codigo: '130107', nombre: 'El Rosario' },
+    { codigo: '130110', nombre: 'Joateca' },
+    { codigo: '130111', nombre: 'Jocoaitique' },
+    { codigo: '130114', nombre: 'Meanguera' },
+    { codigo: '130116', nombre: 'Perquín' },
+    { codigo: '130118', nombre: 'San Fernando' },
+    { codigo: '130120', nombre: 'San Isidro' },
+    { codigo: '130124', nombre: 'Torola' }
+  ],
+  // Morazán Sur (1302)
+  '1302': [
+    { codigo: '130204', nombre: 'Chilanga' },
+    { codigo: '130205', nombre: 'Delicias de Concepción' },
+    { codigo: '130206', nombre: 'El Divisadero' },
+    { codigo: '130208', nombre: 'Gualococti' },
+    { codigo: '130209', nombre: 'Guatajiagua' },
+    { codigo: '130212', nombre: 'Jocoro' },
+    { codigo: '130213', nombre: 'Lolotiquillo' },
+    { codigo: '130215', nombre: 'Osicala' },
+    { codigo: '130217', nombre: 'San Carlos' },
+    { codigo: '130219', nombre: 'San Francisco Gotera' },
+    { codigo: '130221', nombre: 'San Simón' },
+    { codigo: '130222', nombre: 'Sensembra' },
+    { codigo: '130223', nombre: 'Sociedad' },
+    { codigo: '130225', nombre: 'Yamabal' },
+    { codigo: '130226', nombre: 'Yoloaiquín' }
+  ],
+  // La Unión Norte (1401)
+  '1401': [
+    { codigo: '140101', nombre: 'Anamorós' },
+    { codigo: '140102', nombre: 'Bolívar' },
+    { codigo: '140103', nombre: 'Concepción de Oriente' },
+    { codigo: '140106', nombre: 'El Sauce' },
+    { codigo: '140109', nombre: 'Lislique' },
+    { codigo: '140111', nombre: 'Nueva Esparta' },
+    { codigo: '140112', nombre: 'Pasaquina' },
+    { codigo: '140113', nombre: 'Polorós' },
+    { codigo: '140115', nombre: 'San José' },
+    { codigo: '140116', nombre: 'Santa Rosa de Lima' }
+  ],
+  // La Unión Sur (1402)
+  '1402': [
+    { codigo: '140204', nombre: 'Conchagua' },
+    { codigo: '140205', nombre: 'El Carmen' },
+    { codigo: '140207', nombre: 'Intipucá' },
+    { codigo: '140208', nombre: 'La Unión' },
+    { codigo: '140210', nombre: 'Meanguera del Golfo' },
+    { codigo: '140214', nombre: 'San Alejo' },
+    { codigo: '140217', nombre: 'Yayantique' },
+    { codigo: '140218', nombre: 'Yucuaiquín' }
   ]
 };
 
@@ -717,24 +850,26 @@ function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
   return municipio ? municipio.nombre : codigoMunicipio;
 }
 
-// Obtener nombre del distrito municipal por código de municipio
-function obtenerNombreDistrito(codigoMunicipio) {
-  // Extraer código de distrito (primeros 4 dígitos del código de municipio)
-  const codigoDistrito = codigoMunicipio.substring(0, 4);
-  return distritosMunicipales[codigoDistrito] || codigoDistrito;
+// Obtener lista de distritos por código de municipio
+function obtenerDistritosPorMunicipio(codigoMunicipio) {
+  return distritosPorMunicipio[codigoMunicipio] || [];
 }
 
-// Obtener código de distrito desde código de municipio completo
-function obtenerCodigoDistrito(codigoDepartamento, codigoMunicipio) {
-  if (!municipiosPorDepartamento[codigoDepartamento]) {
-    return null;
+// Obtener nombre del distrito por código completo (6 dígitos)
+function obtenerNombreDistrito(codigoDistrito) {
+  // Buscar en todos los municipios
+  for (const municipio in distritosPorMunicipio) {
+    const distrito = distritosPorMunicipio[municipio].find(d => d.codigo === codigoDistrito);
+    if (distrito) {
+      return distrito.nombre;
+    }
   }
-  
-  const municipio = municipiosPorDepartamento[codigoDepartamento].find(
-    m => m.codigo === codigoMunicipio
-  );
-  
-  return municipio ? municipio.distrito : null;
+  return codigoDistrito;
+}
+
+// Obtener código de municipio desde código de distrito (primeros 4 dígitos)
+function obtenerMunicipioDesdeDistrito(codigoDistrito) {
+  return codigoDistrito.substring(0, 4);
 }
 
 // Guardar configuración
