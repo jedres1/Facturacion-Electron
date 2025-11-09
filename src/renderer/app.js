@@ -372,120 +372,120 @@ const distritosPorMunicipio = {
   ],
   // Usulután Este (1101)
   '1101': [
-    { codigo: '110103', nombre: 'California' },
-    { codigo: '110104', nombre: 'Concepción Batres' },
-    { codigo: '110106', nombre: 'Ereguayquín' },
-    { codigo: '110110', nombre: 'Jucuarán' },
-    { codigo: '110113', nombre: 'Ozatlán' },
-    { codigo: '110123', nombre: 'Usulután' },
-    { codigo: '110117', nombre: 'San Dionisio' },
-    { codigo: '110118', nombre: 'Santa Elena' },
-    { codigo: '110120', nombre: 'Santa María' },
-    { codigo: '110122', nombre: 'Tecapán' }
+    { codigoCarga: '1103', codigoDistrito: '110103', nombre: 'California' },
+    { codigoCarga: '1104', codigoDistrito: '110104', nombre: 'Concepción Batres' },
+    { codigoCarga: '1106', codigoDistrito: '110106', nombre: 'Ereguayquín' },
+    { codigoCarga: '1110', codigoDistrito: '110110', nombre: 'Jucuarán' },
+    { codigoCarga: '1113', codigoDistrito: '110113', nombre: 'Ozatlán' },
+    { codigoCarga: '1123', codigoDistrito: '110123', nombre: 'Usulután' },
+    { codigoCarga: '1117', codigoDistrito: '110117', nombre: 'San Dionisio' },
+    { codigoCarga: '1118', codigoDistrito: '110118', nombre: 'Santa Elena' },
+    { codigoCarga: '1120', codigoDistrito: '110120', nombre: 'Santa María' },
+    { codigoCarga: '1122', codigoDistrito: '110122', nombre: 'Tecapán' }
   ],
   // Usulután Norte (1102)
   '1102': [
-    { codigo: '110201', nombre: 'Alegría' },
-    { codigo: '110202', nombre: 'Berlín' },
-    { codigo: '110205', nombre: 'El Triunfo' },
-    { codigo: '110207', nombre: 'Estanzuelas' },
-    { codigo: '110209', nombre: 'Jucuapa' },
-    { codigo: '110211', nombre: 'Mercedes Umaña' },
-    { codigo: '110212', nombre: 'Nueva Granada' },
-    { codigo: '110216', nombre: 'San Buenaventura' },
-    { codigo: '110221', nombre: 'Santiago de María' }
+    { codigoCarga: '1101', codigoDistrito: '110201', nombre: 'Alegría' },
+    { codigoCarga: '1102', codigoDistrito: '110202', nombre: 'Berlín' },
+    { codigoCarga: '1105', codigoDistrito: '110205', nombre: 'El Triunfo' },
+    { codigoCarga: '1107', codigoDistrito: '110207', nombre: 'Estanzuelas' },
+    { codigoCarga: '1109', codigoDistrito: '110209', nombre: 'Jucuapa' },
+    { codigoCarga: '1111', codigoDistrito: '110211', nombre: 'Mercedes Umaña' },
+    { codigoCarga: '1112', codigoDistrito: '110212', nombre: 'Nueva Granada' },
+    { codigoCarga: '1116', codigoDistrito: '110216', nombre: 'San Buenaventura' },
+    { codigoCarga: '1121', codigoDistrito: '110221', nombre: 'Santiago de María' }
   ],
   // Usulután Oeste (1103)
   '1103': [
-    { codigo: '110308', nombre: 'Jiquilisco' },
-    { codigo: '110314', nombre: 'Puerto El Triunfo' },
-    { codigo: '110315', nombre: 'San Agustín' },
-    { codigo: '110319', nombre: 'San Francisco Javier' }
+    { codigoCarga: '1108', codigoDistrito: '110308', nombre: 'Jiquilisco' },
+    { codigoCarga: '1114', codigoDistrito: '110314', nombre: 'Puerto El Triunfo' },
+    { codigoCarga: '1115', codigoDistrito: '110315', nombre: 'San Agustín' },
+    { codigoCarga: '1119', codigoDistrito: '110319', nombre: 'San Francisco Javier' }
   ],
   // San Miguel Centro (1201)
   '1201': [
-    { codigo: '120103', nombre: 'Comacarán' },
-    { codigo: '120109', nombre: 'Moncagua' },
-    { codigo: '120106', nombre: 'Chirilagua' },
-    { codigo: '120112', nombre: 'Quelepa' },
-    { codigo: '120117', nombre: 'San Miguel' },
-    { codigo: '120120', nombre: 'Uluazapa' }
+    { codigoCarga: '1203', codigoDistrito: '120103', nombre: 'Comacarán' },
+    { codigoCarga: '1209', codigoDistrito: '120109', nombre: 'Moncagua' },
+    { codigoCarga: '1206', codigoDistrito: '120106', nombre: 'Chirilagua' },
+    { codigoCarga: '1212', codigoDistrito: '120112', nombre: 'Quelepa' },
+    { codigoCarga: '1217', codigoDistrito: '120117', nombre: 'San Miguel' },
+    { codigoCarga: '1220', codigoDistrito: '120120', nombre: 'Uluazapa' }
   ],
   // San Miguel Norte (1202)
   '1202': [
-    { codigo: '120201', nombre: 'Carolina' },
-    { codigo: '120202', nombre: 'Ciudad Barrios' },
-    { codigo: '120204', nombre: 'Chapeltique' },
-    { codigo: '120211', nombre: 'Nuevo Edén de San Juan' },
-    { codigo: '120213', nombre: 'San Antonio del Mosco' },
-    { codigo: '120214', nombre: 'San Gerardo' },
-    { codigo: '120216', nombre: 'San Luis de la Reina' },
-    { codigo: '120219', nombre: 'Sesori' }
+    { codigoCarga: '1201', codigoDistrito: '120201', nombre: 'Carolina' },
+    { codigoCarga: '1202', codigoDistrito: '120202', nombre: 'Ciudad Barrios' },
+    { codigoCarga: '1204', codigoDistrito: '120204', nombre: 'Chapeltique' },
+    { codigoCarga: '1211', codigoDistrito: '120211', nombre: 'Nuevo Edén de San Juan' },
+    { codigoCarga: '1213', codigoDistrito: '120213', nombre: 'San Antonio del Mosco' },
+    { codigoCarga: '1214', codigoDistrito: '120214', nombre: 'San Gerardo' },
+    { codigoCarga: '1216', codigoDistrito: '120216', nombre: 'San Luis de la Reina' },
+    { codigoCarga: '1219', codigoDistrito: '120219', nombre: 'Sesori' }
   ],
   // San Miguel Oeste (1203)
   '1203': [
-    { codigo: '120305', nombre: 'Chinameca' },
-    { codigo: '120307', nombre: 'El Tránsito' },
-    { codigo: '120308', nombre: 'Lolotique' },
-    { codigo: '120310', nombre: 'Nueva Guadalupe' },
-    { codigo: '120315', nombre: 'San Jorge' },
-    { codigo: '120318', nombre: 'San Rafael Oriente' }
+    { codigoCarga: '1205', codigoDistrito: '120305', nombre: 'Chinameca' },
+    { codigoCarga: '1207', codigoDistrito: '120307', nombre: 'El Tránsito' },
+    { codigoCarga: '1208', codigoDistrito: '120308', nombre: 'Lolotique' },
+    { codigoCarga: '1210', codigoDistrito: '120310', nombre: 'Nueva Guadalupe' },
+    { codigoCarga: '1215', codigoDistrito: '120315', nombre: 'San Jorge' },
+    { codigoCarga: '1218', codigoDistrito: '120318', nombre: 'San Rafael Oriente' }
   ],
   // Morazán Norte (1301)
   '1301': [
-    { codigo: '130101', nombre: 'Arambala' },
-    { codigo: '130102', nombre: 'Cacaopera' },
-    { codigo: '130103', nombre: 'Corinto' },
-    { codigo: '130107', nombre: 'El Rosario' },
-    { codigo: '130110', nombre: 'Joateca' },
-    { codigo: '130111', nombre: 'Jocoaitique' },
-    { codigo: '130114', nombre: 'Meanguera' },
-    { codigo: '130116', nombre: 'Perquín' },
-    { codigo: '130118', nombre: 'San Fernando' },
-    { codigo: '130120', nombre: 'San Isidro' },
-    { codigo: '130124', nombre: 'Torola' }
+    { codigoCarga: '1301', codigoDistrito: '130101', nombre: 'Arambala' },
+    { codigoCarga: '1302', codigoDistrito: '130102', nombre: 'Cacaopera' },
+    { codigoCarga: '1303', codigoDistrito: '130103', nombre: 'Corinto' },
+    { codigoCarga: '1307', codigoDistrito: '130107', nombre: 'El Rosario' },
+    { codigoCarga: '1310', codigoDistrito: '130110', nombre: 'Joateca' },
+    { codigoCarga: '1311', codigoDistrito: '130111', nombre: 'Jocoaitique' },
+    { codigoCarga: '1314', codigoDistrito: '130114', nombre: 'Meanguera' },
+    { codigoCarga: '1316', codigoDistrito: '130116', nombre: 'Perquín' },
+    { codigoCarga: '1318', codigoDistrito: '130118', nombre: 'San Fernando' },
+    { codigoCarga: '1320', codigoDistrito: '130120', nombre: 'San Isidro' },
+    { codigoCarga: '1324', codigoDistrito: '130124', nombre: 'Torola' }
   ],
   // Morazán Sur (1302)
   '1302': [
-    { codigo: '130204', nombre: 'Chilanga' },
-    { codigo: '130205', nombre: 'Delicias de Concepción' },
-    { codigo: '130206', nombre: 'El Divisadero' },
-    { codigo: '130208', nombre: 'Gualococti' },
-    { codigo: '130209', nombre: 'Guatajiagua' },
-    { codigo: '130212', nombre: 'Jocoro' },
-    { codigo: '130213', nombre: 'Lolotiquillo' },
-    { codigo: '130215', nombre: 'Osicala' },
-    { codigo: '130217', nombre: 'San Carlos' },
-    { codigo: '130219', nombre: 'San Francisco Gotera' },
-    { codigo: '130221', nombre: 'San Simón' },
-    { codigo: '130222', nombre: 'Sensembra' },
-    { codigo: '130223', nombre: 'Sociedad' },
-    { codigo: '130225', nombre: 'Yamabal' },
-    { codigo: '130226', nombre: 'Yoloaiquín' }
+    { codigoCarga: '1304', codigoDistrito: '130204', nombre: 'Chilanga' },
+    { codigoCarga: '1305', codigoDistrito: '130205', nombre: 'Delicias de Concepción' },
+    { codigoCarga: '1306', codigoDistrito: '130206', nombre: 'El Divisadero' },
+    { codigoCarga: '1308', codigoDistrito: '130208', nombre: 'Gualococti' },
+    { codigoCarga: '1309', codigoDistrito: '130209', nombre: 'Guatajiagua' },
+    { codigoCarga: '1312', codigoDistrito: '130212', nombre: 'Jocoro' },
+    { codigoCarga: '1313', codigoDistrito: '130213', nombre: 'Lolotiquillo' },
+    { codigoCarga: '1315', codigoDistrito: '130215', nombre: 'Osicala' },
+    { codigoCarga: '1317', codigoDistrito: '130217', nombre: 'San Carlos' },
+    { codigoCarga: '1319', codigoDistrito: '130219', nombre: 'San Francisco Gotera' },
+    { codigoCarga: '1321', codigoDistrito: '130221', nombre: 'San Simón' },
+    { codigoCarga: '1322', codigoDistrito: '130222', nombre: 'Sensembra' },
+    { codigoCarga: '1323', codigoDistrito: '130223', nombre: 'Sociedad' },
+    { codigoCarga: '1325', codigoDistrito: '130225', nombre: 'Yamabal' },
+    { codigoCarga: '1326', codigoDistrito: '130226', nombre: 'Yoloaiquín' }
   ],
   // La Unión Norte (1401)
   '1401': [
-    { codigo: '140101', nombre: 'Anamorós' },
-    { codigo: '140102', nombre: 'Bolívar' },
-    { codigo: '140103', nombre: 'Concepción de Oriente' },
-    { codigo: '140106', nombre: 'El Sauce' },
-    { codigo: '140109', nombre: 'Lislique' },
-    { codigo: '140111', nombre: 'Nueva Esparta' },
-    { codigo: '140112', nombre: 'Pasaquina' },
-    { codigo: '140113', nombre: 'Polorós' },
-    { codigo: '140115', nombre: 'San José' },
-    { codigo: '140116', nombre: 'Santa Rosa de Lima' }
+    { codigoCarga: '1401', codigoDistrito: '140101', nombre: 'Anamorós' },
+    { codigoCarga: '1402', codigoDistrito: '140102', nombre: 'Bolívar' },
+    { codigoCarga: '1403', codigoDistrito: '140103', nombre: 'Concepción de Oriente' },
+    { codigoCarga: '1406', codigoDistrito: '140106', nombre: 'El Sauce' },
+    { codigoCarga: '1409', codigoDistrito: '140109', nombre: 'Lislique' },
+    { codigoCarga: '1411', codigoDistrito: '140111', nombre: 'Nueva Esparta' },
+    { codigoCarga: '1412', codigoDistrito: '140112', nombre: 'Pasaquina' },
+    { codigoCarga: '1413', codigoDistrito: '140113', nombre: 'Polorós' },
+    { codigoCarga: '1415', codigoDistrito: '140115', nombre: 'San José La Fuente' },
+    { codigoCarga: '1416', codigoDistrito: '140116', nombre: 'Santa Rosa de Lima' }
   ],
   // La Unión Sur (1402)
   '1402': [
-    { codigo: '140204', nombre: 'Conchagua' },
-    { codigo: '140205', nombre: 'El Carmen' },
-    { codigo: '140207', nombre: 'Intipucá' },
-    { codigo: '140208', nombre: 'La Unión' },
-    { codigo: '140210', nombre: 'Meanguera del Golfo' },
-    { codigo: '140214', nombre: 'San Alejo' },
-    { codigo: '140217', nombre: 'Yayantique' },
-    { codigo: '140218', nombre: 'Yucuaiquín' }
+    { codigoCarga: '1404', codigoDistrito: '140204', nombre: 'Conchagua' },
+    { codigoCarga: '1405', codigoDistrito: '140205', nombre: 'El Carmen' },
+    { codigoCarga: '1407', codigoDistrito: '140207', nombre: 'Intipucá' },
+    { codigoCarga: '1408', codigoDistrito: '140208', nombre: 'La Unión' },
+    { codigoCarga: '1410', codigoDistrito: '140210', nombre: 'Meanguera del Golfo' },
+    { codigoCarga: '1414', codigoDistrito: '140214', nombre: 'San Alejo' },
+    { codigoCarga: '1417', codigoDistrito: '140217', nombre: 'Yayantique' },
+    { codigoCarga: '1418', codigoDistrito: '140218', nombre: 'Yucuaiquín' }
   ]
 };
 
