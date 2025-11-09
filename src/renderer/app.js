@@ -11,6 +11,55 @@ let state = {
   }
 };
 
+// Catálogo de Distritos (Zonas Geográficas) - Ministerio de Hacienda
+// Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Distrito
+const distritosMunicipales = {
+  '0101': 'Ahuachapán Centro',
+  '0102': 'Ahuachapán Norte',
+  '0103': 'Ahuachapán Sur',
+  '0201': 'Santa Ana Centro',
+  '0202': 'Santa Ana Este',
+  '0203': 'Santa Ana Norte',
+  '0204': 'Santa Ana Oeste',
+  '0301': 'Sonsonate Centro',
+  '0302': 'Sonsonate Este',
+  '0303': 'Sonsonate Norte',
+  '0304': 'Sonsonate Oeste',
+  '0401': 'Chalatenango Centro',
+  '0402': 'Chalatenango Norte',
+  '0403': 'Chalatenango Sur',
+  '0501': 'La Libertad Centro',
+  '0502': 'La Libertad Costa',
+  '0503': 'La Libertad Este',
+  '0504': 'La Libertad Norte',
+  '0505': 'La Libertad Oeste',
+  '0506': 'La Libertad Sur',
+  '0601': 'San Salvador Centro',
+  '0602': 'San Salvador Este',
+  '0603': 'San Salvador Norte',
+  '0604': 'San Salvador Oeste',
+  '0605': 'San Salvador Sur',
+  '0701': 'Cuscatlán Norte',
+  '0702': 'Cuscatlán Sur',
+  '0801': 'La Paz Centro',
+  '0802': 'La Paz Este',
+  '0803': 'La Paz Oeste',
+  '0901': 'Cabañas Este',
+  '0902': 'Cabañas Oeste',
+  '1001': 'San Vicente Norte',
+  '1002': 'San Vicente Sur',
+  '1101': 'Usulután Este',
+  '1102': 'Usulután Norte',
+  '1103': 'Usulután Oeste',
+  '1201': 'San Miguel Centro',
+  '1202': 'San Miguel Norte',
+  '1203': 'San Miguel Oeste',
+  '1301': 'Morazán Norte',
+  '1302': 'Morazán Sur',
+  '1401': 'La Unión Norte',
+  '1402': 'La Unión Sur'
+};
+
 // Municipios de El Salvador por departamento (Actualizado Noviembre 2025)
 // Códigos oficiales según Ministerio de Hacienda - Catálogo Oficial
 // Estructura: Código Municipio (4 dígitos DDMM), Código Distrito (6 dígitos DDDDMM), Nombre
@@ -666,6 +715,26 @@ function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
   );
   
   return municipio ? municipio.nombre : codigoMunicipio;
+}
+
+// Obtener nombre del distrito municipal por código de municipio
+function obtenerNombreDistrito(codigoMunicipio) {
+  // Extraer código de distrito (primeros 4 dígitos del código de municipio)
+  const codigoDistrito = codigoMunicipio.substring(0, 4);
+  return distritosMunicipales[codigoDistrito] || codigoDistrito;
+}
+
+// Obtener código de distrito desde código de municipio completo
+function obtenerCodigoDistrito(codigoDepartamento, codigoMunicipio) {
+  if (!municipiosPorDepartamento[codigoDepartamento]) {
+    return null;
+  }
+  
+  const municipio = municipiosPorDepartamento[codigoDepartamento].find(
+    m => m.codigo === codigoMunicipio
+  );
+  
+  return municipio ? municipio.distrito : null;
 }
 
 // Guardar configuración
