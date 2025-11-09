@@ -298,6 +298,10 @@
                   <input type="text" id="config-nit" placeholder="0000-000000-000-0" required>
                 </div>
                 <div class="form-group">
+                  <label>NRC (Número de Registro de Contribuyente)</label>
+                  <input type="text" id="config-nrc" placeholder="000000-0">
+                </div>
+                <div class="form-group">
                   <label>Nombre de la Empresa *</label>
                   <input type="text" id="config-nombre" required>
                 </div>
@@ -306,8 +310,148 @@
                   <input type="text" id="config-nombre-comercial">
                 </div>
                 <div class="form-group">
+                  <label>Tipo de Persona</label>
+                  <select id="config-tipo-persona">
+                    <option value="">Seleccionar...</option>
+                    <option value="Natural">Natural</option>
+                    <option value="Jurídica">Jurídica</option>
+                  </select>
+                </div>
+                <div class="form-group full-width">
                   <label>Actividad Económica *</label>
-                  <input type="text" id="config-actividad">
+                  <select id="config-actividad" required>
+                    <option value="">Seleccionar actividad...</option>
+                    <optgroup label="A - Agricultura, ganadería, silvicultura y pesca">
+                      <option value="01">Producción agrícola, pecuaria, caza y actividades de servicios conexas</option>
+                      <option value="02">Silvicultura y extracción de madera</option>
+                      <option value="03">Pesca y acuicultura</option>
+                    </optgroup>
+                    <optgroup label="B - Explotación de minas y canteras">
+                      <option value="05">Extracción de carbón de piedra y lignito</option>
+                      <option value="06">Extracción de petróleo crudo y gas natural</option>
+                      <option value="07">Extracción de minerales metalíferos</option>
+                      <option value="08">Explotación de otras minas y canteras</option>
+                      <option value="09">Actividades de servicios de apoyo para la explotación de minas</option>
+                    </optgroup>
+                    <optgroup label="C - Industrias manufactureras">
+                      <option value="10">Elaboración de productos alimenticios</option>
+                      <option value="11">Elaboración de bebidas</option>
+                      <option value="12">Elaboración de productos de tabaco</option>
+                      <option value="13">Fabricación de productos textiles</option>
+                      <option value="14">Fabricación de prendas de vestir</option>
+                      <option value="15">Fabricación de cueros y productos conexos</option>
+                      <option value="16">Fabricación de productos de madera y corcho, excepto muebles</option>
+                      <option value="17">Fabricación de papel y de productos de papel</option>
+                      <option value="18">Impresión y reproducción de grabaciones</option>
+                      <option value="19">Fabricación de coque y de productos de la refinación del petróleo</option>
+                      <option value="20">Fabricación de sustancias y productos químicos</option>
+                      <option value="21">Fabricación de productos farmacéuticos</option>
+                      <option value="22">Fabricación de productos de caucho y plástico</option>
+                      <option value="23">Fabricación de otros productos minerales no metálicos</option>
+                      <option value="24">Fabricación de metales comunes</option>
+                      <option value="25">Fabricación de productos elaborados de metal, excepto maquinaria y equipo</option>
+                      <option value="26">Fabricación de productos de informática, de electrónica y de óptica</option>
+                      <option value="27">Fabricación de equipo eléctrico</option>
+                      <option value="28">Fabricación de maquinaria y equipo n.c.p.</option>
+                      <option value="29">Fabricación de vehículos automotores, remolques y semirremolques</option>
+                      <option value="30">Fabricación de otros tipos de equipo de transporte</option>
+                      <option value="31">Fabricación de muebles</option>
+                      <option value="32">Otras industrias manufactureras</option>
+                      <option value="33">Reparación e instalación de maquinaria y equipo</option>
+                    </optgroup>
+                    <optgroup label="D - Suministro de electricidad, gas, vapor y aire acondicionado">
+                      <option value="35">Suministro de electricidad, gas, vapor y aire acondicionado</option>
+                    </optgroup>
+                    <optgroup label="E - Suministro de agua; evacuación de aguas residuales, gestión de desechos">
+                      <option value="36">Captación, tratamiento y distribución de agua</option>
+                      <option value="37">Evacuación de aguas residuales (alcantarillado)</option>
+                      <option value="38">Recolección, tratamiento y eliminación de desechos; reciclaje</option>
+                      <option value="39">Actividades de saneamiento y otros servicios de gestión de desechos</option>
+                    </optgroup>
+                    <optgroup label="F - Construcción">
+                      <option value="41">Construcción de edificios</option>
+                      <option value="42">Obras de ingeniería civil</option>
+                      <option value="43">Actividades especializadas de construcción</option>
+                    </optgroup>
+                    <optgroup label="G - Comercio al por mayor y al por menor; reparación de vehículos automotores">
+                      <option value="45">Comercio al por mayor y al por menor y reparación de vehículos automotores y motocicletas</option>
+                      <option value="46">Comercio al por mayor, excepto de vehículos automotores y motocicletas</option>
+                      <option value="47">Comercio al por menor, excepto de vehículos automotores y motocicletas</option>
+                    </optgroup>
+                    <optgroup label="H - Transporte y almacenamiento">
+                      <option value="49">Transporte por vía terrestre y transporte por tuberías</option>
+                      <option value="50">Transporte por vía acuática</option>
+                      <option value="51">Transporte por vía aérea</option>
+                      <option value="52">Almacenamiento y actividades de apoyo al transporte</option>
+                      <option value="53">Actividades postales y de mensajería</option>
+                    </optgroup>
+                    <optgroup label="I - Actividades de alojamiento y de servicio de comidas">
+                      <option value="55">Actividades de alojamiento</option>
+                      <option value="56">Actividades de servicio de comidas y bebidas</option>
+                    </optgroup>
+                    <optgroup label="J - Información y comunicaciones">
+                      <option value="58">Actividades de edición</option>
+                      <option value="59">Actividades de producción de películas cinematográficas, videos y programas de televisión, grabación de sonido y edición de música</option>
+                      <option value="60">Actividades de programación y transmisión</option>
+                      <option value="61">Telecomunicaciones</option>
+                      <option value="62">Programación informática, consultoría informática y actividades conexas</option>
+                      <option value="63">Actividades de servicios de información</option>
+                    </optgroup>
+                    <optgroup label="K - Actividades financieras y de seguros">
+                      <option value="64">Actividades de servicios financieros, excepto las de seguros y fondos de pensiones</option>
+                      <option value="65">Seguros, reaseguros y fondos de pensiones, excepto planes de seguridad social de afiliación obligatoria</option>
+                      <option value="66">Actividades auxiliares de las actividades de servicios financieros</option>
+                    </optgroup>
+                    <optgroup label="L - Actividades inmobiliarias">
+                      <option value="68">Actividades inmobiliarias</option>
+                    </optgroup>
+                    <optgroup label="M - Actividades profesionales, científicas y técnicas">
+                      <option value="69">Actividades jurídicas y contables</option>
+                      <option value="70">Actividades de oficinas centrales; actividades de consultoría en gestión empresarial</option>
+                      <option value="71">Actividades de arquitectura e ingeniería; ensayos y análisis técnicos</option>
+                      <option value="72">Investigación científica y desarrollo</option>
+                      <option value="73">Publicidad y estudios de mercado</option>
+                      <option value="74">Otras actividades profesionales, científicas y técnicas</option>
+                      <option value="75">Actividades veterinarias</option>
+                    </optgroup>
+                    <optgroup label="N - Actividades de servicios administrativos y de apoyo">
+                      <option value="77">Actividades de alquiler y arrendamiento</option>
+                      <option value="78">Actividades de empleo</option>
+                      <option value="79">Actividades de agencias de viajes, operadores turísticos y otros servicios de reserva</option>
+                      <option value="80">Actividades de investigación y seguridad</option>
+                      <option value="81">Actividades de servicios a edificios y paisajismo</option>
+                      <option value="82">Actividades administrativas y de apoyo de oficinas y otras actividades de apoyo a empresas</option>
+                    </optgroup>
+                    <optgroup label="O - Administración pública y defensa; planes de seguridad social obligatoria">
+                      <option value="84">Administración pública y defensa; planes de seguridad social de afiliación obligatoria</option>
+                    </optgroup>
+                    <optgroup label="P - Enseñanza">
+                      <option value="85">Enseñanza</option>
+                    </optgroup>
+                    <optgroup label="Q - Actividades de atención de la salud humana y de asistencia social">
+                      <option value="86">Actividades de atención de la salud humana</option>
+                      <option value="87">Actividades de atención en instituciones</option>
+                      <option value="88">Actividades de asistencia social sin alojamiento</option>
+                    </optgroup>
+                    <optgroup label="R - Actividades artísticas, de entretenimiento y recreativas">
+                      <option value="90">Actividades creativas, artísticas y de esparcimiento</option>
+                      <option value="91">Actividades de bibliotecas, archivos, museos y otras actividades culturales</option>
+                      <option value="92">Actividades de juegos de azar y apuestas</option>
+                      <option value="93">Actividades deportivas, de esparcimiento y recreativas</option>
+                    </optgroup>
+                    <optgroup label="S - Otras actividades de servicios">
+                      <option value="94">Actividades de asociaciones</option>
+                      <option value="95">Reparación de ordenadores y de efectos personales y enseres domésticos</option>
+                      <option value="96">Otras actividades de servicios personales</option>
+                    </optgroup>
+                    <optgroup label="T - Actividades de los hogares como empleadores">
+                      <option value="97">Actividad de los hogares en calidad de empleadores de personal doméstico</option>
+                      <option value="98">Actividades indiferenciadas de producción de bienes y servicios de los hogares para uso propio</option>
+                    </optgroup>
+                    <optgroup label="U - Actividades de organizaciones y órganos extraterritoriales">
+                      <option value="99">Actividades de organizaciones y órganos extraterritoriales</option>
+                    </optgroup>
+                  </select>
                 </div>
                 <div class="form-group">
                   <label>Teléfono</label>
@@ -317,9 +461,45 @@
                   <label>Email</label>
                   <input type="email" id="config-email">
                 </div>
+                <div class="form-group">
+                  <label>Departamento *</label>
+                  <select id="config-departamento" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="01">Ahuachapán</option>
+                    <option value="02">Santa Ana</option>
+                    <option value="03">Sonsonate</option>
+                    <option value="04">Chalatenango</option>
+                    <option value="05">La Libertad</option>
+                    <option value="06">San Salvador</option>
+                    <option value="07">Cuscatlán</option>
+                    <option value="08">La Paz</option>
+                    <option value="09">Cabañas</option>
+                    <option value="10">San Vicente</option>
+                    <option value="11">Usulután</option>
+                    <option value="12">San Miguel</option>
+                    <option value="13">Morazán</option>
+                    <option value="14">La Unión</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Municipio *</label>
+                  <select id="config-municipio" required>
+                    <option value="">Seleccione primero un departamento...</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Distrito *</label>
+                  <select id="config-distrito" required>
+                    <option value="">Seleccione primero un municipio...</option>
+                  </select>
+                </div>
                 <div class="form-group full-width">
-                  <label>Dirección</label>
-                  <textarea id="config-direccion" rows="2"></textarea>
+                  <label>Dirección *</label>
+                  <textarea id="config-direccion" rows="2" required></textarea>
+                </div>
+                <div class="form-group full-width">
+                  <label>Dirección Complementaria</label>
+                  <textarea id="config-direccion-complementaria" rows="2" placeholder="Referencias adicionales de la ubicación"></textarea>
                 </div>
               </div>
             </div>

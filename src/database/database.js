@@ -16,12 +16,18 @@ class DatabaseManager {
       CREATE TABLE IF NOT EXISTS configuracion (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nit TEXT NOT NULL,
+        nrc TEXT,
         nombre_empresa TEXT NOT NULL,
         nombre_comercial TEXT,
+        tipo_persona TEXT,
         actividad_economica TEXT NOT NULL,
         telefono TEXT,
         email TEXT,
         direccion TEXT,
+        direccion_complementaria TEXT,
+        departamento TEXT,
+        municipio TEXT,
+        distrito TEXT,
         codigo_establecimiento TEXT,
         punto_venta TEXT,
         hacienda_usuario TEXT,
@@ -73,6 +79,43 @@ class DatabaseManager {
     // Agregar columna tipo_persona si no existe (para bases de datos existentes)
     try {
       this.db.exec(`ALTER TABLE clientes ADD COLUMN tipo_persona TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    // Agregar columnas a configuracion si no existen (para bases de datos existentes)
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN nrc TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN tipo_persona TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN direccion_complementaria TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN departamento TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN municipio TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN distrito TEXT`);
     } catch (error) {
       // La columna ya existe, ignorar error
     }
@@ -155,16 +198,18 @@ class DatabaseManager {
     if (existing) {
       const stmt = this.db.prepare(`
         UPDATE configuracion 
-        SET nit = ?, nombre_empresa = ?, nombre_comercial = ?, 
+        SET nit = ?, nrc = ?, nombre_empresa = ?, nombre_comercial = ?, tipo_persona = ?,
             actividad_economica = ?, telefono = ?, email = ?, direccion = ?,
+            direccion_complementaria = ?, departamento = ?, municipio = ?, distrito = ?,
             codigo_establecimiento = ?, punto_venta = ?, 
             hacienda_usuario = ?, hacienda_password = ?, hacienda_ambiente = ?,
             certificado_path = ?, pin_certificado = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
       return stmt.run(
-        config.nit, config.nombre_empresa, config.nombre_comercial,
+        config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
         config.actividad_economica, config.telefono, config.email, config.direccion,
+        config.direccion_complementaria, config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.certificado_path, config.pin_certificado, existing.id
@@ -172,14 +217,16 @@ class DatabaseManager {
     } else {
       const stmt = this.db.prepare(`
         INSERT INTO configuracion 
-        (nit, nombre_empresa, nombre_comercial, actividad_economica, telefono, 
-         email, direccion, codigo_establecimiento, punto_venta, hacienda_usuario, 
+        (nit, nrc, nombre_empresa, nombre_comercial, tipo_persona, actividad_economica, 
+         telefono, email, direccion, direccion_complementaria, departamento, municipio, 
+         distrito, codigo_establecimiento, punto_venta, hacienda_usuario, 
          hacienda_password, hacienda_ambiente, certificado_path, pin_certificado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
-        config.nit, config.nombre_empresa, config.nombre_comercial,
+        config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
         config.actividad_economica, config.telefono, config.email, config.direccion,
+        config.direccion_complementaria, config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.certificado_path, config.pin_certificado

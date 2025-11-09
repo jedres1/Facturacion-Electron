@@ -507,6 +507,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Configurar cambio de departamento para cargar municipios
   setupDepartamentoMunicipioHandler();
+  setupDepartamentoMunicipioConfigHandler();
 });
 
 // Configurar navegación
@@ -755,12 +756,32 @@ async function loadConfiguracion() {
     const config = await window.electronAPI.getConfiguracion();
     if (config) {
       document.getElementById('config-nit').value = config.nit || '';
+      document.getElementById('config-nrc').value = config.nrc || '';
       document.getElementById('config-nombre').value = config.nombre_empresa || '';
       document.getElementById('config-nombre-comercial').value = config.nombre_comercial || '';
+      document.getElementById('config-tipo-persona').value = config.tipo_persona || '';
       document.getElementById('config-actividad').value = config.actividad_economica || '';
       document.getElementById('config-telefono').value = config.telefono || '';
       document.getElementById('config-email').value = config.email || '';
+      document.getElementById('config-departamento').value = config.departamento || '';
+      
+      // Cargar municipios y distrito si hay departamento
+      if (config.departamento) {
+        cargarMunicipiosConfig(config.departamento);
+        setTimeout(() => {
+          document.getElementById('config-municipio').value = config.municipio || '';
+          
+          if (config.municipio) {
+            cargarDistritosConfig(config.municipio);
+            setTimeout(() => {
+              document.getElementById('config-distrito').value = config.distrito || '';
+            }, 50);
+          }
+        }, 50);
+      }
+      
       document.getElementById('config-direccion').value = config.direccion || '';
+      document.getElementById('config-direccion-complementaria').value = config.direccion_complementaria || '';
       document.getElementById('config-hacienda-usuario').value = config.hacienda_usuario || '';
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
@@ -934,17 +955,95 @@ function obtenerMunicipioDesdeDistrito(codigoDistrito) {
   return codigoDistrito.substring(0, 4);
 }
 
+// Funciones para departamento-municipio-distrito en configuración
+function setupDepartamentoMunicipioConfigHandler() {
+  const departamentoSelect = document.getElementById('config-departamento');
+  const municipioSelect = document.getElementById('config-municipio');
+  
+  if (departamentoSelect && municipioSelect) {
+    departamentoSelect.addEventListener('change', (e) => {
+      const departamento = e.target.value;
+      cargarMunicipiosConfig(departamento);
+    });
+    
+    municipioSelect.addEventListener('change', (e) => {
+      const municipio = e.target.value;
+      cargarDistritosConfig(municipio);
+    });
+  }
+}
+
+// Cargar municipios en configuración
+function cargarMunicipiosConfig(codigoDepartamento) {
+  const municipioSelect = document.getElementById('config-municipio');
+  const distritoSelect = document.getElementById('config-distrito');
+  
+  // Limpiar opciones actuales
+  municipioSelect.innerHTML = '<option value="">Seleccionar municipio...</option>';
+  if (distritoSelect) {
+    distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
+    distritoSelect.disabled = true;
+  }
+  
+  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+    municipioSelect.disabled = true;
+    return;
+  }
+  
+  municipioSelect.disabled = false;
+  
+  // Cargar municipios del departamento seleccionado
+  const municipios = municipiosPorDepartamento[codigoDepartamento];
+  municipios.forEach(municipio => {
+    const option = document.createElement('option');
+    option.value = municipio.codigo;
+    option.textContent = municipio.nombre;
+    municipioSelect.appendChild(option);
+  });
+}
+
+// Cargar distritos en configuración
+function cargarDistritosConfig(codigoMunicipio) {
+  const distritoSelect = document.getElementById('config-distrito');
+  
+  // Limpiar opciones actuales
+  distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
+  
+  if (!codigoMunicipio || !distritosPorMunicipio[codigoMunicipio]) {
+    distritoSelect.disabled = true;
+    return;
+  }
+  
+  distritoSelect.disabled = false;
+  
+  // Cargar distritos del municipio seleccionado
+  const distritos = distritosPorMunicipio[codigoMunicipio];
+  distritos.forEach(distrito => {
+    const option = document.createElement('option');
+    option.value = distrito.codigoDistrito;
+    option.textContent = distrito.nombre;
+    option.setAttribute('data-codigo-carga', distrito.codigoCarga);
+    distritoSelect.appendChild(option);
+  });
+}
+
 // Guardar configuración
 async function guardarConfiguracion() {
   try {
     const config = {
       nit: document.getElementById('config-nit').value,
+      nrc: document.getElementById('config-nrc').value,
       nombre_empresa: document.getElementById('config-nombre').value,
       nombre_comercial: document.getElementById('config-nombre-comercial').value,
+      tipo_persona: document.getElementById('config-tipo-persona').value,
       actividad_economica: document.getElementById('config-actividad').value,
       telefono: document.getElementById('config-telefono').value,
       email: document.getElementById('config-email').value,
+      departamento: document.getElementById('config-departamento').value,
+      municipio: document.getElementById('config-municipio').value,
+      distrito: document.getElementById('config-distrito').value,
       direccion: document.getElementById('config-direccion').value,
+      direccion_complementaria: document.getElementById('config-direccion-complementaria').value,
       hacienda_usuario: document.getElementById('config-hacienda-usuario').value,
       hacienda_password: document.getElementById('config-hacienda-password').value,
       hacienda_ambiente: document.getElementById('config-hacienda-ambiente').value,
