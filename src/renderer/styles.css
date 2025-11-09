@@ -578,3 +578,48 @@ textarea {
 .btn-success:hover {
   background-color: #059669;
 }
+
+/* Autocomplete para actividades económicas */
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 0.375rem 0.375rem;
+  max-height: 300px;
+  overflow-y: auto;
+  display: none;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  margin-top: -1px;
+}
+
+.autocomplete-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.2s;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background-color: var(--bg-secondary);
+}
+
+.autocomplete-item .codigo {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+/* Ajustar el input para que funcione con el dropdown */
+.form-group {
+  position: relative;
+}
+

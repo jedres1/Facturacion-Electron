@@ -11,6 +11,98 @@ let state = {
   }
 };
 
+// Actividades Económicas - Clasificación BCR Rev. 4.0
+const actividadesEconomicas = [
+  { codigo: '01', descripcion: 'Producción agrícola, pecuaria, caza y actividades de servicios conexas' },
+  { codigo: '02', descripcion: 'Silvicultura y extracción de madera' },
+  { codigo: '03', descripcion: 'Pesca y acuicultura' },
+  { codigo: '05', descripcion: 'Extracción de carbón de piedra y lignito' },
+  { codigo: '06', descripcion: 'Extracción de petróleo crudo y gas natural' },
+  { codigo: '07', descripcion: 'Extracción de minerales metalíferos' },
+  { codigo: '08', descripcion: 'Explotación de otras minas y canteras' },
+  { codigo: '09', descripcion: 'Actividades de servicios de apoyo para la explotación de minas' },
+  { codigo: '10', descripcion: 'Elaboración de productos alimenticios' },
+  { codigo: '11', descripcion: 'Elaboración de bebidas' },
+  { codigo: '12', descripcion: 'Elaboración de productos de tabaco' },
+  { codigo: '13', descripcion: 'Fabricación de productos textiles' },
+  { codigo: '14', descripcion: 'Fabricación de prendas de vestir' },
+  { codigo: '15', descripcion: 'Fabricación de cueros y productos conexos' },
+  { codigo: '16', descripcion: 'Fabricación de productos de madera y corcho, excepto muebles' },
+  { codigo: '17', descripcion: 'Fabricación de papel y de productos de papel' },
+  { codigo: '18', descripcion: 'Impresión y reproducción de grabaciones' },
+  { codigo: '19', descripcion: 'Fabricación de coque y de productos de la refinación del petróleo' },
+  { codigo: '20', descripcion: 'Fabricación de sustancias y productos químicos' },
+  { codigo: '21', descripcion: 'Fabricación de productos farmacéuticos' },
+  { codigo: '22', descripcion: 'Fabricación de productos de caucho y plástico' },
+  { codigo: '23', descripcion: 'Fabricación de otros productos minerales no metálicos' },
+  { codigo: '24', descripcion: 'Fabricación de metales comunes' },
+  { codigo: '25', descripcion: 'Fabricación de productos elaborados de metal, excepto maquinaria y equipo' },
+  { codigo: '26', descripcion: 'Fabricación de productos de informática, de electrónica y de óptica' },
+  { codigo: '27', descripcion: 'Fabricación de equipo eléctrico' },
+  { codigo: '28', descripcion: 'Fabricación de maquinaria y equipo n.c.p.' },
+  { codigo: '29', descripcion: 'Fabricación de vehículos automotores, remolques y semirremolques' },
+  { codigo: '30', descripcion: 'Fabricación de otros tipos de equipo de transporte' },
+  { codigo: '31', descripcion: 'Fabricación de muebles' },
+  { codigo: '32', descripcion: 'Otras industrias manufactureras' },
+  { codigo: '33', descripcion: 'Reparación e instalación de maquinaria y equipo' },
+  { codigo: '35', descripcion: 'Suministro de electricidad, gas, vapor y aire acondicionado' },
+  { codigo: '36', descripcion: 'Captación, tratamiento y distribución de agua' },
+  { codigo: '37', descripcion: 'Evacuación de aguas residuales (alcantarillado)' },
+  { codigo: '38', descripcion: 'Recolección, tratamiento y eliminación de desechos; reciclaje' },
+  { codigo: '39', descripcion: 'Actividades de saneamiento y otros servicios de gestión de desechos' },
+  { codigo: '41', descripcion: 'Construcción de edificios' },
+  { codigo: '42', descripcion: 'Obras de ingeniería civil' },
+  { codigo: '43', descripcion: 'Actividades especializadas de construcción' },
+  { codigo: '45', descripcion: 'Comercio al por mayor y al por menor y reparación de vehículos automotores y motocicletas' },
+  { codigo: '46', descripcion: 'Comercio al por mayor, excepto de vehículos automotores y motocicletas' },
+  { codigo: '47', descripcion: 'Comercio al por menor, excepto de vehículos automotores y motocicletas' },
+  { codigo: '49', descripcion: 'Transporte por vía terrestre y transporte por tuberías' },
+  { codigo: '50', descripcion: 'Transporte por vía acuática' },
+  { codigo: '51', descripcion: 'Transporte por vía aérea' },
+  { codigo: '52', descripcion: 'Almacenamiento y actividades de apoyo al transporte' },
+  { codigo: '53', descripcion: 'Actividades postales y de mensajería' },
+  { codigo: '55', descripcion: 'Actividades de alojamiento' },
+  { codigo: '56', descripcion: 'Actividades de servicio de comidas y bebidas' },
+  { codigo: '58', descripcion: 'Actividades de edición' },
+  { codigo: '59', descripcion: 'Actividades de producción de películas cinematográficas, videos y programas de televisión, grabación de sonido y edición de música' },
+  { codigo: '60', descripcion: 'Actividades de programación y transmisión' },
+  { codigo: '61', descripcion: 'Telecomunicaciones' },
+  { codigo: '62', descripcion: 'Programación informática, consultoría informática y actividades conexas' },
+  { codigo: '63', descripcion: 'Actividades de servicios de información' },
+  { codigo: '64', descripcion: 'Actividades de servicios financieros, excepto las de seguros y fondos de pensiones' },
+  { codigo: '65', descripcion: 'Seguros, reaseguros y fondos de pensiones, excepto planes de seguridad social de afiliación obligatoria' },
+  { codigo: '66', descripcion: 'Actividades auxiliares de las actividades de servicios financieros' },
+  { codigo: '68', descripcion: 'Actividades inmobiliarias' },
+  { codigo: '69', descripcion: 'Actividades jurídicas y contables' },
+  { codigo: '70', descripcion: 'Actividades de oficinas centrales; actividades de consultoría en gestión empresarial' },
+  { codigo: '71', descripcion: 'Actividades de arquitectura e ingeniería; ensayos y análisis técnicos' },
+  { codigo: '72', descripcion: 'Investigación científica y desarrollo' },
+  { codigo: '73', descripcion: 'Publicidad y estudios de mercado' },
+  { codigo: '74', descripcion: 'Otras actividades profesionales, científicas y técnicas' },
+  { codigo: '75', descripcion: 'Actividades veterinarias' },
+  { codigo: '77', descripcion: 'Actividades de alquiler y arrendamiento' },
+  { codigo: '78', descripcion: 'Actividades de empleo' },
+  { codigo: '79', descripcion: 'Actividades de agencias de viajes, operadores turísticos y otros servicios de reserva' },
+  { codigo: '80', descripcion: 'Actividades de investigación y seguridad' },
+  { codigo: '81', descripcion: 'Actividades de servicios a edificios y paisajismo' },
+  { codigo: '82', descripcion: 'Actividades administrativas y de apoyo de oficinas y otras actividades de apoyo a empresas' },
+  { codigo: '84', descripcion: 'Administración pública y defensa; planes de seguridad social de afiliación obligatoria' },
+  { codigo: '85', descripcion: 'Enseñanza' },
+  { codigo: '86', descripcion: 'Actividades de atención de la salud humana' },
+  { codigo: '87', descripcion: 'Actividades de atención en instituciones' },
+  { codigo: '88', descripcion: 'Actividades de asistencia social sin alojamiento' },
+  { codigo: '90', descripcion: 'Actividades creativas, artísticas y de esparcimiento' },
+  { codigo: '91', descripcion: 'Actividades de bibliotecas, archivos, museos y otras actividades culturales' },
+  { codigo: '92', descripcion: 'Actividades de juegos de azar y apuestas' },
+  { codigo: '93', descripcion: 'Actividades deportivas, de esparcimiento y recreativas' },
+  { codigo: '94', descripcion: 'Actividades de asociaciones' },
+  { codigo: '95', descripcion: 'Reparación de ordenadores y de efectos personales y enseres domésticos' },
+  { codigo: '96', descripcion: 'Otras actividades de servicios personales' },
+  { codigo: '97', descripcion: 'Actividad de los hogares en calidad de empleadores de personal doméstico' },
+  { codigo: '98', descripcion: 'Actividades indiferenciadas de producción de bienes y servicios de los hogares para uso propio' },
+  { codigo: '99', descripcion: 'Actividades de organizaciones y órganos extraterritoriales' }
+];
+
 // Municipios oficiales de El Salvador (Actualizado Noviembre 2025)
 // Estructura: Departamento → Municipio → Distritos
 // Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Municipio
@@ -760,7 +852,17 @@ async function loadConfiguracion() {
       document.getElementById('config-nombre').value = config.nombre_empresa || '';
       document.getElementById('config-nombre-comercial').value = config.nombre_comercial || '';
       document.getElementById('config-tipo-persona').value = config.tipo_persona || '';
-      document.getElementById('config-actividad').value = config.actividad_economica || '';
+      
+      // Mostrar actividad económica con código y descripción
+      if (config.actividad_economica) {
+        const actividad = actividadesEconomicas.find(a => a.codigo === config.actividad_economica);
+        if (actividad) {
+          document.getElementById('config-actividad').value = `${actividad.codigo} - ${actividad.descripcion}`;
+        } else {
+          document.getElementById('config-actividad').value = config.actividad_economica;
+        }
+      }
+      
       document.getElementById('config-telefono').value = config.telefono || '';
       document.getElementById('config-email').value = config.email || '';
       document.getElementById('config-departamento').value = config.departamento || '';
@@ -844,6 +946,10 @@ function setupEventListeners() {
     e.preventDefault();
     await guardarProducto();
   });
+  
+  // Inicializar autocomplete de actividades económicas
+  setupActividadAutocomplete('cliente-giro', 'cliente-giro-dropdown');
+  setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
 }
 
 // Configurar manejador de departamento-municipio-distrito
@@ -1029,13 +1135,22 @@ function cargarDistritosConfig(codigoMunicipio) {
 // Guardar configuración
 async function guardarConfiguracion() {
   try {
+    // Obtener valor de actividad y extraer solo el código
+    const actividadInput = document.getElementById('config-actividad');
+    let actividadValue = actividadInput.value;
+    
+    // Si tiene el formato "XX - Descripción", extraer solo el código
+    if (actividadValue.includes(' - ')) {
+      actividadValue = actividadValue.split(' - ')[0].trim();
+    }
+    
     const config = {
       nit: document.getElementById('config-nit').value,
       nrc: document.getElementById('config-nrc').value,
       nombre_empresa: document.getElementById('config-nombre').value,
       nombre_comercial: document.getElementById('config-nombre-comercial').value,
       tipo_persona: document.getElementById('config-tipo-persona').value,
-      actividad_economica: document.getElementById('config-actividad').value,
+      actividad_economica: actividadValue,
       telefono: document.getElementById('config-telefono').value,
       email: document.getElementById('config-email').value,
       departamento: document.getElementById('config-departamento').value,
@@ -1387,7 +1502,16 @@ function abrirModalCliente(cliente = null) {
     }
     
     document.getElementById('cliente-direccion').value = cliente.direccion || '';
-    document.getElementById('cliente-giro').value = cliente.giro || '';
+    
+    // Mostrar giro con código y descripción
+    if (cliente.giro) {
+      const actividad = actividadesEconomicas.find(a => a.codigo === cliente.giro);
+      if (actividad) {
+        document.getElementById('cliente-giro').value = `${actividad.codigo} - ${actividad.descripcion}`;
+      } else {
+        document.getElementById('cliente-giro').value = cliente.giro;
+      }
+    }
   } else {
     // Modo nuevo
     titulo.textContent = 'Nuevo Cliente';
@@ -1409,6 +1533,15 @@ async function guardarCliente() {
   try {
     const clienteId = document.getElementById('cliente-id').value;
     
+    // Obtener valor del giro y extraer solo el código
+    const giroInput = document.getElementById('cliente-giro');
+    let giroValue = giroInput.value;
+    
+    // Si tiene el formato "XX - Descripción", extraer solo el código
+    if (giroValue.includes(' - ')) {
+      giroValue = giroValue.split(' - ')[0].trim();
+    }
+    
     const clienteData = {
       tipo_documento: document.getElementById('cliente-tipo-documento').value,
       numero_documento: document.getElementById('cliente-numero-documento').value,
@@ -1422,7 +1555,7 @@ async function guardarCliente() {
       municipio: document.getElementById('cliente-municipio').value,
       distrito: document.getElementById('cliente-distrito').value,
       direccion: document.getElementById('cliente-direccion').value,
-      giro: document.getElementById('cliente-giro').value
+      giro: giroValue
     };
     
     if (clienteId) {
@@ -2086,6 +2219,108 @@ async function enviarFacturaHacienda(facturaId) {
     console.error('Error enviando factura:', error);
     showNotification('Error al enviar factura: ' + error.message, 'error');
   }
+}
+
+// Función de autocompletado para actividades económicas
+function setupActividadAutocomplete(inputId, dropdownId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  
+  // Crear contenedor para el dropdown si no existe
+  let dropdown = document.getElementById(dropdownId);
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = dropdownId;
+    dropdown.className = 'autocomplete-dropdown';
+    input.parentNode.style.position = 'relative';
+    input.parentNode.appendChild(dropdown);
+  }
+  
+  // Función para filtrar actividades
+  function filterActividades(searchText) {
+    if (!searchText) return actividadesEconomicas;
+    
+    const search = searchText.toLowerCase();
+    return actividadesEconomicas.filter(act => 
+      act.codigo.toLowerCase().includes(search) || 
+      act.descripcion.toLowerCase().includes(search)
+    );
+  }
+  
+  // Función para mostrar el dropdown
+  function showDropdown(items) {
+    if (items.length === 0) {
+      dropdown.style.display = 'none';
+      return;
+    }
+    
+    dropdown.innerHTML = items.map(act => `
+      <div class="autocomplete-item" data-codigo="${act.codigo}">
+        <span class="codigo">${act.codigo}</span> - ${act.descripcion}
+      </div>
+    `).join('');
+    
+    dropdown.style.display = 'block';
+    
+    // Agregar listeners a cada item
+    dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const codigo = item.getAttribute('data-codigo');
+        const actividad = actividadesEconomicas.find(a => a.codigo === codigo);
+        if (actividad) {
+          input.value = `${actividad.codigo} - ${actividad.descripcion}`;
+          input.setAttribute('data-codigo', actividad.codigo);
+        }
+        dropdown.style.display = 'none';
+      });
+    });
+  }
+  
+  // Event listeners
+  input.addEventListener('input', (e) => {
+    const filtered = filterActividades(e.target.value);
+    showDropdown(filtered);
+  });
+  
+  input.addEventListener('focus', (e) => {
+    const filtered = filterActividades(e.target.value);
+    showDropdown(filtered);
+  });
+  
+  // Cerrar dropdown al hacer clic fuera
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+  
+  // Navegación con teclado
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    const activeItem = dropdown.querySelector('.autocomplete-item.active');
+    let activeIndex = Array.from(items).indexOf(activeItem);
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (activeIndex < items.length - 1) {
+        if (activeItem) activeItem.classList.remove('active');
+        items[activeIndex + 1].classList.add('active');
+        items[activeIndex + 1].scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (activeIndex > 0) {
+        if (activeItem) activeItem.classList.remove('active');
+        items[activeIndex - 1].classList.add('active');
+        items[activeIndex - 1].scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'Enter' && activeItem) {
+      e.preventDefault();
+      activeItem.click();
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+    }
+  });
 }
 
 // Hacer funciones globales
