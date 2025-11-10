@@ -112,6 +112,19 @@ class DatabaseManager {
     } catch (error) {
       // La columna ya existe, ignorar error
     }
+    
+    // Agregar columnas de certificado si no existen
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN certificado_path TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+    
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN certificado_password TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
 
     // Tabla de productos/servicios
     this.db.exec(`
@@ -196,7 +209,7 @@ class DatabaseManager {
             departamento = ?, municipio = ?, distrito = ?,
             codigo_establecimiento = ?, punto_venta = ?, 
             hacienda_usuario = ?, hacienda_password = ?, hacienda_ambiente = ?,
-            certificado_path = ?, pin_certificado = ?, updated_at = CURRENT_TIMESTAMP
+            certificado_path = ?, certificado_password = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
       return stmt.run(
@@ -205,7 +218,7 @@ class DatabaseManager {
         config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
-        config.certificado_path, config.pin_certificado, existing.id
+        config.certificado_path, config.certificado_password, existing.id
       );
     } else {
       const stmt = this.db.prepare(`
@@ -213,7 +226,7 @@ class DatabaseManager {
         (nit, nrc, nombre_empresa, nombre_comercial, tipo_persona, actividad_economica, 
          telefono, email, direccion, departamento, municipio, 
          distrito, codigo_establecimiento, punto_venta, hacienda_usuario, 
-         hacienda_password, hacienda_ambiente, certificado_path, pin_certificado)
+         hacienda_password, hacienda_ambiente, certificado_path, certificado_password)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
@@ -222,7 +235,7 @@ class DatabaseManager {
         config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
-        config.certificado_path, config.pin_certificado
+        config.certificado_path, config.certificado_password
       );
     }
   }

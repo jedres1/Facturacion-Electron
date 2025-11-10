@@ -887,6 +887,8 @@ async function loadConfiguracion() {
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
       document.getElementById('config-punto-venta').value = config.punto_venta || '';
+      document.getElementById('config-certificado-path').value = config.certificado_path || '';
+      document.getElementById('config-certificado-password').value = config.certificado_password || '';
     }
   } catch (error) {
     console.error('Error cargando configuración:', error);
@@ -956,6 +958,11 @@ function setupEventListeners() {
   document.getElementById('form-firmador')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     await procesarFirmaDocumento();
+  });
+  
+  // Botón seleccionar certificado
+  document.getElementById('btn-select-certificado')?.addEventListener('click', async () => {
+    await seleccionarCertificado();
   });
   
   // Inicializar autocomplete de actividades económicas
@@ -1172,7 +1179,9 @@ async function guardarConfiguracion() {
       hacienda_password: document.getElementById('config-hacienda-password').value,
       hacienda_ambiente: document.getElementById('config-hacienda-ambiente').value,
       codigo_establecimiento: document.getElementById('config-establecimiento').value,
-      punto_venta: document.getElementById('config-punto-venta').value
+      punto_venta: document.getElementById('config-punto-venta').value,
+      certificado_path: document.getElementById('config-certificado-path').value,
+      certificado_password: document.getElementById('config-certificado-password').value
     };
     
     await window.electronAPI.updateConfiguracion(config);
@@ -2186,7 +2195,9 @@ async function procesarFirmaDocumento() {
       documento: documento,
       pin: pinCertificado,
       usuario: usuarioFirmador,
-      password: passwordFirmador
+      password: passwordFirmador,
+      certificadoPath: state.configuracion.certificado_path,
+      certificadoPassword: state.configuracion.certificado_password || pinCertificado
     });
     
     if (result.success) {
@@ -2217,6 +2228,26 @@ function cerrarModalFirmador() {
   const modal = document.getElementById('modal-firmador');
   modal.classList.remove('active');
   document.getElementById('form-firmador').reset();
+}
+
+// Seleccionar certificado digital
+async function seleccionarCertificado() {
+  try {
+    const result = await window.electronAPI.selectFile({
+      filters: [
+        { name: 'Certificados', extensions: ['crt', 'p12', 'pfx', 'pem'] },
+        { name: 'Todos los archivos', extensions: ['*'] }
+      ]
+    });
+    
+    if (!result.canceled) {
+      document.getElementById('config-certificado-path').value = result.filePath;
+      showNotification('Certificado seleccionado: ' + result.filePath, 'success');
+    }
+  } catch (error) {
+    console.error('Error seleccionando certificado:', error);
+    showNotification('Error al seleccionar certificado', 'error');
+  }
 }
 
 // Probar conexión con Hacienda

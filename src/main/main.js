@@ -1,8 +1,9 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const Database = require('../database/database');
 const HaciendaAPI = require('../api/hacienda');
 const Firmador = require('../utils/firmador');
+const FirmadorLocal = require('../utils/firmador-local');
 
 let mainWindow;
 let db;
@@ -143,16 +144,42 @@ ipcMain.handle('hacienda:consultarDTE', async (event, { codigoGeneracion, token 
 });
 
 // IPC Handler para el firmador
-ipcMain.handle('firmador:firmarDocumento', async (event, { documento, pin, usuario, password }) => {
+ipcMain.handle('firmador:firmarDocumento', async (event, { documento, pin, usuario, password, certificadoPath, certificadoPassword }) => {
   try {
-    // Crear instancia del firmador con credenciales
-    const firmador = new Firmador({ 
-      usuario: usuario, 
-      password: password 
-    });
-    const documentoFirmado = await firmador.firmarDocumento(documento, pin);
-    return { success: true, documentoFirmado };
+    // Si hay ruta de certificado, usar firmador local
+    if (certificadoPath) {
+      const firmadorLocal = new FirmadorLocal();
+      await firmadorLocal.cargarCertificado(certificadoPath, certificadoPassword || pin);
+      const result = await firmadorLocal.firmarDocumento(documento);
+      return result;
+    } else {
+      // Usar firmador web con Puppeteer
+      const firmador = new Firmador({ 
+        usuario: usuario, 
+        password: password 
+      });
+      const documentoFirmado = await firmador.firmarDocumento(documento, pin);
+      return { success: true, documentoFirmado };
+    }
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
+
+// IPC Handler para diálogo de selección de archivos
+ipcMain.handle('dialog:selectFile', async (event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: options?.filters || [
+      { name: 'Certificados', extensions: ['crt', 'p12', 'pfx', 'pem'] },
+      { name: 'Todos los archivos', extensions: ['*'] }
+    ]
+  });
+  
+  if (result.canceled) {
+    return { canceled: true };
+  } else {
+    return { canceled: false, filePath: result.filePaths[0] };
+  }
+});
+
