@@ -595,6 +595,46 @@
     </div>
   </div>
 
+  <!-- Modal para credenciales del Firmador -->
+  <div id="modal-firmador" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>🔐 Firmar Documento</h2>
+        <button class="close-modal" onclick="cerrarModalFirmador()">×</button>
+      </div>
+      <form id="form-firmador" class="modal-form">
+        <input type="hidden" id="firmador-factura-id">
+        
+        <div class="form-group full-width">
+          <label>Usuario del Firmador de Hacienda *</label>
+          <input type="text" id="firmador-usuario" required placeholder="Usuario del firmador">
+        </div>
+
+        <div class="form-group full-width">
+          <label>Contraseña del Firmador *</label>
+          <input type="password" id="firmador-password" required placeholder="Contraseña del firmador">
+        </div>
+
+        <div class="form-group full-width">
+          <label>PIN del Certificado Digital *</label>
+          <input type="password" id="firmador-pin" required placeholder="PIN del certificado">
+        </div>
+
+        <div class="alert alert-info" style="margin-top: 1rem;">
+          <small>
+            ℹ️ Se abrirá el Firmador de Hacienda en una ventana del navegador para completar el proceso de firma.
+            El proceso puede tomar algunos minutos.
+          </small>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalFirmador()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">🔐 Iniciar Firma</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal para agregar item a factura -->
   <div id="modal-item" class="modal">
     <div class="modal-content" style="max-width: 500px;">

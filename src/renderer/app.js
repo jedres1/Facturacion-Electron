@@ -952,6 +952,12 @@ function setupEventListeners() {
     await probarConexionHacienda();
   });
   
+  // Form firmador
+  document.getElementById('form-firmador')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await procesarFirmaDocumento();
+  });
+  
   // Inicializar autocomplete de actividades económicas
   setupActividadAutocomplete('cliente-giro', 'cliente-giro-dropdown');
   setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
@@ -2096,7 +2102,22 @@ function cerrarModalVerFactura() {
 
 // Firmar factura con Puppeteer
 async function firmarFactura(facturaId) {
+  // Abrir modal para pedir credenciales
+  const modal = document.getElementById('modal-firmador');
+  document.getElementById('firmador-factura-id').value = facturaId;
+  document.getElementById('form-firmador').reset();
+  document.getElementById('firmador-factura-id').value = facturaId; // Mantener el ID después del reset
+  modal.classList.add('active');
+}
+
+// Procesar firma del documento
+async function procesarFirmaDocumento() {
   try {
+    const facturaId = parseInt(document.getElementById('firmador-factura-id').value);
+    const usuarioFirmador = document.getElementById('firmador-usuario').value;
+    const passwordFirmador = document.getElementById('firmador-password').value;
+    const pinCertificado = document.getElementById('firmador-pin').value;
+    
     const factura = state.facturas.find(f => f.id === facturaId);
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
@@ -2109,18 +2130,19 @@ async function firmarFactura(facturaId) {
       return;
     }
     
-    const pinCertificado = prompt('Ingrese el PIN del certificado digital:');
-    if (!pinCertificado) return;
+    // Cerrar modal y mostrar progreso
+    cerrarModalFirmador();
+    showNotification('Firmando documento... Este proceso puede tomar varios minutos.', 'info');
     
-    const usuarioFirmador = prompt('Ingrese el usuario del Firmador de Hacienda:');
-    if (!usuarioFirmador) return;
+    // Parsear el JSON DTE de la factura
+    let jsonDte = {};
+    try {
+      jsonDte = JSON.parse(factura.json_dte || '{}');
+    } catch (e) {
+      console.error('Error parseando JSON DTE:', e);
+    }
     
-    const passwordFirmador = prompt('Ingrese la contraseña del Firmador de Hacienda:');
-    if (!passwordFirmador) return;
-    
-    showNotification('Firmando documento...', 'info');
-    
-    // Construir documento para firmar
+    // Construir documento completo para firmar
     const documento = {
       identificacion: {
         version: 1,
@@ -2133,7 +2155,30 @@ async function firmarFactura(facturaId) {
         fecEmi: new Date(factura.fecha_emision).toISOString().split('T')[0],
         horEmi: new Date(factura.fecha_emision).toTimeString().split(' ')[0],
         tipoMoneda: 'USD'
-      }
+      },
+      emisor: {
+        nit: state.configuracion.nit,
+        nrc: state.configuracion.nrc,
+        nombre: state.configuracion.nombre_empresa,
+        codActividad: state.configuracion.actividad_economica,
+        descActividad: obtenerDescripcionActividad(state.configuracion.actividad_economica),
+        nombreComercial: state.configuracion.nombre_comercial,
+        tipoEstablecimiento: '01',
+        direccion: {
+          departamento: state.configuracion.departamento,
+          municipio: state.configuracion.municipio,
+          complemento: state.configuracion.direccion
+        },
+        telefono: state.configuracion.telefono,
+        correo: state.configuracion.email,
+        codEstableMH: state.configuracion.codigo_establecimiento,
+        codEstable: state.configuracion.codigo_establecimiento,
+        codPuntoVentaMH: state.configuracion.punto_venta,
+        codPuntoVenta: state.configuracion.punto_venta
+      },
+      receptor: jsonDte.receptor || {},
+      cuerpoDocumento: jsonDte.cuerpoDocumento || [],
+      resumen: jsonDte.resumen || {}
     };
     
     // Llamar al firmador
@@ -2145,7 +2190,7 @@ async function firmarFactura(facturaId) {
     });
     
     if (result.success) {
-      showNotification('Documento firmado exitosamente', 'success');
+      showNotification('✓ Documento firmado exitosamente', 'success');
       
       // Actualizar estado en base de datos
       await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
@@ -2153,12 +2198,25 @@ async function firmarFactura(facturaId) {
       cerrarModalVerFactura();
       await loadFacturas();
     } else {
-      showNotification('Error al firmar: ' + result.error, 'error');
+      showNotification('✗ Error al firmar: ' + result.error, 'error');
     }
   } catch (error) {
     console.error('Error firmando factura:', error);
     showNotification('Error al firmar factura: ' + error.message, 'error');
   }
+}
+
+// Obtener descripción de actividad económica
+function obtenerDescripcionActividad(codigo) {
+  const actividad = actividadesEconomicas.find(a => a.codigo === codigo);
+  return actividad ? actividad.descripcion : '';
+}
+
+// Cerrar modal del firmador
+function cerrarModalFirmador() {
+  const modal = document.getElementById('modal-firmador');
+  modal.classList.remove('active');
+  document.getElementById('form-firmador').reset();
 }
 
 // Probar conexión con Hacienda
@@ -2376,6 +2434,8 @@ function setupActividadAutocomplete(inputId, dropdownId) {
 
 // Hacer funciones globales
 window.cerrarModalVerFactura = cerrarModalVerFactura;
+window.cerrarModalFirmador = cerrarModalFirmador;
 window.editarCliente = editarCliente;
 window.eliminarCliente = eliminarCliente;
 window.cerrarModalCliente = cerrarModalCliente;
+
