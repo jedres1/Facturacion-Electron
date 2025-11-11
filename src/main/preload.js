@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Firmador
   firmarDocumento: (data) => ipcRenderer.invoke('firmador:firmarDocumento', data),
   
+  // Generador de DTEs
+  generarDTE: (data) => ipcRenderer.invoke('dte:generar', data),
+  
   // Diálogos del sistema
   selectFile: (options) => ipcRenderer.invoke('dialog:selectFile', options)
 });

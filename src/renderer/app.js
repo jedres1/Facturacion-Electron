@@ -1224,12 +1224,104 @@ async function generarFactura() {
     // Calcular totales
     const resumen = calcularResumenFactura();
     
-    // Crear objeto de factura
+    // Obtener tipo de DTE
+    const tipoDte = document.getElementById('tipo-dte').value;
+    
+    // Preparar datos del cliente para el generador
+    const clienteDatos = {
+      tipoDocumento: cliente.tipo_documento,
+      numeroDocumento: cliente.numero_documento,
+      nombre: cliente.nombre,
+      telefono: cliente.telefono,
+      email: cliente.email,
+      direccion: {
+        complemento: cliente.direccion,
+        municipio: cliente.municipio,
+        departamento: cliente.departamento
+      }
+    };
+    
+    // Si es CCF, agregar NIT y NRC si están disponibles
+    if (tipoDte === '03') {
+      if (cliente.nit) clienteDatos.nit = cliente.nit;
+      if (cliente.nrc) clienteDatos.nrc = cliente.nrc;
+    }
+    
+    // Preparar items para el generador
+    const items = state.currentFactura.items.map((item, index) => ({
+      numItem: index + 1,
+      tipoItem: 1, // 1=Bien, 2=Servicio
+      numeroDocumento: null,
+      cantidad: item.cantidad,
+      codigo: item.codigo,
+      codTributo: item.exento ? null : '20', // '20' = IVA 13%
+      uniMedida: 99, // 99 = Unidad
+      descripcion: item.descripcion,
+      precioUni: item.precioUnitario,
+      montoDescu: item.descuento || 0,
+      ventaNoSuj: item.exento ? (item.cantidad * item.precioUnitario) - (item.descuento || 0) : 0,
+      ventaExenta: 0,
+      ventaGravada: !item.exento ? (item.cantidad * item.precioUnitario) - (item.descuento || 0) : 0
+    }));
+    
+    // Preparar resumen para el generador
+    const resumenDte = {
+      totalNoSuj: resumen.subtotalExento,
+      totalExenta: 0,
+      totalGravada: resumen.subtotalGravado,
+      subTotalVentas: resumen.subtotalTotal,
+      descuNoSuj: 0,
+      descuExenta: 0,
+      descuGravada: resumen.totalDescuento,
+      totalDescu: resumen.totalDescuento,
+      tributos: resumen.totalIva > 0 ? [{
+        codigo: '20',
+        descripcion: 'Impuesto al Valor Agregado 13%',
+        valor: resumen.totalIva
+      }] : null,
+      subTotal: resumen.subtotalTotal,
+      ivaRete1: 0,
+      reteRenta: 0,
+      montoTotalOperacion: resumen.total,
+      totalNoGravado: 0,
+      totalPagar: resumen.total,
+      totalLetras: numeroALetras(resumen.total),
+      condicionOperacion: parseInt(document.getElementById('condicion-operacion').value),
+      pagos: [{
+        codigo: '01', // Efectivo
+        montoPago: resumen.total,
+        referencia: null,
+        plazo: null,
+        periodo: null
+      }]
+    };
+    
+    // Generar DTE usando el generador oficial
+    const resultadoDte = await window.electronAPI.generarDTE({
+      tipo: tipoDte,
+      config: state.configuracion,
+      cliente: clienteDatos,
+      items: items,
+      resumen: resumenDte,
+      opciones: {
+        tipoTransmision: 1, // 1=Normal
+        tipoContingencia: null
+      }
+    });
+    
+    if (!resultadoDte.success) {
+      showNotification('Error al generar DTE: ' + resultadoDte.error, 'error');
+      return;
+    }
+    
+    const dte = resultadoDte.dte;
+    
+    // Crear objeto de factura para la base de datos
     const factura = {
-      numero_control: generarNumeroControl(),
-      codigo_generacion: generarCodigoGeneracion(),
-      tipo_dte: document.getElementById('tipo-dte').value,
-      fecha_emision: new Date().toISOString(),
+      numero_control: dte.identificacion.numeroControl,
+      codigo_generacion: dte.identificacion.codigoGeneracion,
+      tipo_dte: tipoDte,
+      fecha_emision: dte.identificacion.fecEmi,
       cliente_id: cliente.id,
       cliente_datos: {
         tipo_documento: cliente.tipo_documento,
@@ -1246,16 +1338,16 @@ async function generarFactura() {
       iva: resumen.totalIva,
       total: resumen.total,
       descuento: resumen.totalDescuento,
-      condicion_operacion: document.getElementById('condicion-operacion').value,
+      condicion_operacion: resumenDte.condicionOperacion,
       estado: 'PENDIENTE',
-      json_dte: null // Se generará al firmar
+      json_dte: JSON.stringify(dte)
     };
 
     // Guardar en base de datos
     const result = await window.electronAPI.addFactura(factura);
     
     if (result) {
-      showNotification('Factura generada exitosamente', 'success');
+      showNotification('Factura generada exitosamente según schema oficial MH', 'success');
       limpiarFormularioFactura();
       
       // Actualizar estadísticas

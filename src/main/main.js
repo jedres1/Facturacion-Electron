@@ -4,9 +4,11 @@ const Database = require('../database/database');
 const HaciendaAPI = require('../api/hacienda');
 const Firmador = require('../utils/firmador');
 const FirmadorLocal = require('../utils/firmador-local');
+const DTEGenerator = require('../utils/dte-generator');
 
 let mainWindow;
 let db;
+let dteGenerator;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -35,6 +37,9 @@ function createWindow() {
 app.whenReady().then(() => {
   // Inicializar base de datos
   db = new Database();
+  
+  // Inicializar generador de DTEs
+  dteGenerator = new DTEGenerator();
   
   createWindow();
 
@@ -182,4 +187,30 @@ ipcMain.handle('dialog:selectFile', async (event, options) => {
     return { canceled: false, filePath: result.filePaths[0] };
   }
 });
+
+// IPC Handler para generar DTE
+ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resumen, opciones }) => {
+  try {
+    let dte;
+    
+    switch(tipo) {
+      case '01': // Factura
+        dte = dteGenerator.generarFactura(config, cliente, items, resumen, opciones);
+        break;
+      case '03': // Crédito Fiscal
+        dte = dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opciones);
+        break;
+      case '05': // Nota de Crédito
+        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opciones.documentoRelacionado, opciones);
+        break;
+      default:
+        throw new Error('Tipo de DTE no soportado: ' + tipo);
+    }
+    
+    return { success: true, dte };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 
