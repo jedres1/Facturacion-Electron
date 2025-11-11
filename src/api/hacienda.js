@@ -43,28 +43,49 @@ class HaciendaAPI {
   }
 
   /**
-   * Enviar DTE (Documento Tributario Electrónico)
+   * Enviar DTE (Documento Tributario Electrónico) - Modelo uno a uno
+   * @param {Object} dte - Documento firmado con estructura completa
+   * @param {string} nit - NIT del emisor
+   * @param {string} passwordPri - Password de la llave privada (si aplica)
+   * @returns {Promise<Object>} Respuesta del MH con estado y sello
    */
-  async enviarDTE(dte) {
+  async enviarDTE(dte, nit, passwordPri = null) {
     if (!this.token) {
       throw new Error('No hay token de autenticación. Autentique primero.');
     }
 
     try {
-      const response = await this.axiosInstance.post('/fesv/recepciondte', {
-        nit: dte.emisor.nit,
+      const payload = {
+        nit: nit,
         activo: true,
-        passwordPri: dte.passwordPri,
-        dteJson: dte.documento
-      }, {
+        passwordPri: passwordPri,
+        dteJson: dte
+      };
+
+      const response = await this.axiosInstance.post('/fesv/recepciondte', payload, {
         headers: {
-          'Authorization': this.token
+          'Authorization': this.token,
+          'Content-Type': 'application/json'
         }
       });
 
-      return response.data;
+      // Respuesta esperada: { estado, codigoGeneracion, selloRecibido, observaciones }
+      return {
+        success: true,
+        estado: response.data.estado,
+        codigoGeneracion: response.data.codigoGeneracion,
+        selloRecibido: response.data.selloRecibido,
+        observaciones: response.data.observaciones,
+        raw: response.data
+      };
     } catch (error) {
-      throw new Error(`Error al enviar DTE: ${error.message}`);
+      const errorMsg = error.response?.data?.mensaje || error.message;
+      return {
+        success: false,
+        error: errorMsg,
+        estado: error.response?.data?.estado,
+        observaciones: error.response?.data?.observaciones
+      };
     }
   }
 

@@ -128,11 +128,26 @@ ipcMain.handle('hacienda:autenticar', async (event, credenciales) => {
   }
 });
 
-ipcMain.handle('hacienda:enviarDTE', async (event, { dte, token }) => {
+ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPri }) => {
   try {
-    const api = new HaciendaAPI({ token });
-    const resultado = await api.enviarDTE(dte);
-    return { success: true, resultado };
+    const config = db.getConfiguracion();
+    if (!config || !config.usuario_hacienda || !config.password_hacienda) {
+      return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    const api = new HaciendaAPI({
+      ambiente: config.ambiente || 'pruebas',
+      usuario: config.usuario_hacienda,
+      password: config.password_hacienda
+    });
+
+    // Autenticar primero
+    await api.autenticar();
+
+    // Enviar DTE firmado (modelo uno a uno)
+    const resultado = await api.enviarDTE(dteFirmado, nit, passwordPri);
+    
+    return resultado;
   } catch (error) {
     return { success: false, error: error.message };
   }

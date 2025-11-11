@@ -2397,55 +2397,73 @@ async function enviarFacturaHacienda(facturaId) {
       return;
     }
     
-    if (!state.configuracion || !state.configuracion.hacienda_usuario) {
+    if (!state.configuracion || !state.configuracion.usuario_hacienda) {
       showNotification('Por favor configure las credenciales de Hacienda primero', 'error');
+      return;
+    }
+    
+    // Verificar que la factura tenga JSON DTE
+    if (!factura.json_dte) {
+      showNotification('La factura no tiene DTE generado. Genere la factura primero.', 'error');
+      return;
+    }
+    
+    // Verificar que el estado sea FIRMADO o PENDIENTE
+    if (factura.estado !== 'FIRMADO' && factura.estado !== 'PENDIENTE') {
+      showNotification('La factura debe estar firmada antes de enviarla a Hacienda', 'error');
       return;
     }
     
     const confirmacion = confirm('¿Está seguro de enviar esta factura al Ministerio de Hacienda?');
     if (!confirmacion) return;
     
-    showNotification('Autenticando con Hacienda...', 'info');
+    showNotification('Enviando DTE a Hacienda (modelo uno a uno)...', 'info');
     
-    // Autenticar con Hacienda
-    const authResult = await window.electronAPI.autenticar({
-      usuario: state.configuracion.hacienda_usuario,
-      password: state.configuracion.hacienda_password,
-      ambiente: state.configuracion.hacienda_ambiente
-    });
-    
-    if (!authResult.success) {
-      showNotification('Error de autenticación: ' + authResult.error, 'error');
+    // Parsear el DTE firmado
+    let dteFirmado;
+    try {
+      dteFirmado = JSON.parse(factura.json_dte);
+    } catch (e) {
+      showNotification('Error al parsear DTE: ' + e.message, 'error');
       return;
     }
     
-    showNotification('Enviando DTE a Hacienda...', 'info');
-    
-    // Enviar DTE
-    const dteResult = await window.electronAPI.enviarDTE({
-      dte: {
-        emisor: {
-          nit: state.configuracion.nit
-        },
-        documento: JSON.parse(factura.json_dte || '{}')
-      },
-      token: authResult.token
+    // Enviar DTE usando el nuevo formato (modelo uno a uno)
+    const resultado = await window.electronAPI.enviarDTE({
+      dteFirmado: dteFirmado,
+      nit: state.configuracion.nit,
+      passwordPri: null // Se puede agregar si se usa certificado con password
     });
     
-    if (dteResult.success) {
-      showNotification('Factura enviada exitosamente a Hacienda', 'success');
+    if (resultado.success) {
+      showNotification('✓ Factura enviada exitosamente a Hacienda', 'success');
       
-      // Actualizar estado
+      // Mostrar información de la respuesta
+      if (resultado.selloRecibido) {
+        console.log('Sello recibido:', resultado.selloRecibido);
+        console.log('Estado:', resultado.estado);
+      }
+      
+      if (resultado.observaciones) {
+        console.log('Observaciones:', resultado.observaciones);
+      }
+      
+      // Actualizar estado en base de datos
       await window.electronAPI.updateFacturaEstado(
         facturaId, 
-        'ENVIADO', 
-        dteResult.resultado?.selloRecepcion || null
+        'PROCESADO',
+        resultado.selloRecibido || null
       );
       
       cerrarModalVerFactura();
       await loadFacturas();
     } else {
-      showNotification('Error al enviar: ' + dteResult.error, 'error');
+      let errorMsg = 'Error al enviar: ' + resultado.error;
+      if (resultado.observaciones && resultado.observaciones.length > 0) {
+        errorMsg += '\nObservaciones: ' + resultado.observaciones.join(', ');
+      }
+      showNotification(errorMsg, 'error');
+      console.error('Error completo:', resultado);
     }
   } catch (error) {
     console.error('Error enviando factura:', error);
