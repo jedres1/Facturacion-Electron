@@ -131,14 +131,14 @@ ipcMain.handle('hacienda:autenticar', async (event, credenciales) => {
 ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPri }) => {
   try {
     const config = db.getConfiguracion();
-    if (!config || !config.usuario_hacienda || !config.password_hacienda) {
+    if (!config || !config.hacienda_usuario || !config.hacienda_password) {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
     }
 
     const api = new HaciendaAPI({
-      ambiente: config.ambiente || 'pruebas',
-      usuario: config.usuario_hacienda,
-      password: config.password_hacienda
+      ambiente: config.hacienda_ambiente || 'pruebas',
+      usuario: config.hacienda_usuario,
+      password: config.hacienda_password
     });
 
     // Autenticar primero

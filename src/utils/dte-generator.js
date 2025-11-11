@@ -3,7 +3,7 @@
  * Basado en los schemas oficiales del Ministerio de Hacienda de El Salvador
  */
 
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 class DTEGenerator {
   constructor() {
@@ -370,7 +370,7 @@ class DTEGenerator {
    * Generar código de generación (UUID v4)
    */
   generarCodigoGeneracion() {
-    return uuidv4().toUpperCase();
+    return crypto.randomUUID().toUpperCase();
   }
 
   /**

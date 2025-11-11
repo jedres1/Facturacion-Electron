@@ -884,6 +884,7 @@ async function loadConfiguracion() {
       
       document.getElementById('config-direccion').value = config.direccion || '';
       document.getElementById('config-hacienda-usuario').value = config.hacienda_usuario || '';
+      document.getElementById('config-hacienda-password').value = config.hacienda_password || '';
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
       document.getElementById('config-punto-venta').value = config.punto_venta || '';
@@ -2397,7 +2398,7 @@ async function enviarFacturaHacienda(facturaId) {
       return;
     }
     
-    if (!state.configuracion || !state.configuracion.usuario_hacienda) {
+    if (!state.configuracion || !state.configuracion.hacienda_usuario) {
       showNotification('Por favor configure las credenciales de Hacienda primero', 'error');
       return;
     }
