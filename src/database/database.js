@@ -381,6 +381,15 @@ class DatabaseManager {
     return stmt.run(estado, selloRecepcion, observaciones, id);
   }
 
+  // Obtener siguiente correlativo para número de control
+  getSiguienteCorrelativo(tipoDte) {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) as total FROM facturas WHERE tipo_dte = ?
+    `);
+    const result = stmt.get(tipoDte);
+    return (result.total || 0) + 1;
+  }
+
   close() {
     this.db.close();
   }

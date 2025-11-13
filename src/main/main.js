@@ -109,6 +109,10 @@ ipcMain.handle('db:updateFacturaEstado', async (event, { id, estado, selloRecepc
   return db.updateFacturaEstado(id, estado, selloRecepcion);
 });
 
+ipcMain.handle('db:getSiguienteCorrelativo', async (event, tipoDte) => {
+  return db.getSiguienteCorrelativo(tipoDte);
+});
+
 ipcMain.handle('db:getConfiguracion', async () => {
   return db.getConfiguracion();
 });
@@ -206,17 +210,26 @@ ipcMain.handle('dialog:selectFile', async (event, options) => {
 // IPC Handler para generar DTE
 ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resumen, opciones }) => {
   try {
+    // Obtener el siguiente correlativo de la base de datos
+    const correlativo = db.getSiguienteCorrelativo(tipo);
+    
+    // Agregar correlativo a las opciones
+    const opcionesConCorrelativo = {
+      ...opciones,
+      correlativo: correlativo
+    };
+    
     let dte;
     
     switch(tipo) {
       case '01': // Factura
-        dte = dteGenerator.generarFactura(config, cliente, items, resumen, opciones);
+        dte = dteGenerator.generarFactura(config, cliente, items, resumen, opcionesConCorrelativo);
         break;
       case '03': // Crédito Fiscal
-        dte = dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opciones);
+        dte = dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opcionesConCorrelativo);
         break;
       case '05': // Nota de Crédito
-        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opciones.documentoRelacionado, opciones);
+        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opciones.documentoRelacionado, opcionesConCorrelativo);
         break;
       default:
         throw new Error('Tipo de DTE no soportado: ' + tipo);

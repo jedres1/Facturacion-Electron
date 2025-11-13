@@ -25,7 +25,8 @@ class DTEGenerator {
   generarFactura(config, cliente, items, resumen, opciones = {}) {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
-    const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento);
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento, correlativo);
 
     return {
       identificacion: {
@@ -60,7 +61,8 @@ class DTEGenerator {
   generarCreditoFiscal(config, cliente, items, resumen, opciones = {}) {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
-    const numeroControl = this.generarNumeroControl('03', config.codigo_establecimiento);
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('03', config.codigo_establecimiento, correlativo);
 
     return {
       identificacion: {
@@ -95,7 +97,8 @@ class DTEGenerator {
   generarNotaCredito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
-    const numeroControl = this.generarNumeroControl('05', config.codigo_establecimiento);
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('05', config.codigo_establecimiento, correlativo);
 
     return {
       identificacion: {
@@ -377,10 +380,10 @@ class DTEGenerator {
    * Generar número de control
    * Formato: DTE-{tipoDte}-{codEstablecimiento}-{correlativo}
    */
-  generarNumeroControl(tipoDte, codEstablecimiento) {
-    const establecimiento = (codEstablecimiento || '0000').padStart(8, '0');
-    const correlativo = Date.now().toString().slice(-15).padStart(15, '0');
-    return `DTE-${tipoDte}-${establecimiento}-${correlativo}`;
+  generarNumeroControl(tipoDte, codEstablecimiento, correlativo = 1) {
+    const establecimiento = (codEstablecimiento || '0000').padStart(4, '0');
+    const numeroCorrelativo = correlativo.toString().padStart(15, '0');
+    return `DTE-${tipoDte}-${establecimiento}-${numeroCorrelativo}`;
   }
 
   /**

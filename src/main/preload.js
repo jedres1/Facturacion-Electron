@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFacturas: (filtros) => ipcRenderer.invoke('db:getFacturas', filtros),
   addFactura: (factura) => ipcRenderer.invoke('db:addFactura', factura),
   updateFacturaEstado: (id, estado, selloRecepcion) => ipcRenderer.invoke('db:updateFacturaEstado', { id, estado, selloRecepcion }),
+  getSiguienteCorrelativo: (tipoDte) => ipcRenderer.invoke('db:getSiguienteCorrelativo', tipoDte),
   getConfiguracion: () => ipcRenderer.invoke('db:getConfiguracion'),
   updateConfiguracion: (config) => ipcRenderer.invoke('db:updateConfiguracion', config),
   
