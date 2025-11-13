@@ -2155,6 +2155,19 @@ function abrirModalVerFactura(factura) {
   // Información de la factura
   document.getElementById('factura-numero-control').textContent = factura.numero_control || 'N/A';
   document.getElementById('factura-codigo-generacion').textContent = factura.codigo_generacion || 'N/A';
+  
+  // Sello de recepción de Hacienda (si existe)
+  const selloElement = document.getElementById('factura-sello-recepcion');
+  if (factura.sello_recepcion) {
+    selloElement.textContent = factura.sello_recepcion;
+    selloElement.style.color = '#28a745';
+    selloElement.style.fontWeight = 'bold';
+  } else {
+    selloElement.textContent = 'Pendiente de envío a Hacienda';
+    selloElement.style.color = '#6c757d';
+    selloElement.style.fontWeight = 'normal';
+  }
+  
   document.getElementById('factura-fecha').textContent = formatDate(factura.fecha_emision);
   
   // Badge de estado
