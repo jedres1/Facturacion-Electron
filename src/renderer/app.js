@@ -678,9 +678,27 @@ async function loadInitialData() {
     state.configuracion = await window.electronAPI.getConfiguracion();
     
     console.log('Datos iniciales cargados', state);
+    
+    // Verificar estado de conexión con Hacienda si hay credenciales guardadas
+    verificarEstadoConexion();
   } catch (error) {
     console.error('Error cargando datos iniciales:', error);
     showNotification('Error al cargar datos', 'error');
+  }
+}
+
+// Verificar estado de conexión con Hacienda
+function verificarEstadoConexion() {
+  const estadoConexion = document.getElementById('estado-conexion');
+  
+  if (state.configuracion && state.configuracion.hacienda_usuario && state.configuracion.hacienda_password) {
+    estadoConexion.textContent = `Configurado (${state.configuracion.hacienda_ambiente === 'produccion' ? 'Prod' : 'Test'})`;
+    estadoConexion.className = 'badge badge-info';
+    estadoConexion.title = 'Credenciales configuradas. Use "Probar Conexión" para verificar.';
+  } else {
+    estadoConexion.textContent = 'Sin configurar';
+    estadoConexion.className = 'badge badge-warning';
+    estadoConexion.title = 'Configure las credenciales de Hacienda';
   }
 }
 
@@ -1188,6 +1206,9 @@ async function guardarConfiguracion() {
     await window.electronAPI.updateConfiguracion(config);
     state.configuracion = config;
     showNotification('Configuración guardada exitosamente', 'success');
+    
+    // Actualizar estado de conexión
+    verificarEstadoConexion();
   } catch (error) {
     console.error('Error guardando configuración:', error);
     showNotification('Error al guardar configuración', 'error');
@@ -2357,8 +2378,12 @@ async function probarConexionHacienda() {
     }
     
     const btnTest = document.getElementById('btn-test-conexion');
+    const estadoConexion = document.getElementById('estado-conexion');
+    
     btnTest.disabled = true;
     btnTest.textContent = 'Probando...';
+    estadoConexion.textContent = 'Conectando...';
+    estadoConexion.className = 'badge badge-info';
     
     showNotification('Probando conexión con Hacienda...', 'info');
     
@@ -2373,6 +2398,10 @@ async function probarConexionHacienda() {
     btnTest.textContent = 'Probar Conexión';
     
     if (authResult.success) {
+      // Actualizar badge de conexión
+      estadoConexion.textContent = `✓ Conectado MH (${ambiente === 'produccion' ? 'Prod' : 'Test'})`;
+      estadoConexion.className = 'badge badge-success';
+      
       showNotification('✓ Conexión exitosa con el Ministerio de Hacienda', 'success');
       console.log('=== AUTENTICACIÓN EXITOSA ===');
       console.log('Usuario:', authResult.user);
@@ -2382,6 +2411,10 @@ async function probarConexionHacienda() {
       console.log('Roles:', authResult.roles);
       console.log('=============================');
     } else {
+      // Actualizar badge a error
+      estadoConexion.textContent = '✗ Sin conexión';
+      estadoConexion.className = 'badge badge-danger';
+      
       showNotification('✗ Error de conexión: ' + authResult.error, 'error');
       console.error('Error de autenticación:', authResult.error);
     }
@@ -2390,8 +2423,12 @@ async function probarConexionHacienda() {
     showNotification('Error al probar conexión: ' + error.message, 'error');
     
     const btnTest = document.getElementById('btn-test-conexion');
+    const estadoConexion = document.getElementById('estado-conexion');
+    
     btnTest.disabled = false;
     btnTest.textContent = 'Probar Conexión';
+    estadoConexion.textContent = '✗ Error conexión';
+    estadoConexion.className = 'badge badge-danger';
   }
 }
 
