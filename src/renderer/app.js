@@ -2236,17 +2236,88 @@ function cerrarModalVerFactura() {
   modal.classList.remove('active');
 }
 
-// Firmar factura con Puppeteer
+// Firmar factura
 async function firmarFactura(facturaId) {
-  // Abrir modal para pedir credenciales
-  const modal = document.getElementById('modal-firmador');
-  document.getElementById('firmador-factura-id').value = facturaId;
-  document.getElementById('form-firmador').reset();
-  document.getElementById('firmador-factura-id').value = facturaId; // Mantener el ID después del reset
-  modal.classList.add('active');
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    // Verificar configuración
+    if (!state.configuracion) {
+      showNotification('Por favor configure los datos de la empresa primero', 'error');
+      return;
+    }
+    
+    // Si hay certificado configurado, firmar automáticamente
+    if (state.configuracion.certificado_path && state.configuracion.certificado_password) {
+      await firmarConCertificadoLocal(facturaId);
+    } else {
+      // Si no hay certificado, abrir modal para pedir credenciales del firmador web
+      const modal = document.getElementById('modal-firmador');
+      document.getElementById('firmador-factura-id').value = facturaId;
+      document.getElementById('form-firmador').reset();
+      document.getElementById('firmador-factura-id').value = facturaId;
+      modal.classList.add('active');
+    }
+  } catch (error) {
+    console.error('Error al firmar factura:', error);
+    showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
 }
 
-// Procesar firma del documento
+// Firmar con certificado local automáticamente
+async function firmarConCertificadoLocal(facturaId) {
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    showNotification('Firmando documento con certificado local...', 'info');
+    
+    // Parsear el JSON DTE de la factura
+    let jsonDte = {};
+    try {
+      jsonDte = JSON.parse(factura.json_dte || '{}');
+    } catch (e) {
+      console.error('Error parseando JSON DTE:', e);
+    }
+    
+    // Construir documento completo para firmar
+    const documento = jsonDte;
+    
+    // Llamar al firmador con el certificado configurado
+    const result = await window.electronAPI.firmarDocumento({
+      documento: documento,
+      pin: state.configuracion.certificado_password,
+      usuario: null,
+      password: null,
+      certificadoPath: state.configuracion.certificado_path,
+      certificadoPassword: state.configuracion.certificado_password
+    });
+    
+    if (result.success) {
+      showNotification('✓ Documento firmado exitosamente', 'success');
+      
+      // Actualizar estado en base de datos
+      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      
+      cerrarModalVerFactura();
+      await loadFacturas();
+    } else {
+      showNotification('✗ Error al firmar: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error firmando factura:', error);
+    showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
+}
+
+// Procesar firma del documento (solo para firmador web)
 async function procesarFirmaDocumento() {
   try {
     const facturaId = parseInt(document.getElementById('firmador-factura-id').value);
@@ -2257,6 +2328,12 @@ async function procesarFirmaDocumento() {
     const factura = state.facturas.find(f => f.id === facturaId);
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    // Validar credenciales del firmador web
+    if (!usuarioFirmador || !passwordFirmador || !pinCertificado) {
+      showNotification('Por favor ingrese todas las credenciales del firmador web', 'error');
       return;
     }
     

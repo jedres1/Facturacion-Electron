@@ -622,20 +622,28 @@
   <div id="modal-firmador" class="modal">
     <div class="modal-content" style="max-width: 500px;">
       <div class="modal-header">
-        <h2>🔐 Firmar Documento</h2>
+        <h2>🔐 Firmar con Firmador Web</h2>
         <button class="close-modal" onclick="cerrarModalFirmador()">×</button>
       </div>
       <form id="form-firmador" class="modal-form">
         <input type="hidden" id="firmador-factura-id">
         
+        <div class="alert alert-warning" style="margin-bottom: 1rem;">
+          <small>
+            ⚠️ No tienes un certificado digital configurado. Se usará el Firmador Web de Hacienda (más lento).
+            <br><br>
+            <strong>Recomendación:</strong> Configura tu certificado digital en Configuración para firmar instantáneamente.
+          </small>
+        </div>
+        
         <div class="form-group full-width">
           <label>Usuario del Firmador de Hacienda *</label>
-          <input type="text" id="firmador-usuario" required placeholder="Usuario del firmador">
+          <input type="text" id="firmador-usuario" required placeholder="Usuario del firmador web">
         </div>
 
         <div class="form-group full-width">
           <label>Contraseña del Firmador *</label>
-          <input type="password" id="firmador-password" required placeholder="Contraseña del firmador">
+          <input type="password" id="firmador-password" required placeholder="Contraseña del firmador web">
         </div>
 
         <div class="form-group full-width">
@@ -646,13 +654,13 @@
         <div class="alert alert-info" style="margin-top: 1rem;">
           <small>
             ℹ️ Se abrirá el Firmador de Hacienda en una ventana del navegador para completar el proceso de firma.
-            El proceso puede tomar algunos minutos.
+            El proceso puede tomar varios minutos.
           </small>
         </div>
 
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="cerrarModalFirmador()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">🔐 Iniciar Firma</button>
+          <button type="submit" class="btn btn-primary">🔐 Iniciar Firma Web</button>
         </div>
       </form>
     </div>
