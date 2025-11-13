@@ -121,8 +121,8 @@ ipcMain.handle('db:updateConfiguracion', async (event, config) => {
 ipcMain.handle('hacienda:autenticar', async (event, credenciales) => {
   try {
     const api = new HaciendaAPI(credenciales);
-    const token = await api.autenticar();
-    return { success: true, token };
+    const resultado = await api.autenticar();
+    return resultado; // Retorna { success, token, user, rol, roles, tokenType }
   } catch (error) {
     return { success: false, error: error.message };
   }

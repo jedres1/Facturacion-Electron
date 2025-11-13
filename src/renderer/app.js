@@ -2374,7 +2374,13 @@ async function probarConexionHacienda() {
     
     if (authResult.success) {
       showNotification('✓ Conexión exitosa con el Ministerio de Hacienda', 'success');
-      console.log('Token recibido:', authResult.token);
+      console.log('=== AUTENTICACIÓN EXITOSA ===');
+      console.log('Usuario:', authResult.user);
+      console.log('Token:', authResult.token);
+      console.log('Tipo Token:', authResult.tokenType);
+      console.log('Rol:', authResult.rol?.nombre);
+      console.log('Roles:', authResult.roles);
+      console.log('=============================');
     } else {
       showNotification('✗ Error de conexión: ' + authResult.error, 'error');
       console.error('Error de autenticación:', authResult.error);

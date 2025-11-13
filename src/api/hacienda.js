@@ -23,22 +23,39 @@ class HaciendaAPI {
 
   /**
    * Autenticar con el Ministerio de Hacienda
+   * Según guía oficial: APIS - Sistema Transmisión de DTE
    */
   async autenticar() {
     try {
-      const response = await this.axiosInstance.post('/seguridad/auth', {
-        user: this.usuario,
-        pwd: this.password
+      // Preparar datos en formato application/x-www-form-urlencoded
+      const params = new URLSearchParams();
+      params.append('user', this.usuario);
+      params.append('pwd', this.password);
+
+      const response = await this.axiosInstance.post('/seguridad/auth', params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'FacturacionElectron/1.0'
+        }
       });
 
-      if (response.data && response.data.body && response.data.body.token) {
+      // Validar respuesta según estructura oficial
+      if (response.data && response.data.status === 'OK' && response.data.body && response.data.body.token) {
         this.token = response.data.body.token;
-        return this.token;
+        return {
+          success: true,
+          token: this.token,
+          user: response.data.body.user,
+          rol: response.data.body.rol,
+          roles: response.data.body.roles,
+          tokenType: response.data.body.tokenType
+        };
       }
 
       throw new Error('No se recibió token de autenticación');
     } catch (error) {
-      throw new Error(`Error en autenticación: ${error.message}`);
+      const errorMsg = error.response?.data?.mensaje || error.response?.data?.body?.mensaje || error.message;
+      throw new Error(`Error en autenticación: ${errorMsg}`);
     }
   }
 
