@@ -666,6 +666,24 @@
     </div>
   </div>
 
+  <!-- Modal para respuesta de Hacienda -->
+  <div id="modal-respuesta-hacienda" class="modal">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 id="respuesta-titulo">📋 Respuesta del Ministerio de Hacienda</h2>
+        <button class="close-modal" onclick="cerrarModalRespuestaHacienda()">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="respuesta-contenido" class="factura-info">
+          <!-- Se llenará dinámicamente -->
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" onclick="cerrarModalRespuestaHacienda()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal para agregar item a factura -->
   <div id="modal-item" class="modal">
     <div class="modal-content" style="max-width: 500px;">

@@ -11,6 +11,19 @@ let state = {
   }
 };
 
+// Importar utilidades de división geográfica
+const {
+  getDepartamentos,
+  getMunicipios,
+  getDistritos,
+  getDepartamentoByCodigo,
+  getMunicipioByCodigo,
+  getDistritoByCodigo,
+  poblarSelectDepartamentos,
+  poblarSelectMunicipios,
+  poblarSelectDistritos
+} = require('../utils/division-geografica-utils');
+
 // Actividades Económicas - Clasificación BCR Rev. 4.0
 const actividadesEconomicas = [
   { codigo: '01', descripcion: 'Producción agrícola, pecuaria, caza y actividades de servicios conexas' },
@@ -103,9 +116,9 @@ const actividadesEconomicas = [
   { codigo: '99', descripcion: 'Actividades de organizaciones y órganos extraterritoriales' }
 ];
 
-// Municipios oficiales de El Salvador (Actualizado Noviembre 2025)
-// Estructura: Departamento → Municipio → Distritos
-// Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Municipio
+// División geográfica ahora se maneja en src/utils/division-geografica.js
+// Este código se mantiene comentado como referencia
+/*
 const municipiosPorDepartamento = {
   '01': [ // Ahuachapán
     { codigo: '0101', nombre: 'Ahuachapán Centro' },
@@ -181,10 +194,7 @@ const municipiosPorDepartamento = {
   ]
 };
 
-// Distritos por Municipio (Antiguos Municipios ahora son Distritos)
-// Estructura: codigoCarga (4 dígitos), codigoDistrito (6 dígitos), nombre
-// El código de carga agentes es el código que se usa para identificar el distrito
-const distritosPorMunicipio = {
+const distritosPorMunicipio_OLD = {
   // Ahuachapán Centro (0101)
   '0101': [
     { codigoCarga: '0101', codigoDistrito: '010101', nombre: 'Ahuachapán' },
@@ -989,10 +999,15 @@ function setupEventListeners() {
   setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
 }
 
-// Configurar manejador de departamento-municipio-distrito
+// Configurar manejador de departamento-municipio-distrito para clientes
 function setupDepartamentoMunicipioHandler() {
   const departamentoSelect = document.getElementById('cliente-departamento');
   const municipioSelect = document.getElementById('cliente-municipio');
+  
+  // Poblar departamentos al cargar
+  if (departamentoSelect) {
+    poblarSelectDepartamentos(departamentoSelect);
+  }
   
   if (departamentoSelect && municipioSelect) {
     departamentoSelect.addEventListener('change', (e) => {
@@ -1012,42 +1027,37 @@ function cargarMunicipios(codigoDepartamento) {
   const municipioSelect = document.getElementById('cliente-municipio');
   const distritoSelect = document.getElementById('cliente-distrito');
   
-  // Limpiar opciones actuales
-  municipioSelect.innerHTML = '<option value="">Seleccionar municipio...</option>';
+  // Limpiar distritos
   if (distritoSelect) {
     distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
     distritoSelect.disabled = true;
   }
   
-  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+  if (!codigoDepartamento) {
+    municipioSelect.innerHTML = '<option value="">Seleccione primero un departamento...</option>';
     municipioSelect.disabled = true;
     return;
   }
   
+  // Usar función del módulo division-geografica.js
+  poblarSelectMunicipios(municipioSelect, codigoDepartamento);
   municipioSelect.disabled = false;
-  
-  // Cargar municipios del departamento seleccionado
-  const municipios = municipiosPorDepartamento[codigoDepartamento];
-  municipios.forEach(municipio => {
-    const option = document.createElement('option');
-    option.value = municipio.codigo;
-    option.textContent = municipio.nombre;
-    municipioSelect.appendChild(option);
-  });
 }
 
 // Cargar distritos según municipio
 function cargarDistritos(codigoMunicipio) {
   const distritoSelect = document.getElementById('cliente-distrito');
   
-  // Limpiar opciones actuales
-  distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
-  
-  if (!codigoMunicipio || !distritosPorMunicipio[codigoMunicipio]) {
+  if (!codigoMunicipio) {
+    distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
     distritoSelect.disabled = true;
     return;
   }
   
+  // Usar función del módulo division-geografica.js
+  poblarSelectDistritos(distritoSelect, codigoMunicipio);
+  distritoSelect.disabled = false;
+}
   distritoSelect.disabled = false;
   
   // Cargar distritos del municipio seleccionado
@@ -1064,32 +1074,19 @@ function cargarDistritos(codigoMunicipio) {
 
 // Obtener nombre del municipio por código
 function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
-  if (!municipiosPorDepartamento[codigoDepartamento]) {
-    return codigoMunicipio;
-  }
-  
-  const municipio = municipiosPorDepartamento[codigoDepartamento].find(
-    m => m.codigo === codigoMunicipio
-  );
-  
+  const municipio = getMunicipioByCodigo(codigoMunicipio);
   return municipio ? municipio.nombre : codigoMunicipio;
 }
 
 // Obtener lista de distritos por código de municipio
 function obtenerDistritosPorMunicipio(codigoMunicipio) {
-  return distritosPorMunicipio[codigoMunicipio] || [];
+  return getDistritos(codigoMunicipio);
 }
 
 // Obtener nombre del distrito por código completo (6 dígitos)
 function obtenerNombreDistrito(codigoDistrito) {
-  // Buscar en todos los municipios
-  for (const municipio in distritosPorMunicipio) {
-    const distrito = distritosPorMunicipio[municipio].find(d => d.codigoDistrito === codigoDistrito);
-    if (distrito) {
-      return distrito.nombre;
-    }
-  }
-  return codigoDistrito;
+  const distrito = getDistritoByCodigo(codigoDistrito);
+  return distrito ? distrito.nombre : codigoDistrito;
 }
 
 // Obtener código de municipio desde código de distrito (primeros 4 dígitos)
@@ -1101,6 +1098,11 @@ function obtenerMunicipioDesdeDistrito(codigoDistrito) {
 function setupDepartamentoMunicipioConfigHandler() {
   const departamentoSelect = document.getElementById('config-departamento');
   const municipioSelect = document.getElementById('config-municipio');
+  
+  // Poblar departamentos al cargar
+  if (departamentoSelect) {
+    poblarSelectDepartamentos(departamentoSelect);
+  }
   
   if (departamentoSelect && municipioSelect) {
     departamentoSelect.addEventListener('change', (e) => {
@@ -1120,34 +1122,37 @@ function cargarMunicipiosConfig(codigoDepartamento) {
   const municipioSelect = document.getElementById('config-municipio');
   const distritoSelect = document.getElementById('config-distrito');
   
-  // Limpiar opciones actuales
-  municipioSelect.innerHTML = '<option value="">Seleccionar municipio...</option>';
+  // Limpiar distritos
   if (distritoSelect) {
     distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
     distritoSelect.disabled = true;
   }
   
-  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+  if (!codigoDepartamento) {
+    municipioSelect.innerHTML = '<option value="">Seleccione primero un departamento...</option>';
     municipioSelect.disabled = true;
     return;
   }
   
+  // Usar función del módulo division-geografica.js
+  poblarSelectMunicipios(municipioSelect, codigoDepartamento);
   municipioSelect.disabled = false;
-  
-  // Cargar municipios del departamento seleccionado
-  const municipios = municipiosPorDepartamento[codigoDepartamento];
-  municipios.forEach(municipio => {
-    const option = document.createElement('option');
-    option.value = municipio.codigo;
-    option.textContent = municipio.nombre;
-    municipioSelect.appendChild(option);
-  });
 }
 
 // Cargar distritos en configuración
 function cargarDistritosConfig(codigoMunicipio) {
   const distritoSelect = document.getElementById('config-distrito');
   
+  if (!codigoMunicipio) {
+    distritoSelect.innerHTML = '<option value="">Seleccione primero un municipio...</option>';
+    distritoSelect.disabled = true;
+    return;
+  }
+  
+  // Usar función del módulo division-geografica.js
+  poblarSelectDistritos(distritoSelect, codigoMunicipio);
+  distritoSelect.disabled = false;
+}
   // Limpiar opciones actuales
   distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
   
@@ -2434,6 +2439,119 @@ function cerrarModalFirmador() {
   document.getElementById('form-firmador').reset();
 }
 
+// ===== FUNCIONES MODAL RESPUESTA HACIENDA =====
+function mostrarRespuestaHacienda(resultado) {
+  const modal = document.getElementById('modal-respuesta-hacienda');
+  const contenido = document.getElementById('respuesta-contenido');
+  const titulo = document.getElementById('respuesta-titulo');
+
+  // Determinar si fue exitoso
+  const esExitoso = resultado.success === true;
+  const icono = esExitoso ? '✅' : '❌';
+  const color = esExitoso ? '#28a745' : '#dc3545';
+
+  titulo.textContent = `${icono} Respuesta del Ministerio de Hacienda`;
+  titulo.style.color = color;
+
+  // Construir HTML de la respuesta
+  let html = '<div style="font-size: 14px;">';
+
+  // Estado
+  if (resultado.estado) {
+    const estadoColor = esExitoso ? '#28a745' : '#dc3545';
+    html += `
+      <div class="info-row">
+        <strong>Estado:</strong>
+        <span style="color: ${estadoColor}; font-weight: bold; font-size: 16px;">
+          ${resultado.estado}
+        </span>
+      </div>
+    `;
+  }
+
+  // Sello de recepción (solo si existe)
+  if (resultado.selloRecibido) {
+    html += `
+      <div class="info-row">
+        <strong>Sello de Recepción:</strong>
+        <div style="word-break: break-all; background-color: #f8f9fa; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 12px; margin-top: 5px;">
+          ${resultado.selloRecibido}
+        </div>
+      </div>
+    `;
+  }
+
+  // Mensaje de error (si existe)
+  if (resultado.error) {
+    html += `
+      <div class="info-row">
+        <strong>Error:</strong>
+        <div style="color: #dc3545; margin-top: 5px;">
+          ${resultado.error}
+        </div>
+      </div>
+    `;
+  }
+
+  // Observaciones (si existen)
+  if (resultado.observaciones && resultado.observaciones.length > 0) {
+    html += `
+      <div class="info-row">
+        <strong>Observaciones:</strong>
+        <ul style="margin: 8px 0; padding-left: 20px; color: #dc3545;">
+          ${resultado.observaciones.map(obs => `<li>${obs}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  // Si fue exitoso y no hay observaciones
+  if (esExitoso && (!resultado.observaciones || resultado.observaciones.length === 0)) {
+    html += `
+      <div class="info-row">
+        <div style="color: #28a745; font-weight: bold; text-align: center; padding: 20px;">
+          ✓ Documento procesado exitosamente por el Ministerio de Hacienda
+        </div>
+      </div>
+    `;
+  }
+
+  // Botón para copiar respuesta completa (para debugging)
+  html += `
+    <div class="info-row" style="margin-top: 20px; text-align: center;">
+      <button onclick="copiarRespuestaCompleta()" class="btn btn-secondary" style="font-size: 12px;">
+        📋 Copiar respuesta completa
+      </button>
+    </div>
+  `;
+
+  html += '</div>';
+
+  contenido.innerHTML = html;
+
+  // Guardar resultado para función copiar
+  window._ultimaRespuestaHacienda = resultado;
+
+  // Mostrar modal
+  modal.style.display = 'flex';
+}
+
+function cerrarModalRespuestaHacienda() {
+  document.getElementById('modal-respuesta-hacienda').style.display = 'none';
+}
+
+function copiarRespuestaCompleta() {
+  if (window._ultimaRespuestaHacienda) {
+    const texto = JSON.stringify(window._ultimaRespuestaHacienda, null, 2);
+    navigator.clipboard.writeText(texto).then(() => {
+      showNotification('Respuesta copiada al portapapeles', 'success');
+    }).catch(err => {
+      console.error('Error al copiar:', err);
+      showNotification('Error al copiar al portapapeles', 'error');
+    });
+  }
+}
+
 // Seleccionar certificado digital
 async function seleccionarCertificado() {
   try {
@@ -2542,18 +2660,7 @@ async function enviarFacturaHacienda(facturaId) {
       return;
     }
     
-    // Verificar que el estado sea FIRMADO o PENDIENTE
-    if (factura.estado !== 'FIRMADO' && factura.estado !== 'PENDIENTE') {
-      showNotification('La factura debe estar firmada antes de enviarla a Hacienda', 'error');
-      return;
-    }
-    
-    const confirmacion = confirm('¿Está seguro de enviar esta factura al Ministerio de Hacienda?');
-    if (!confirmacion) return;
-    
-    showNotification('Enviando DTE a Hacienda (modelo uno a uno)...', 'info');
-    
-    // Parsear el DTE firmado
+    // Parsear el DTE para verificar firma
     let dteFirmado;
     try {
       dteFirmado = JSON.parse(factura.json_dte);
@@ -2562,10 +2669,30 @@ async function enviarFacturaHacienda(facturaId) {
       return;
     }
     
+    // Verificar que el DTE tenga firma digital
+    if (!dteFirmado.firma || !dteFirmado.firma.valorFirma) {
+      showNotification('❌ La factura NO está firmada digitalmente. Debe firmarla primero usando el botón "🔐 Firmar".', 'error');
+      return;
+    }
+    
+    // Verificar que el estado sea FIRMADO
+    if (factura.estado !== 'FIRMADO') {
+      showNotification('La factura debe estar en estado FIRMADO antes de enviarla', 'error');
+      return;
+    }
+    
+    const confirmacion = confirm('¿Está seguro de enviar esta factura al Ministerio de Hacienda?');
+    if (!confirmacion) return;
+    
+    showNotification('Enviando DTE a Hacienda (modelo uno a uno)...', 'info');
+    
+    // Limpiar NIT (quitar guiones y espacios)
+    const nitLimpio = state.configuracion.nit.replace(/[-\s]/g, '');
+    
     // Enviar DTE usando el nuevo formato (modelo uno a uno)
     const resultado = await window.electronAPI.enviarDTE({
       dteFirmado: dteFirmado,
-      nit: state.configuracion.nit,
+      nit: nitLimpio,
       passwordPri: null // Se puede agregar si se usa certificado con password
     });
     
@@ -2588,15 +2715,16 @@ async function enviarFacturaHacienda(facturaId) {
         'PROCESADO',
         resultado.selloRecibido || null
       );
+
+      // Mostrar modal con respuesta detallada
+      mostrarRespuestaHacienda(resultado);
       
       cerrarModalVerFactura();
       await loadFacturas();
     } else {
-      let errorMsg = 'Error al enviar: ' + resultado.error;
-      if (resultado.observaciones && resultado.observaciones.length > 0) {
-        errorMsg += '\nObservaciones: ' + resultado.observaciones.join(', ');
-      }
-      showNotification(errorMsg, 'error');
+      // Mostrar modal con error detallado
+      mostrarRespuestaHacienda(resultado);
+      
       console.error('Error completo:', resultado);
     }
   } catch (error) {

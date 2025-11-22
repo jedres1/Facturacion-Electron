@@ -4,9 +4,17 @@ const crypto = require('crypto');
 class HaciendaAPI {
   constructor(config = {}) {
     this.ambiente = config.ambiente || 'pruebas';
-    this.baseURL = this.ambiente === 'produccion' 
-      ? 'https://api.dtes.mh.gob.sv'
-      : 'https://apitest.dtes.mh.gob.sv';
+    
+    // URLs según documentación oficial MH
+    if (this.ambiente === 'produccion') {
+      // Ambiente de producción
+      this.baseURL = 'https://api.dtes.mh.gob.sv/fesv';
+      this.authURL = 'https://api.dtes.mh.gob.sv/seguridad/auth';
+    } else {
+      // Ambiente de pruebas
+      this.baseURL = 'https://apitest.dtes.mh.gob.sv/fesv';
+      this.authURL = 'https://apitest.dtes.mh.gob.sv/seguridad/auth';
+    }
     
     this.usuario = config.usuario;
     this.password = config.password;
@@ -19,6 +27,10 @@ class HaciendaAPI {
         'Content-Type': 'application/json'
       }
     });
+    
+    console.log(`🌐 Hacienda API configurada para: ${this.ambiente.toUpperCase()}`);
+    console.log(`   Auth URL: ${this.authURL}`);
+    console.log(`   Base URL: ${this.baseURL}`);
   }
 
   /**
@@ -32,11 +44,13 @@ class HaciendaAPI {
       params.append('user', this.usuario);
       params.append('pwd', this.password);
 
-      const response = await this.axiosInstance.post('/seguridad/auth', params, {
+      // Usar authURL dedicada para autenticación
+      const response = await axios.post(this.authURL, params, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'User-Agent': 'FacturacionElectron/1.0'
-        }
+        },
+        timeout: 30000
       });
 
       // Validar respuesta según estructura oficial
@@ -72,19 +86,60 @@ class HaciendaAPI {
     }
 
     try {
+      // Parsear el DTE si viene como string
+      let dteObj = typeof dte === 'string' ? JSON.parse(dte) : dte;
+      
+      // Convertir DTE a string JSON (el endpoint espera string, no objeto)
+      const dteJsonString = JSON.stringify(dteObj);
+      
+      // Estructura según documentación oficial MH para recepción DTE
       const payload = {
-        nit: nit,
-        activo: true,
-        passwordPri: passwordPri,
-        dteJson: dte
+        ambiente: this.ambiente === 'produccion' ? '00' : '01',
+        idEnvio: 1,
+        version: 2,
+        tipoDte: dteObj.identificacion?.tipoDte || '01',
+        documento: dteJsonString  // El DTE como string JSON
       };
 
-      const response = await this.axiosInstance.post('/fesv/recepciondte', payload, {
+      console.log('=== ENVIANDO DTE A HACIENDA ===');
+      console.log('NIT:', nit);
+      console.log('Ambiente:', payload.ambiente, `(${this.ambiente})`);
+      console.log('Base URL:', this.baseURL);
+      console.log('Endpoint completo:', this.baseURL + '/recepciondte');
+      console.log('Token presente:', !!this.token);
+      console.log('Token value:', this.token?.substring(0, 20) + '...');
+      console.log('Version:', payload.version);
+      console.log('Tipo DTE:', payload.tipoDte);
+      console.log('ID Envío:', payload.idEnvio);
+      console.log('Código Generación:', dteObj.identificacion?.codigoGeneracion);
+      console.log('Número Control:', dteObj.identificacion?.numeroControl);
+      console.log('Tiene firma:', !!dteObj.firma);
+      console.log('Tamaño documento:', dteJsonString.length, 'caracteres');
+      
+      // Mostrar estructura del payload
+      console.log('\nPayload estructura:');
+      console.log(JSON.stringify({
+        ambiente: payload.ambiente,
+        idEnvio: payload.idEnvio,
+        version: payload.version,
+        tipoDte: payload.tipoDte,
+        documento: `<string JSON de ${dteJsonString.length} caracteres>`
+      }, null, 2));
+      
+      // Mostrar primeros 300 caracteres del documento
+      console.log('\nPrimeros 300 caracteres del documento:');
+      console.log(dteJsonString.substring(0, 300));
+      console.log('...\n');
+
+      const response = await this.axiosInstance.post('/recepciondte', payload, {
         headers: {
-          'Authorization': this.token,
+          'Authorization': `Bearer ${this.token}`,
           'Content-Type': 'application/json'
         }
       });
+
+      console.log('\n=== RESPUESTA DE HACIENDA ===');
+      console.log(JSON.stringify(response.data, null, 2));      console.log(JSON.stringify(response.data, null, 2));
 
       // Respuesta esperada: { estado, codigoGeneracion, selloRecibido, observaciones }
       return {
@@ -92,16 +147,25 @@ class HaciendaAPI {
         estado: response.data.estado,
         codigoGeneracion: response.data.codigoGeneracion,
         selloRecibido: response.data.selloRecibido,
-        observaciones: response.data.observaciones,
+        observaciones: response.data.observaciones || [],
         raw: response.data
       };
     } catch (error) {
-      const errorMsg = error.response?.data?.mensaje || error.message;
+      console.error('=== ERROR AL ENVIAR DTE ===');
+      console.error('Status:', error.response?.status);
+      console.error('Data:', JSON.stringify(error.response?.data, null, 2));
+      
+      const errorMsg = error.response?.data?.descripcionMsg || 
+                      error.response?.data?.mensaje || 
+                      error.message;
+      
+      const observaciones = error.response?.data?.observaciones || [];
+      
       return {
         success: false,
         error: errorMsg,
-        estado: error.response?.data?.estado,
-        observaciones: error.response?.data?.observaciones
+        estado: error.response?.data?.estado || 'RECHAZADO',
+        observaciones: Array.isArray(observaciones) ? observaciones : [observaciones].filter(Boolean)
       };
     }
   }
