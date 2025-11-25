@@ -423,20 +423,6 @@
                   <label>Departamento *</label>
                   <select id="config-departamento" required>
                     <option value="">Seleccionar...</option>
-                    <option value="01">Ahuachapán</option>
-                    <option value="02">Santa Ana</option>
-                    <option value="03">Sonsonate</option>
-                    <option value="04">Chalatenango</option>
-                    <option value="05">La Libertad</option>
-                    <option value="06">San Salvador</option>
-                    <option value="07">Cuscatlán</option>
-                    <option value="08">La Paz</option>
-                    <option value="09">Cabañas</option>
-                    <option value="10">San Vicente</option>
-                    <option value="11">Usulután</option>
-                    <option value="12">San Miguel</option>
-                    <option value="13">Morazán</option>
-                    <option value="14">La Unión</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -768,20 +754,6 @@
           <label>Departamento *</label>
           <select id="cliente-departamento" required>
             <option value="">Seleccionar...</option>
-            <option value="01">Ahuachapán</option>
-            <option value="02">Santa Ana</option>
-            <option value="03">Sonsonate</option>
-            <option value="04">Chalatenango</option>
-            <option value="05">La Libertad</option>
-            <option value="06">San Salvador</option>
-            <option value="07">Cuscatlán</option>
-            <option value="08">La Paz</option>
-            <option value="09">Cabañas</option>
-            <option value="10">San Vicente</option>
-            <option value="11">Usulután</option>
-            <option value="12">San Miguel</option>
-            <option value="13">Morazán</option>
-            <option value="14">La Unión</option>
           </select>
         </div>
 
@@ -979,6 +951,20 @@
     </div>
   </div>
 
+  <script>
+    // Cargar división geográfica antes de iniciar la app
+    (async function() {
+      try {
+        const response = await fetch('../data/division-geografica.json');
+        window.divisionGeografica = await response.json();
+        console.log('División geográfica cargada correctamente');
+      } catch (error) {
+        console.error('Error cargando división geográfica:', error);
+        // Inicializar con datos vacíos para evitar errores
+        window.divisionGeografica = { departamentos: [], municipios: {}, distritos: {} };
+      }
+    })();
+  </script>
   <script src="app.js"></script>
 </body>
 </html>

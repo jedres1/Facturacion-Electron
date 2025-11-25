@@ -103,483 +103,7 @@ const actividadesEconomicas = [
   { codigo: '99', descripcion: 'Actividades de organizaciones y órganos extraterritoriales' }
 ];
 
-// Municipios oficiales de El Salvador (Actualizado Noviembre 2025)
-// Estructura: Departamento → Municipio → Distritos
-// Código de 4 dígitos (DDMM) donde DD=Departamento, MM=Municipio
-const municipiosPorDepartamento = {
-  '01': [ // Ahuachapán
-    { codigo: '0101', nombre: 'Ahuachapán Centro' },
-    { codigo: '0102', nombre: 'Ahuachapán Norte' },
-    { codigo: '0103', nombre: 'Ahuachapán Sur' }
-  ],
-  '02': [ // Santa Ana
-    { codigo: '0201', nombre: 'Santa Ana Centro' },
-    { codigo: '0202', nombre: 'Santa Ana Este' },
-    { codigo: '0203', nombre: 'Santa Ana Norte' },
-    { codigo: '0204', nombre: 'Santa Ana Oeste' }
-  ],
-  '03': [ // Sonsonate
-    { codigo: '0301', nombre: 'Sonsonate Centro' },
-    { codigo: '0302', nombre: 'Sonsonate Este' },
-    { codigo: '0303', nombre: 'Sonsonate Norte' },
-    { codigo: '0304', nombre: 'Sonsonate Oeste' }
-  ],
-  '04': [ // Chalatenango
-    { codigo: '0401', nombre: 'Chalatenango Centro' },
-    { codigo: '0402', nombre: 'Chalatenango Norte' },
-    { codigo: '0403', nombre: 'Chalatenango Sur' }
-  ],
-  '05': [ // La Libertad
-    { codigo: '0501', nombre: 'La Libertad Centro' },
-    { codigo: '0502', nombre: 'La Libertad Costa' },
-    { codigo: '0503', nombre: 'La Libertad Este' },
-    { codigo: '0504', nombre: 'La Libertad Norte' },
-    { codigo: '0505', nombre: 'La Libertad Oeste' },
-    { codigo: '0506', nombre: 'La Libertad Sur' }
-  ],
-  '06': [ // San Salvador
-    { codigo: '0601', nombre: 'San Salvador Centro' },
-    { codigo: '0602', nombre: 'San Salvador Este' },
-    { codigo: '0603', nombre: 'San Salvador Norte' },
-    { codigo: '0604', nombre: 'San Salvador Oeste' },
-    { codigo: '0605', nombre: 'San Salvador Sur' }
-  ],
-  '07': [ // Cuscatlán
-    { codigo: '0701', nombre: 'Cuscatlán Norte' },
-    { codigo: '0702', nombre: 'Cuscatlán Sur' }
-  ],
-  '08': [ // La Paz
-    { codigo: '0801', nombre: 'La Paz Centro' },
-    { codigo: '0802', nombre: 'La Paz Este' },
-    { codigo: '0803', nombre: 'La Paz Oeste' }
-  ],
-  '09': [ // Cabañas
-    { codigo: '0901', nombre: 'Cabañas Este' },
-    { codigo: '0902', nombre: 'Cabañas Oeste' }
-  ],
-  '10': [ // San Vicente
-    { codigo: '1001', nombre: 'San Vicente Norte' },
-    { codigo: '1002', nombre: 'San Vicente Sur' }
-  ],
-  '11': [ // Usulután
-    { codigo: '1101', nombre: 'Usulután Este' },
-    { codigo: '1102', nombre: 'Usulután Norte' },
-    { codigo: '1103', nombre: 'Usulután Oeste' }
-  ],
-  '12': [ // San Miguel
-    { codigo: '1201', nombre: 'San Miguel Centro' },
-    { codigo: '1202', nombre: 'San Miguel Norte' },
-    { codigo: '1203', nombre: 'San Miguel Oeste' }
-  ],
-  '13': [ // Morazán
-    { codigo: '1301', nombre: 'Morazán Norte' },
-    { codigo: '1302', nombre: 'Morazán Sur' }
-  ],
-  '14': [ // La Unión
-    { codigo: '1401', nombre: 'La Unión Norte' },
-    { codigo: '1402', nombre: 'La Unión Sur' }
-  ]
-};
-
-// Distritos por Municipio (Antiguos Municipios ahora son Distritos)
-// Estructura: codigoCarga (4 dígitos), codigoDistrito (6 dígitos), nombre
-// El código de carga agentes es el código que se usa para identificar el distrito
-const distritosPorMunicipio = {
-  // Ahuachapán Centro (0101)
-  '0101': [
-    { codigoCarga: '0101', codigoDistrito: '010101', nombre: 'Ahuachapán' },
-    { codigoCarga: '0102', codigoDistrito: '010102', nombre: 'Apaneca' },
-    { codigoCarga: '0104', codigoDistrito: '010104', nombre: 'Concepción de Ataco' },
-    { codigoCarga: '0111', codigoDistrito: '010111', nombre: 'Tacuba' }
-  ],
-  // Ahuachapán Norte (0102)
-  '0102': [
-    { codigoCarga: '0103', codigoDistrito: '010203', nombre: 'Atiquizaya' },
-    { codigoCarga: '0105', codigoDistrito: '010205', nombre: 'El Refugio' },
-    { codigoCarga: '0109', codigoDistrito: '010209', nombre: 'San Lorenzo' },
-    { codigoCarga: '0112', codigoDistrito: '010212', nombre: 'Turín' }
-  ],
-  // Ahuachapán Sur (0103)
-  '0103': [
-    { codigoCarga: '0106', codigoDistrito: '010306', nombre: 'Guaymango' },
-    { codigoCarga: '0107', codigoDistrito: '010307', nombre: 'Jujutla' },
-    { codigoCarga: '0108', codigoDistrito: '010308', nombre: 'San Francisco Menéndez' },
-    { codigoCarga: '0110', codigoDistrito: '010310', nombre: 'San Pedro Puxtla' }
-  ],
-  // Santa Ana Centro (0201)
-  '0201': [
-    { codigoCarga: '0210', codigoDistrito: '020110', nombre: 'Santa Ana' }
-  ],
-  // Santa Ana Este (0202)
-  '0202': [
-    { codigoCarga: '0202', codigoDistrito: '020202', nombre: 'Coatepeque' },
-    { codigoCarga: '0204', codigoDistrito: '020204', nombre: 'El Congo' }
-  ],
-  // Santa Ana Norte (0203)
-  '0203': [
-    { codigoCarga: '0206', codigoDistrito: '020306', nombre: 'Masahuat' },
-    { codigoCarga: '0207', codigoDistrito: '020307', nombre: 'Metapán' },
-    { codigoCarga: '0211', codigoDistrito: '020311', nombre: 'Santa Rosa Guachipilín' },
-    { codigoCarga: '0213', codigoDistrito: '020313', nombre: 'Texistepeque' }
-  ],
-  // Santa Ana Oeste (0204)
-  '0204': [
-    { codigoCarga: '0201', codigoDistrito: '020401', nombre: 'Candelaria de la Frontera' },
-    { codigoCarga: '0203', codigoDistrito: '020403', nombre: 'Chalchuapa' },
-    { codigoCarga: '0205', codigoDistrito: '020405', nombre: 'El Porvenir' },
-    { codigoCarga: '0208', codigoDistrito: '020408', nombre: 'San Antonio Pajonal' },
-    { codigoCarga: '0209', codigoDistrito: '020409', nombre: 'San Sebastián Salitrillo' },
-    { codigoCarga: '0212', codigoDistrito: '020412', nombre: 'Santiago de la Frontera' }
-  ],
-  // Sonsonate Centro (0301)
-  '0301': [
-    { codigoCarga: '0309', codigoDistrito: '030109', nombre: 'Nahulingo' },
-    { codigoCarga: '0311', codigoDistrito: '030111', nombre: 'San Antonio del Monte' },
-    { codigoCarga: '0314', codigoDistrito: '030114', nombre: 'Santo Domingo de Guzmán' },
-    { codigoCarga: '0315', codigoDistrito: '030115', nombre: 'Sonsonate' },
-    { codigoCarga: '0316', codigoDistrito: '030116', nombre: 'Sonzacate' }
-  ],
-  // Sonsonate Este (0302)
-  '0302': [
-    { codigoCarga: '0302', codigoDistrito: '030202', nombre: 'Armenia' },
-    { codigoCarga: '0303', codigoDistrito: '030203', nombre: 'Caluco' },
-    { codigoCarga: '0304', codigoDistrito: '030204', nombre: 'Cuisnahuat' },
-    { codigoCarga: '0305', codigoDistrito: '030205', nombre: 'Santa Isabel Ishuatán' },
-    { codigoCarga: '0306', codigoDistrito: '030206', nombre: 'Izalco' },
-    { codigoCarga: '0312', codigoDistrito: '030212', nombre: 'San Julián' }
-  ],
-  // Sonsonate Norte (0303)
-  '0303': [
-    { codigoCarga: '0307', codigoDistrito: '030307', nombre: 'Juayúa' },
-    { codigoCarga: '0308', codigoDistrito: '030308', nombre: 'Nahuizalco' },
-    { codigoCarga: '0310', codigoDistrito: '030310', nombre: 'Salcoatitán' },
-    { codigoCarga: '0313', codigoDistrito: '030313', nombre: 'Santa Catarina Masahuat' }
-  ],
-  // Sonsonate Oeste (0304)
-  '0304': [
-    { codigoCarga: '0301', codigoDistrito: '030401', nombre: 'Acajutla' }
-  ],
-  // Chalatenango Centro (0401)
-  '0401': [
-    { codigoCarga: '0401', codigoDistrito: '040101', nombre: 'Agua Caliente' },
-    { codigoCarga: '0408', codigoDistrito: '040108', nombre: 'Dulce Nombre de María' },
-    { codigoCarga: '0410', codigoDistrito: '040110', nombre: 'El Paraíso' },
-    { codigoCarga: '0413', codigoDistrito: '040113', nombre: 'La Reina' },
-    { codigoCarga: '0416', codigoDistrito: '040116', nombre: 'Nueva Concepción' },
-    { codigoCarga: '0422', codigoDistrito: '040122', nombre: 'San Fernando' },
-    { codigoCarga: '0424', codigoDistrito: '040124', nombre: 'San Francisco Morazán' },
-    { codigoCarga: '0431', codigoDistrito: '040131', nombre: 'San Rafael' },
-    { codigoCarga: '0432', codigoDistrito: '040132', nombre: 'Santa Rita' },
-    { codigoCarga: '0433', codigoDistrito: '040133', nombre: 'Tejutla' }
-  ],
-  // Chalatenango Norte (0402)
-  '0402': [
-    { codigoCarga: '0404', codigoDistrito: '040204', nombre: 'Citalá' },
-    { codigoCarga: '0425', codigoDistrito: '040225', nombre: 'San Ignacio' },
-    { codigoCarga: '0412', codigoDistrito: '040212', nombre: 'La Palma' }
-  ],
-  // Chalatenango Sur (0403)
-  '0403': [
-    { codigoCarga: '0402', codigoDistrito: '040302', nombre: 'Arcatao' },
-    { codigoCarga: '0403', codigoDistrito: '040303', nombre: 'Azacualpa' },
-    { codigoCarga: '0405', codigoDistrito: '040305', nombre: 'Comalapa' },
-    { codigoCarga: '0406', codigoDistrito: '040306', nombre: 'Concepción Quezaltepeque' },
-    { codigoCarga: '0407', codigoDistrito: '040307', nombre: 'Chalatenango' },
-    { codigoCarga: '0409', codigoDistrito: '040309', nombre: 'El Carrizal' },
-    { codigoCarga: '0411', codigoDistrito: '040311', nombre: 'La Laguna' },
-    { codigoCarga: '0414', codigoDistrito: '040314', nombre: 'Las Vueltas' },
-    { codigoCarga: '0415', codigoDistrito: '040315', nombre: 'Nombre de Jesús' },
-    { codigoCarga: '0417', codigoDistrito: '040317', nombre: 'Nueva Trinidad' },
-    { codigoCarga: '0418', codigoDistrito: '040318', nombre: 'Ojos de Agua' },
-    { codigoCarga: '0419', codigoDistrito: '040319', nombre: 'Potonico' },
-    { codigoCarga: '0420', codigoDistrito: '040320', nombre: 'San Antonio de la Cruz' },
-    { codigoCarga: '0421', codigoDistrito: '040321', nombre: 'San Antonio Los Ranchos' },
-    { codigoCarga: '0426', codigoDistrito: '040326', nombre: 'San Isidro Labrador' },
-    { codigoCarga: '0423', codigoDistrito: '040323', nombre: 'San Francisco Lempa' },
-    { codigoCarga: '0427', codigoDistrito: '040327', nombre: 'San José Cancasque' },
-    { codigoCarga: '0428', codigoDistrito: '040328', nombre: 'San José Las Flores' },
-    { codigoCarga: '0429', codigoDistrito: '040329', nombre: 'San Luis del Carmen' },
-    { codigoCarga: '0430', codigoDistrito: '040330', nombre: 'San Miguel de Mercedes' }
-  ],
-  // La Libertad Centro (0501)
-  '0501': [
-    { codigoCarga: '0502', codigoDistrito: '050102', nombre: 'Ciudad Arce' },
-    { codigoCarga: '0515', codigoDistrito: '050115', nombre: 'San Juan Opico' }
-  ],
-  // La Libertad Costa (0502)
-  '0502': [
-    { codigoCarga: '0505', codigoDistrito: '050205', nombre: 'Chiltiupán' },
-    { codigoCarga: '0508', codigoDistrito: '050208', nombre: 'Jicalapa' },
-    { codigoCarga: '0509', codigoDistrito: '050209', nombre: 'La Libertad' },
-    { codigoCarga: '0518', codigoDistrito: '050218', nombre: 'Tamanique' },
-    { codigoCarga: '0520', codigoDistrito: '050220', nombre: 'Teotepeque' }
-  ],
-  // La Libertad Este (0503)
-  '0503': [
-    { codigoCarga: '0501', codigoDistrito: '050301', nombre: 'Antiguo Cuscatlán' },
-    { codigoCarga: '0506', codigoDistrito: '050306', nombre: 'Huizúcar' },
-    { codigoCarga: '0510', codigoDistrito: '050310', nombre: 'Nuevo Cuscatlán' },
-    { codigoCarga: '0514', codigoDistrito: '050314', nombre: 'San José Villanueva' },
-    { codigoCarga: '0522', codigoDistrito: '050322', nombre: 'Zaragoza' }
-  ],
-  // La Libertad Norte (0504)
-  '0504': [
-    { codigoCarga: '0512', codigoDistrito: '050412', nombre: 'Quezaltepeque' },
-    { codigoCarga: '0516', codigoDistrito: '050416', nombre: 'San Matías' },
-    { codigoCarga: '0517', codigoDistrito: '050417', nombre: 'San Pablo Tacachico' }
-  ],
-  // La Libertad Oeste (0505)
-  '0505': [
-    { codigoCarga: '0503', codigoDistrito: '050503', nombre: 'Colón' },
-    { codigoCarga: '0507', codigoDistrito: '050507', nombre: 'Jayaque' },
-    { codigoCarga: '0513', codigoDistrito: '050513', nombre: 'Sacacoyo' },
-    { codigoCarga: '0519', codigoDistrito: '050519', nombre: 'Talnique' },
-    { codigoCarga: '0521', codigoDistrito: '050521', nombre: 'Tepecoyo' }
-  ],
-  // La Libertad Sur (0506)
-  '0506': [
-    { codigoCarga: '0504', codigoDistrito: '050604', nombre: 'Comasagua' },
-    { codigoCarga: '0511', codigoDistrito: '050611', nombre: 'Santa Tecla' }
-  ],
-  // San Salvador Centro (0601)
-  '0601': [
-    { codigoCarga: '0603', codigoDistrito: '060103', nombre: 'Ayutuxtepeque' },
-    { codigoCarga: '0604', codigoDistrito: '060104', nombre: 'Cuscatancingo' },
-    { codigoCarga: '0608', codigoDistrito: '060108', nombre: 'Mejicanos' },
-    { codigoCarga: '0614', codigoDistrito: '060114', nombre: 'San Salvador' },
-    { codigoCarga: '0619', codigoDistrito: '060119', nombre: 'Ciudad Delgado' }
-  ],
-  // San Salvador Este (0602)
-  '0602': [
-    { codigoCarga: '0607', codigoDistrito: '060207', nombre: 'Ilopango' },
-    { codigoCarga: '0613', codigoDistrito: '060213', nombre: 'San Martín' },
-    { codigoCarga: '0617', codigoDistrito: '060217', nombre: 'Soyapango' },
-    { codigoCarga: '0618', codigoDistrito: '060218', nombre: 'Tonacatepeque' }
-  ],
-  // San Salvador Norte (0603)
-  '0603': [
-    { codigoCarga: '0601', codigoDistrito: '060301', nombre: 'Aguilares' },
-    { codigoCarga: '0605', codigoDistrito: '060305', nombre: 'El Paisnal' },
-    { codigoCarga: '0606', codigoDistrito: '060306', nombre: 'Guazapa' }
-  ],
-  // San Salvador Oeste (0604)
-  '0604': [
-    { codigoCarga: '0602', codigoDistrito: '060402', nombre: 'Apopa' },
-    { codigoCarga: '0609', codigoDistrito: '060409', nombre: 'Nejapa' }
-  ],
-  // San Salvador Sur (0605)
-  '0605': [
-    { codigoCarga: '0610', codigoDistrito: '060510', nombre: 'Panchimalco' },
-    { codigoCarga: '0611', codigoDistrito: '060511', nombre: 'Rosario de Mora' },
-    { codigoCarga: '0612', codigoDistrito: '060512', nombre: 'San Marcos' },
-    { codigoCarga: '0615', codigoDistrito: '060515', nombre: 'Santiago Texacuangos' },
-    { codigoCarga: '0616', codigoDistrito: '060516', nombre: 'Santo Tomás' }
-  ],
-  // Cuscatlán Norte (0701)
-  '0701': [
-    { codigoCarga: '0706', codigoDistrito: '070106', nombre: 'Oratorio de Concepción' },
-    { codigoCarga: '0707', codigoDistrito: '070107', nombre: 'San Bartolomé Perulapía' },
-    { codigoCarga: '0709', codigoDistrito: '070109', nombre: 'San José Guayabal' },
-    { codigoCarga: '0710', codigoDistrito: '070110', nombre: 'San Pedro Perulapán' },
-    { codigoCarga: '0715', codigoDistrito: '070115', nombre: 'Suchitoto' }
-  ],
-  // Cuscatlán Sur (0702)
-  '0702': [
-    { codigoCarga: '0701', codigoDistrito: '070201', nombre: 'Candelaria' },
-    { codigoCarga: '0702', codigoDistrito: '070202', nombre: 'Cojutepeque' },
-    { codigoCarga: '0703', codigoDistrito: '070203', nombre: 'El Carmen' },
-    { codigoCarga: '0704', codigoDistrito: '070204', nombre: 'El Rosario' },
-    { codigoCarga: '0705', codigoDistrito: '070205', nombre: 'Monte San Juan' },
-    { codigoCarga: '0708', codigoDistrito: '070208', nombre: 'San Cristóbal' },
-    { codigoCarga: '0711', codigoDistrito: '070211', nombre: 'San Rafael Cedros' },
-    { codigoCarga: '0712', codigoDistrito: '070212', nombre: 'San Ramón' },
-    { codigoCarga: '0713', codigoDistrito: '070213', nombre: 'Santa Cruz Analquito' },
-    { codigoCarga: '0714', codigoDistrito: '070214', nombre: 'Santa Cruz Michapa' },
-    { codigoCarga: '0716', codigoDistrito: '070216', nombre: 'Tenancingo' }
-  ],
-  // La Paz Centro (0801)
-  '0801': [
-    { codigoCarga: '0802', codigoDistrito: '080102', nombre: 'El Rosario' },
-    { codigoCarga: '0803', codigoDistrito: '080103', nombre: 'Jerusalén' },
-    { codigoCarga: '0804', codigoDistrito: '080104', nombre: 'Mercedes La Ceiba' },
-    { codigoCarga: '0806', codigoDistrito: '080106', nombre: 'Paraíso de Osorio' },
-    { codigoCarga: '0807', codigoDistrito: '080107', nombre: 'San Antonio Masahuat' },
-    { codigoCarga: '0808', codigoDistrito: '080108', nombre: 'San Emigdio' },
-    { codigoCarga: '0812', codigoDistrito: '080112', nombre: 'San Juan Tepezontes' },
-    { codigoCarga: '0814', codigoDistrito: '080114', nombre: 'San Miguel Tepezontes' },
-    { codigoCarga: '0816', codigoDistrito: '080116', nombre: 'San Pedro Nonualco' },
-    { codigoCarga: '0818', codigoDistrito: '080118', nombre: 'Santa María Ostuma' },
-    { codigoCarga: '0819', codigoDistrito: '080119', nombre: 'Santiago Nonualco' },
-    { codigoCarga: '0822', codigoDistrito: '080122', nombre: 'San Luis La Herradura' }
-  ],
-  // La Paz Este (0802)
-  '0802': [
-    { codigoCarga: '0810', codigoDistrito: '080210', nombre: 'San Juan Nonualco' },
-    { codigoCarga: '0817', codigoDistrito: '080217', nombre: 'San Rafael Obrajuelo' },
-    { codigoCarga: '0821', codigoDistrito: '080221', nombre: 'Zacatecoluca' }
-  ],
-  // La Paz Oeste (0803)
-  '0803': [
-    { codigoCarga: '0801', codigoDistrito: '080301', nombre: 'Cuyultitán' },
-    { codigoCarga: '0805', codigoDistrito: '080305', nombre: 'Olocuilta' },
-    { codigoCarga: '0809', codigoDistrito: '080309', nombre: 'San Francisco Chinameca' },
-    { codigoCarga: '0811', codigoDistrito: '080311', nombre: 'San Juan Talpa' },
-    { codigoCarga: '0813', codigoDistrito: '080313', nombre: 'San Luis Talpa' },
-    { codigoCarga: '0815', codigoDistrito: '080315', nombre: 'San Pedro Masahuat' },
-    { codigoCarga: '0820', codigoDistrito: '080320', nombre: 'Tapalhuaca' }
-  ],
-  // Cabañas Este (0901)
-  '0901': [
-    { codigoCarga: '0909', codigoDistrito: '090109', nombre: 'Dolores' },
-    { codigoCarga: '0902', codigoDistrito: '090102', nombre: 'Guacotecti' },
-    { codigoCarga: '0905', codigoDistrito: '090105', nombre: 'San Isidro' },
-    { codigoCarga: '0906', codigoDistrito: '090106', nombre: 'Sensuntepeque' },
-    { codigoCarga: '0908', codigoDistrito: '090108', nombre: 'Victoria' }
-  ],
-  // Cabañas Oeste (0902)
-  '0902': [
-    { codigoCarga: '0901', codigoDistrito: '090201', nombre: 'Cinquera' },
-    { codigoCarga: '0903', codigoDistrito: '090203', nombre: 'Ilobasco' },
-    { codigoCarga: '0904', codigoDistrito: '090204', nombre: 'Jutiapa' },
-    { codigoCarga: '0907', codigoDistrito: '090207', nombre: 'Tejutepeque' }
-  ],
-  // San Vicente Norte (1001)
-  '1001': [
-    { codigoCarga: '1001', codigoDistrito: '100101', nombre: 'Apastepeque' },
-    { codigoCarga: '1006', codigoDistrito: '100106', nombre: 'San Esteban Catarina' },
-    { codigoCarga: '1007', codigoDistrito: '100107', nombre: 'San Ildefonso' },
-    { codigoCarga: '1008', codigoDistrito: '100108', nombre: 'San Lorenzo' },
-    { codigoCarga: '1009', codigoDistrito: '100109', nombre: 'San Sebastián' },
-    { codigoCarga: '1004', codigoDistrito: '100104', nombre: 'Santa Clara' },
-    { codigoCarga: '1005', codigoDistrito: '100105', nombre: 'Santo Domingo' }
-  ],
-  // San Vicente Sur (1002)
-  '1002': [
-    { codigoCarga: '1002', codigoDistrito: '100202', nombre: 'Guadalupe' },
-    { codigoCarga: '1003', codigoDistrito: '100203', nombre: 'San Cayetano Istepeque' },
-    { codigoCarga: '1010', codigoDistrito: '100210', nombre: 'San Vicente' },
-    { codigoCarga: '1011', codigoDistrito: '100211', nombre: 'Tecoluca' },
-    { codigoCarga: '1012', codigoDistrito: '100212', nombre: 'Tepetitán' },
-    { codigoCarga: '1013', codigoDistrito: '100213', nombre: 'Verapaz' }
-  ],
-  // Usulután Este (1101)
-  '1101': [
-    { codigoCarga: '1103', codigoDistrito: '110103', nombre: 'California' },
-    { codigoCarga: '1104', codigoDistrito: '110104', nombre: 'Concepción Batres' },
-    { codigoCarga: '1106', codigoDistrito: '110106', nombre: 'Ereguayquín' },
-    { codigoCarga: '1110', codigoDistrito: '110110', nombre: 'Jucuarán' },
-    { codigoCarga: '1113', codigoDistrito: '110113', nombre: 'Ozatlán' },
-    { codigoCarga: '1123', codigoDistrito: '110123', nombre: 'Usulután' },
-    { codigoCarga: '1117', codigoDistrito: '110117', nombre: 'San Dionisio' },
-    { codigoCarga: '1118', codigoDistrito: '110118', nombre: 'Santa Elena' },
-    { codigoCarga: '1120', codigoDistrito: '110120', nombre: 'Santa María' },
-    { codigoCarga: '1122', codigoDistrito: '110122', nombre: 'Tecapán' }
-  ],
-  // Usulután Norte (1102)
-  '1102': [
-    { codigoCarga: '1101', codigoDistrito: '110201', nombre: 'Alegría' },
-    { codigoCarga: '1102', codigoDistrito: '110202', nombre: 'Berlín' },
-    { codigoCarga: '1105', codigoDistrito: '110205', nombre: 'El Triunfo' },
-    { codigoCarga: '1107', codigoDistrito: '110207', nombre: 'Estanzuelas' },
-    { codigoCarga: '1109', codigoDistrito: '110209', nombre: 'Jucuapa' },
-    { codigoCarga: '1111', codigoDistrito: '110211', nombre: 'Mercedes Umaña' },
-    { codigoCarga: '1112', codigoDistrito: '110212', nombre: 'Nueva Granada' },
-    { codigoCarga: '1116', codigoDistrito: '110216', nombre: 'San Buenaventura' },
-    { codigoCarga: '1121', codigoDistrito: '110221', nombre: 'Santiago de María' }
-  ],
-  // Usulután Oeste (1103)
-  '1103': [
-    { codigoCarga: '1108', codigoDistrito: '110308', nombre: 'Jiquilisco' },
-    { codigoCarga: '1114', codigoDistrito: '110314', nombre: 'Puerto El Triunfo' },
-    { codigoCarga: '1115', codigoDistrito: '110315', nombre: 'San Agustín' },
-    { codigoCarga: '1119', codigoDistrito: '110319', nombre: 'San Francisco Javier' }
-  ],
-  // San Miguel Centro (1201)
-  '1201': [
-    { codigoCarga: '1203', codigoDistrito: '120103', nombre: 'Comacarán' },
-    { codigoCarga: '1209', codigoDistrito: '120109', nombre: 'Moncagua' },
-    { codigoCarga: '1206', codigoDistrito: '120106', nombre: 'Chirilagua' },
-    { codigoCarga: '1212', codigoDistrito: '120112', nombre: 'Quelepa' },
-    { codigoCarga: '1217', codigoDistrito: '120117', nombre: 'San Miguel' },
-    { codigoCarga: '1220', codigoDistrito: '120120', nombre: 'Uluazapa' }
-  ],
-  // San Miguel Norte (1202)
-  '1202': [
-    { codigoCarga: '1201', codigoDistrito: '120201', nombre: 'Carolina' },
-    { codigoCarga: '1202', codigoDistrito: '120202', nombre: 'Ciudad Barrios' },
-    { codigoCarga: '1204', codigoDistrito: '120204', nombre: 'Chapeltique' },
-    { codigoCarga: '1211', codigoDistrito: '120211', nombre: 'Nuevo Edén de San Juan' },
-    { codigoCarga: '1213', codigoDistrito: '120213', nombre: 'San Antonio del Mosco' },
-    { codigoCarga: '1214', codigoDistrito: '120214', nombre: 'San Gerardo' },
-    { codigoCarga: '1216', codigoDistrito: '120216', nombre: 'San Luis de la Reina' },
-    { codigoCarga: '1219', codigoDistrito: '120219', nombre: 'Sesori' }
-  ],
-  // San Miguel Oeste (1203)
-  '1203': [
-    { codigoCarga: '1205', codigoDistrito: '120305', nombre: 'Chinameca' },
-    { codigoCarga: '1207', codigoDistrito: '120307', nombre: 'El Tránsito' },
-    { codigoCarga: '1208', codigoDistrito: '120308', nombre: 'Lolotique' },
-    { codigoCarga: '1210', codigoDistrito: '120310', nombre: 'Nueva Guadalupe' },
-    { codigoCarga: '1215', codigoDistrito: '120315', nombre: 'San Jorge' },
-    { codigoCarga: '1218', codigoDistrito: '120318', nombre: 'San Rafael Oriente' }
-  ],
-  // Morazán Norte (1301)
-  '1301': [
-    { codigoCarga: '1301', codigoDistrito: '130101', nombre: 'Arambala' },
-    { codigoCarga: '1302', codigoDistrito: '130102', nombre: 'Cacaopera' },
-    { codigoCarga: '1303', codigoDistrito: '130103', nombre: 'Corinto' },
-    { codigoCarga: '1307', codigoDistrito: '130107', nombre: 'El Rosario' },
-    { codigoCarga: '1310', codigoDistrito: '130110', nombre: 'Joateca' },
-    { codigoCarga: '1311', codigoDistrito: '130111', nombre: 'Jocoaitique' },
-    { codigoCarga: '1314', codigoDistrito: '130114', nombre: 'Meanguera' },
-    { codigoCarga: '1316', codigoDistrito: '130116', nombre: 'Perquín' },
-    { codigoCarga: '1318', codigoDistrito: '130118', nombre: 'San Fernando' },
-    { codigoCarga: '1320', codigoDistrito: '130120', nombre: 'San Isidro' },
-    { codigoCarga: '1324', codigoDistrito: '130124', nombre: 'Torola' }
-  ],
-  // Morazán Sur (1302)
-  '1302': [
-    { codigoCarga: '1304', codigoDistrito: '130204', nombre: 'Chilanga' },
-    { codigoCarga: '1305', codigoDistrito: '130205', nombre: 'Delicias de Concepción' },
-    { codigoCarga: '1306', codigoDistrito: '130206', nombre: 'El Divisadero' },
-    { codigoCarga: '1308', codigoDistrito: '130208', nombre: 'Gualococti' },
-    { codigoCarga: '1309', codigoDistrito: '130209', nombre: 'Guatajiagua' },
-    { codigoCarga: '1312', codigoDistrito: '130212', nombre: 'Jocoro' },
-    { codigoCarga: '1313', codigoDistrito: '130213', nombre: 'Lolotiquillo' },
-    { codigoCarga: '1315', codigoDistrito: '130215', nombre: 'Osicala' },
-    { codigoCarga: '1317', codigoDistrito: '130217', nombre: 'San Carlos' },
-    { codigoCarga: '1319', codigoDistrito: '130219', nombre: 'San Francisco Gotera' },
-    { codigoCarga: '1321', codigoDistrito: '130221', nombre: 'San Simón' },
-    { codigoCarga: '1322', codigoDistrito: '130222', nombre: 'Sensembra' },
-    { codigoCarga: '1323', codigoDistrito: '130223', nombre: 'Sociedad' },
-    { codigoCarga: '1325', codigoDistrito: '130225', nombre: 'Yamabal' },
-    { codigoCarga: '1326', codigoDistrito: '130226', nombre: 'Yoloaiquín' }
-  ],
-  // La Unión Norte (1401)
-  '1401': [
-    { codigoCarga: '1401', codigoDistrito: '140101', nombre: 'Anamorós' },
-    { codigoCarga: '1402', codigoDistrito: '140102', nombre: 'Bolívar' },
-    { codigoCarga: '1403', codigoDistrito: '140103', nombre: 'Concepción de Oriente' },
-    { codigoCarga: '1406', codigoDistrito: '140106', nombre: 'El Sauce' },
-    { codigoCarga: '1409', codigoDistrito: '140109', nombre: 'Lislique' },
-    { codigoCarga: '1411', codigoDistrito: '140111', nombre: 'Nueva Esparta' },
-    { codigoCarga: '1412', codigoDistrito: '140112', nombre: 'Pasaquina' },
-    { codigoCarga: '1413', codigoDistrito: '140113', nombre: 'Polorós' },
-    { codigoCarga: '1415', codigoDistrito: '140115', nombre: 'San José La Fuente' },
-    { codigoCarga: '1416', codigoDistrito: '140116', nombre: 'Santa Rosa de Lima' }
-  ],
-  // La Unión Sur (1402)
-  '1402': [
-    { codigoCarga: '1404', codigoDistrito: '140204', nombre: 'Conchagua' },
-    { codigoCarga: '1405', codigoDistrito: '140205', nombre: 'El Carmen' },
-    { codigoCarga: '1407', codigoDistrito: '140207', nombre: 'Intipucá' },
-    { codigoCarga: '1408', codigoDistrito: '140208', nombre: 'La Unión' },
-    { codigoCarga: '1410', codigoDistrito: '140210', nombre: 'Meanguera del Golfo' },
-    { codigoCarga: '1414', codigoDistrito: '140214', nombre: 'San Alejo' },
-    { codigoCarga: '1417', codigoDistrito: '140217', nombre: 'Yayantique' },
-    { codigoCarga: '1418', codigoDistrito: '140218', nombre: 'Yucuaiquín' }
-  ]
-};
+// División geográfica se carga desde JSON externo en window.divisionGeografica
 
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', async () => {
@@ -596,6 +120,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Actualizar dashboard
   updateDashboard();
+  
+  // Poblar selects de departamentos
+  poblarSelectsDepartamentos();
   
   // Configurar cambio de departamento para cargar municipios
   setupDepartamentoMunicipioHandler();
@@ -788,14 +315,8 @@ async function loadClientes() {
           const nombreMunicipio = obtenerNombreMunicipio(c.departamento, c.municipio);
           ubicacion = nombreMunicipio;
         } else if (c.departamento) {
-          const deptos = {
-            '01': 'Ahuachapán', '02': 'Santa Ana', '03': 'Sonsonate',
-            '04': 'Chalatenango', '05': 'La Libertad', '06': 'San Salvador',
-            '07': 'Cuscatlán', '08': 'La Paz', '09': 'Cabañas',
-            '10': 'San Vicente', '11': 'Usulután', '12': 'San Miguel',
-            '13': 'Morazán', '14': 'La Unión'
-          };
-          ubicacion = deptos[c.departamento] || c.departamento;
+          const depto = window.divisionGeografica?.departamentos.find(d => d.codigo === c.departamento);
+          ubicacion = depto?.nombre || c.departamento;
         } else {
           ubicacion = 'N/A';
         }
@@ -989,6 +510,41 @@ function setupEventListeners() {
   setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
 }
 
+// Poblar selects de departamentos
+function poblarSelectsDepartamentos() {
+  // Si los datos no están disponibles aún, reintentar en 100ms
+  if (!window.divisionGeografica) {
+    console.warn('División geográfica no cargada aún, reintentando...');
+    setTimeout(poblarSelectsDepartamentos, 100);
+    return;
+  }
+  
+  const clienteDepartamento = document.getElementById('cliente-departamento');
+  const configDepartamento = document.getElementById('config-departamento');
+  
+  const departamentos = window.divisionGeografica.departamentos;
+  
+  // Poblar select de clientes
+  if (clienteDepartamento) {
+    departamentos.forEach(depto => {
+      const option = document.createElement('option');
+      option.value = depto.codigo;
+      option.textContent = depto.nombre;
+      clienteDepartamento.appendChild(option);
+    });
+  }
+  
+  // Poblar select de configuración
+  if (configDepartamento) {
+    departamentos.forEach(depto => {
+      const option = document.createElement('option');
+      option.value = depto.codigo;
+      option.textContent = depto.nombre;
+      configDepartamento.appendChild(option);
+    });
+  }
+}
+
 // Configurar manejador de departamento-municipio-distrito
 function setupDepartamentoMunicipioHandler() {
   const departamentoSelect = document.getElementById('cliente-departamento');
@@ -1019,7 +575,7 @@ function cargarMunicipios(codigoDepartamento) {
     distritoSelect.disabled = true;
   }
   
-  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+  if (!codigoDepartamento || !window.divisionGeografica?.municipios[codigoDepartamento]) {
     municipioSelect.disabled = true;
     return;
   }
@@ -1027,7 +583,7 @@ function cargarMunicipios(codigoDepartamento) {
   municipioSelect.disabled = false;
   
   // Cargar municipios del departamento seleccionado
-  const municipios = municipiosPorDepartamento[codigoDepartamento];
+  const municipios = window.divisionGeografica.municipios[codigoDepartamento];
   municipios.forEach(municipio => {
     const option = document.createElement('option');
     option.value = municipio.codigo;
@@ -1043,7 +599,7 @@ function cargarDistritos(codigoMunicipio) {
   // Limpiar opciones actuales
   distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
   
-  if (!codigoMunicipio || !distritosPorMunicipio[codigoMunicipio]) {
+  if (!codigoMunicipio || !window.divisionGeografica?.distritos[codigoMunicipio]) {
     distritoSelect.disabled = true;
     return;
   }
@@ -1051,24 +607,22 @@ function cargarDistritos(codigoMunicipio) {
   distritoSelect.disabled = false;
   
   // Cargar distritos del municipio seleccionado
-  const distritos = distritosPorMunicipio[codigoMunicipio];
+  const distritos = window.divisionGeografica.distritos[codigoMunicipio];
   distritos.forEach(distrito => {
     const option = document.createElement('option');
-    option.value = distrito.codigoDistrito; // Usar el código de 6 dígitos
+    option.value = distrito.codigo; // Usar el código de 6 dígitos
     option.textContent = distrito.nombre;
-    // Agregar el código de carga como atributo data para referencia
-    option.setAttribute('data-codigo-carga', distrito.codigoCarga);
     distritoSelect.appendChild(option);
   });
 }
 
 // Obtener nombre del municipio por código
 function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
-  if (!municipiosPorDepartamento[codigoDepartamento]) {
+  if (!window.divisionGeografica?.municipios[codigoDepartamento]) {
     return codigoMunicipio;
   }
   
-  const municipio = municipiosPorDepartamento[codigoDepartamento].find(
+  const municipio = window.divisionGeografica.municipios[codigoDepartamento].find(
     m => m.codigo === codigoMunicipio
   );
   
@@ -1077,14 +631,14 @@ function obtenerNombreMunicipio(codigoDepartamento, codigoMunicipio) {
 
 // Obtener lista de distritos por código de municipio
 function obtenerDistritosPorMunicipio(codigoMunicipio) {
-  return distritosPorMunicipio[codigoMunicipio] || [];
+  return window.divisionGeografica?.distritos[codigoMunicipio] || [];
 }
 
 // Obtener nombre del distrito por código completo (6 dígitos)
 function obtenerNombreDistrito(codigoDistrito) {
   // Buscar en todos los municipios
-  for (const municipio in distritosPorMunicipio) {
-    const distrito = distritosPorMunicipio[municipio].find(d => d.codigoDistrito === codigoDistrito);
+  for (const municipio in window.divisionGeografica?.distritos || {}) {
+    const distrito = window.divisionGeografica.distritos[municipio].find(d => d.codigo === codigoDistrito);
     if (distrito) {
       return distrito.nombre;
     }
@@ -1127,7 +681,7 @@ function cargarMunicipiosConfig(codigoDepartamento) {
     distritoSelect.disabled = true;
   }
   
-  if (!codigoDepartamento || !municipiosPorDepartamento[codigoDepartamento]) {
+  if (!codigoDepartamento || !window.divisionGeografica?.municipios[codigoDepartamento]) {
     municipioSelect.disabled = true;
     return;
   }
@@ -1135,7 +689,7 @@ function cargarMunicipiosConfig(codigoDepartamento) {
   municipioSelect.disabled = false;
   
   // Cargar municipios del departamento seleccionado
-  const municipios = municipiosPorDepartamento[codigoDepartamento];
+  const municipios = window.divisionGeografica.municipios[codigoDepartamento];
   municipios.forEach(municipio => {
     const option = document.createElement('option');
     option.value = municipio.codigo;
@@ -1151,7 +705,7 @@ function cargarDistritosConfig(codigoMunicipio) {
   // Limpiar opciones actuales
   distritoSelect.innerHTML = '<option value="">Seleccionar distrito...</option>';
   
-  if (!codigoMunicipio || !distritosPorMunicipio[codigoMunicipio]) {
+  if (!codigoMunicipio || !window.divisionGeografica?.distritos[codigoMunicipio]) {
     distritoSelect.disabled = true;
     return;
   }
@@ -1159,12 +713,11 @@ function cargarDistritosConfig(codigoMunicipio) {
   distritoSelect.disabled = false;
   
   // Cargar distritos del municipio seleccionado
-  const distritos = distritosPorMunicipio[codigoMunicipio];
+  const distritos = window.divisionGeografica.distritos[codigoMunicipio];
   distritos.forEach(distrito => {
     const option = document.createElement('option');
-    option.value = distrito.codigoDistrito;
+    option.value = distrito.codigo;
     option.textContent = distrito.nombre;
-    option.setAttribute('data-codigo-carga', distrito.codigoCarga);
     distritoSelect.appendChild(option);
   });
 }
