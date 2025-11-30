@@ -112,6 +112,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Configurar navegación
   setupNavigation();
   
+  // Establecer fecha actual en filtros
+  establecerFechaActualFiltros();
+  
   // Cargar datos iniciales
   await loadInitialData();
   
@@ -128,6 +131,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupDepartamentoMunicipioHandler();
   setupDepartamentoMunicipioConfigHandler();
 });
+
+// Establecer fecha actual en filtros
+function establecerFechaActualFiltros() {
+  const hoy = new Date();
+  const fechaStr = hoy.toISOString().split('T')[0];
+  
+  const fechaDesde = document.getElementById('fecha-desde');
+  const fechaHasta = document.getElementById('fecha-hasta');
+  
+  if (fechaDesde) fechaDesde.value = fechaStr;
+  if (fechaHasta) fechaHasta.value = fechaStr;
+}
 
 // Configurar navegación
 function setupNavigation() {
@@ -268,12 +283,38 @@ function updateDashboard() {
 async function loadFacturas() {
   try {
     state.facturas = await window.electronAPI.getFacturas({});
+    
+    // Aplicar filtros
+    let facturasFiltradas = [...state.facturas];
+    
+    const fechaDesde = document.getElementById('fecha-desde')?.value;
+    const fechaHasta = document.getElementById('fecha-hasta')?.value;
+    const estadoFiltro = document.getElementById('filtro-estado')?.value;
+    
+    if (fechaDesde) {
+      facturasFiltradas = facturasFiltradas.filter(f => {
+        const fechaFactura = f.fecha_emision.split('T')[0];
+        return fechaFactura >= fechaDesde;
+      });
+    }
+    
+    if (fechaHasta) {
+      facturasFiltradas = facturasFiltradas.filter(f => {
+        const fechaFactura = f.fecha_emision.split('T')[0];
+        return fechaFactura <= fechaHasta;
+      });
+    }
+    
+    if (estadoFiltro) {
+      facturasFiltradas = facturasFiltradas.filter(f => f.estado === estadoFiltro);
+    }
+    
     const tbody = document.querySelector('#tabla-facturas tbody');
     
-    if (state.facturas.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay facturas</td></tr>';
+    if (facturasFiltradas.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay facturas que coincidan con los filtros</td></tr>';
     } else {
-      tbody.innerHTML = state.facturas.map(f => {
+      tbody.innerHTML = facturasFiltradas.map(f => {
         const clienteData = JSON.parse(f.cliente_datos || '{}');
         return `
           <tr>
@@ -427,11 +468,39 @@ async function loadConfiguracion() {
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
       document.getElementById('config-punto-venta').value = config.punto_venta || '';
+      
+      // Tipo de firma y credenciales
+      const tipoFirma = config.tipo_firma || 'web';
+      document.getElementById('config-tipo-firma').value = tipoFirma;
+      
+      // Mostrar/ocultar opciones según tipo de firma
+      toggleFirmaOptions(tipoFirma);
+      
+      // Credenciales firmador web
+      document.getElementById('config-firmador-usuario').value = config.firmador_usuario || '';
+      document.getElementById('config-firmador-password').value = config.firmador_password || '';
+      document.getElementById('config-firmador-pin').value = config.firmador_pin || '';
+      
+      // Certificado local
       document.getElementById('config-certificado-path').value = config.certificado_path || '';
       document.getElementById('config-certificado-password').value = config.certificado_password || '';
     }
   } catch (error) {
     console.error('Error cargando configuración:', error);
+  }
+}
+
+// Toggle entre opciones de firma web y local
+function toggleFirmaOptions(tipo) {
+  const webOptions = document.getElementById('firma-web-options');
+  const localOptions = document.getElementById('firma-local-options');
+  
+  if (tipo === 'web') {
+    webOptions.style.display = 'grid';
+    localOptions.style.display = 'none';
+  } else {
+    webOptions.style.display = 'none';
+    localOptions.style.display = 'grid';
   }
 }
 
@@ -449,6 +518,14 @@ async function loadClientesSelect() {
 
 // Configurar event listeners
 function setupEventListeners() {
+  // Botón filtrar facturas
+  document.getElementById('btn-filtrar')?.addEventListener('click', loadFacturas);
+  
+  // Filtros automáticos al cambiar fecha o estado
+  document.getElementById('fecha-desde')?.addEventListener('change', loadFacturas);
+  document.getElementById('fecha-hasta')?.addEventListener('change', loadFacturas);
+  document.getElementById('filtro-estado')?.addEventListener('change', loadFacturas);
+  
   // Configuración
   document.getElementById('form-configuracion')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -503,6 +580,11 @@ function setupEventListeners() {
   // Botón seleccionar certificado
   document.getElementById('btn-select-certificado')?.addEventListener('click', async () => {
     await seleccionarCertificado();
+  });
+  
+  // Cambio de tipo de firma
+  document.getElementById('config-tipo-firma')?.addEventListener('change', (e) => {
+    toggleFirmaOptions(e.target.value);
   });
   
   // Inicializar autocomplete de actividades económicas
@@ -752,6 +834,10 @@ async function guardarConfiguracion() {
       hacienda_ambiente: document.getElementById('config-hacienda-ambiente').value,
       codigo_establecimiento: document.getElementById('config-establecimiento').value,
       punto_venta: document.getElementById('config-punto-venta').value,
+      tipo_firma: document.getElementById('config-tipo-firma').value,
+      firmador_usuario: document.getElementById('config-firmador-usuario').value,
+      firmador_password: document.getElementById('config-firmador-password').value,
+      firmador_pin: document.getElementById('config-firmador-pin').value,
       certificado_path: document.getElementById('config-certificado-path').value,
       certificado_password: document.getElementById('config-certificado-password').value
     };
@@ -923,6 +1009,31 @@ async function generarFactura() {
     
     if (result) {
       showNotification('Factura generada exitosamente según schema oficial MH', 'success');
+      
+      // Generar PDF automáticamente
+      showNotification('Generando PDF...', 'info');
+      try {
+        const pdfResult = await window.electronAPI.generarPDF({
+          factura: {
+            ...factura,
+            id: result.id || Date.now()
+          },
+          dte: dte,
+          config: state.configuracion
+        });
+        
+        if (pdfResult.success) {
+          console.log('PDF generado en:', pdfResult.pdfPath);
+          showNotification('✓ PDF generado exitosamente', 'success');
+        } else {
+          console.error('Error generando PDF:', pdfResult.error);
+          showNotification('⚠ Factura guardada pero no se pudo generar PDF', 'warning');
+        }
+      } catch (pdfError) {
+        console.error('Error al generar PDF:', pdfError);
+        // No bloquear por error de PDF
+      }
+      
       limpiarFormularioFactura();
       
       // Actualizar estadísticas
@@ -1766,6 +1877,8 @@ function abrirModalVerFactura(factura) {
   // Mostrar botones según el estado
   const btnFirmar = document.getElementById('btn-firmar-factura');
   const btnEnviar = document.getElementById('btn-enviar-factura');
+  const btnDescargarPDF = document.getElementById('btn-descargar-pdf');
+  const btnImprimirPDF = document.getElementById('btn-imprimir-pdf');
   
   btnFirmar.style.display = 'none';
   btnEnviar.style.display = 'none';
@@ -1778,6 +1891,19 @@ function abrirModalVerFactura(factura) {
   if (factura.estado === 'FIRMADO') {
     btnEnviar.style.display = 'inline-flex';
     btnEnviar.onclick = () => enviarFacturaHacienda(factura.id);
+  }
+  
+  // Botones PDF siempre visibles (si hay DTE generado)
+  if (factura.json_dte) {
+    if (btnDescargarPDF) {
+      btnDescargarPDF.style.display = 'inline-flex';
+      btnDescargarPDF.onclick = () => descargarPDFFactura(factura);
+    }
+    
+    if (btnImprimirPDF) {
+      btnImprimirPDF.style.display = 'inline-flex';
+      btnImprimirPDF.onclick = () => abrirPDFFactura(factura);
+    }
   }
   
   modal.classList.add('active');
@@ -1804,15 +1930,32 @@ async function firmarFactura(facturaId) {
       return;
     }
     
-    // Si hay certificado configurado, firmar automáticamente
-    if (state.configuracion.certificado_path && state.configuracion.certificado_password) {
+    // Verificar tipo de firma configurado
+    const tipoFirma = state.configuracion.tipo_firma || 'web';
+    
+    if (tipoFirma === 'local' && state.configuracion.certificado_path && state.configuracion.certificado_password) {
+      // Usar certificado local
       await firmarConCertificadoLocal(facturaId);
+    } else if (tipoFirma === 'web' && state.configuracion.firmador_usuario && state.configuracion.firmador_password) {
+      // Usar firmador web con credenciales guardadas
+      await firmarConFirmadorWeb(facturaId);
     } else {
-      // Si no hay certificado, abrir modal para pedir credenciales del firmador web
+      // Si no hay credenciales completas, abrir modal para pedirlas
       const modal = document.getElementById('modal-firmador');
       document.getElementById('firmador-factura-id').value = facturaId;
       document.getElementById('form-firmador').reset();
-      document.getElementById('firmador-factura-id').value = facturaId;
+      
+      // Pre-llenar con credenciales guardadas si existen
+      if (state.configuracion.firmador_usuario) {
+        document.getElementById('firmador-usuario').value = state.configuracion.firmador_usuario;
+      }
+      if (state.configuracion.firmador_password) {
+        document.getElementById('firmador-password').value = state.configuracion.firmador_password;
+      }
+      if (state.configuracion.firmador_pin) {
+        document.getElementById('firmador-pin').value = state.configuracion.firmador_pin;
+      }
+      
       modal.classList.add('active');
     }
   } catch (error) {
@@ -1828,6 +1971,36 @@ async function firmarConCertificadoLocal(facturaId) {
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return;
+    }
+    
+    showNotification('Verificando certificado...', 'info');
+    
+    // Validar certificado antes de firmar
+    try {
+      const validacion = await window.electronAPI.validarCertificado({
+        certificadoPath: state.configuracion.certificado_path,
+        certificadoPassword: state.configuracion.certificado_password
+      });
+      
+      if (!validacion.valido) {
+        showNotification('❌ Certificado inválido: ' + (validacion.info?.error || 'Certificado no válido'), 'error');
+        return;
+      }
+      
+      // Advertir si está próximo a vencer
+      if (validacion.info?.advertencia) {
+        const continuar = confirm(
+          `⚠️ ADVERTENCIA: ${validacion.info.advertencia}\n\n` +
+          `Días restantes: ${validacion.info.diasRestantes}\n\n` +
+          `¿Desea continuar con la firma?`
+        );
+        if (!continuar) return;
+      }
+      
+      console.log('✓ Certificado válido:', validacion.info);
+    } catch (validacionError) {
+      console.error('Error validando certificado:', validacionError);
+      showNotification('⚠️ No se pudo validar el certificado, pero se intentará firmar', 'warning');
     }
     
     showNotification('Firmando documento con certificado local...', 'info');
@@ -1851,6 +2024,55 @@ async function firmarConCertificadoLocal(facturaId) {
       password: null,
       certificadoPath: state.configuracion.certificado_path,
       certificadoPassword: state.configuracion.certificado_password
+    });
+    
+    if (result.success) {
+      showNotification('✓ Documento firmado exitosamente', 'success');
+      
+      // Actualizar estado en base de datos
+      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      
+      cerrarModalVerFactura();
+      await loadFacturas();
+    } else {
+      showNotification('✗ Error al firmar: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error firmando factura:', error);
+    showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
+}
+
+// Firmar con firmador web del MH usando credenciales guardadas
+async function firmarConFirmadorWeb(facturaId) {
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+    
+    showNotification('Firmando documento con Firmador Web del MH...', 'info');
+    
+    // Parsear el JSON DTE de la factura
+    let jsonDte = {};
+    try {
+      jsonDte = JSON.parse(factura.json_dte || '{}');
+    } catch (e) {
+      console.error('Error parseando JSON DTE:', e);
+    }
+    
+    // Construir documento completo para firmar
+    const documento = jsonDte;
+    
+    // Llamar al firmador web con credenciales guardadas
+    const result = await window.electronAPI.firmarDocumento({
+      documento: documento,
+      pin: state.configuracion.firmador_pin,
+      usuario: state.configuracion.firmador_usuario,
+      password: state.configuracion.firmador_password,
+      certificadoPath: null,
+      certificadoPassword: null
     });
     
     if (result.success) {
@@ -2142,19 +2364,134 @@ async function enviarFacturaHacienda(facturaId) {
         resultado.selloRecibido || null
       );
       
+      // Regenerar PDF con sello de recepción si está disponible
+      if (resultado.selloRecibido) {
+        try {
+          const pdfResult = await window.electronAPI.generarPDF({
+            factura: factura,
+            dte: dteFirmado,
+            config: state.configuracion,
+            selloRecepcion: resultado.selloRecibido
+          });
+          
+          if (pdfResult.success) {
+            console.log('PDF actualizado con sello MH:', pdfResult.pdfPath);
+          }
+        } catch (pdfError) {
+          console.error('Error regenerando PDF con sello:', pdfError);
+        }
+      }
+      
       cerrarModalVerFactura();
       await loadFacturas();
     } else {
-      let errorMsg = 'Error al enviar: ' + resultado.error;
-      if (resultado.observaciones && resultado.observaciones.length > 0) {
-        errorMsg += '\nObservaciones: ' + resultado.observaciones.join(', ');
+      // Procesar error usando la nueva estructura de errores
+      let errorMsg = 'Error al enviar a Hacienda';
+      let mostrarReintento = false;
+      
+      if (resultado.errorDetalle) {
+        const error = resultado.errorDetalle;
+        
+        // Mostrar mensaje específico según tipo de error
+        switch(error.tipo) {
+          case 'AUTENTICACION':
+            errorMsg = '❌ Error de autenticación: ' + error.mensaje;
+            errorMsg += '\n\nVerifique sus credenciales en la configuración.';
+            break;
+          case 'VALIDACION':
+            errorMsg = '❌ Error de validación: ' + error.mensaje;
+            if (error.observacionesDetalle && error.observacionesDetalle.length > 0) {
+              errorMsg += '\n\nDetalles:\n• ' + error.observacionesDetalle.join('\n• ');
+            }
+            break;
+          case 'SERVIDOR_MH':
+            errorMsg = '⚠️ Error en servidor de Hacienda: ' + error.mensaje;
+            errorMsg += '\n\nIntente nuevamente en unos minutos.';
+            mostrarReintento = true;
+            break;
+          case 'SERVICIO_NO_DISPONIBLE':
+            errorMsg = '⚠️ Servicio de Hacienda temporalmente no disponible';
+            errorMsg += '\n\nLa factura se ha guardado en contingencia y se reenviará automáticamente.';
+            mostrarReintento = true;
+            
+            // Registrar en contingencia
+            try {
+              await window.electronAPI.registrarContingencia({
+                facturaId: facturaId,
+                jsonDte: factura.json_dte,
+                tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
+                numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+              });
+            } catch (e) {
+              console.error('Error registrando contingencia:', e);
+            }
+            break;
+          case 'TIMEOUT':
+          case 'RED':
+            errorMsg = '⚠️ Error de conexión: ' + error.mensaje;
+            errorMsg += '\n\nVerifique su conexión a internet.';
+            mostrarReintento = true;
+            
+            // Registrar en contingencia
+            try {
+              await window.electronAPI.registrarContingencia({
+                facturaId: facturaId,
+                jsonDte: factura.json_dte,
+                tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
+                numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+              });
+            } catch (e) {
+              console.error('Error registrando contingencia:', e);
+            }
+            break;
+          default:
+            errorMsg = 'Error: ' + (error.mensaje || resultado.error);
+        }
+        
+        // Mostrar código de error si está disponible
+        if (error.codigo) {
+          errorMsg += `\n\nCódigo: ${error.codigo}`;
+        }
+        
+      } else {
+        // Formato de error antiguo
+        errorMsg = 'Error al enviar: ' + resultado.error;
+        if (resultado.observaciones && resultado.observaciones.length > 0) {
+          errorMsg += '\nObservaciones: ' + resultado.observaciones.join(', ');
+        }
       }
+      
       showNotification(errorMsg, 'error');
       console.error('Error completo:', resultado);
+      
+      // Mostrar opción de reintento si aplica
+      if (mostrarReintento) {
+        if (confirm('¿Desea reintentar el envío ahora?')) {
+          await enviarFacturaHacienda(facturaId);
+        }
+      }
     }
   } catch (error) {
     console.error('Error enviando factura:', error);
-    showNotification('Error al enviar factura: ' + error.message, 'error');
+    
+    // En caso de error inesperado, intentar registrar en contingencia
+    try {
+      const factura = state.facturas.find(f => f.id === facturaId);
+      if (factura && factura.json_dte) {
+        const dteFirmado = JSON.parse(factura.json_dte);
+        await window.electronAPI.registrarContingencia({
+          facturaId: facturaId,
+          jsonDte: factura.json_dte,
+          tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
+          numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+        });
+        showNotification('⚠️ Error inesperado. Factura guardada en contingencia.', 'warning');
+      } else {
+        showNotification('Error al enviar factura: ' + error.message, 'error');
+      }
+    } catch (e) {
+      showNotification('Error al enviar factura: ' + error.message, 'error');
+    }
   }
 }
 
@@ -2266,4 +2603,76 @@ window.cerrarModalFirmador = cerrarModalFirmador;
 window.editarCliente = editarCliente;
 window.eliminarCliente = eliminarCliente;
 window.cerrarModalCliente = cerrarModalCliente;
+
+// Funciones para PDF
+async function descargarPDFFactura(factura) {
+  try {
+    showNotification('Generando PDF...', 'info');
+    
+    const dteFirmado = JSON.parse(factura.json_dte);
+    
+    // Debug: Verificar estructura del DTE
+    console.log('Estructura del DTE:', {
+      tieneIdentificacion: !!dteFirmado.identificacion,
+      tieneDteJson: !!dteFirmado.dteJson,
+      tieneDte: !!dteFirmado.dte,
+      propiedades: Object.keys(dteFirmado)
+    });
+    
+    const pdfResult = await window.electronAPI.generarPDF({
+      factura: factura,
+      dte: dteFirmado,
+      config: state.configuracion,
+      selloRecepcion: factura.sello_recepcion
+    });
+    
+    if (pdfResult.success) {
+      showNotification('✓ PDF generado: ' + pdfResult.pdfPath, 'success');
+      // Abrir ubicación del archivo en el explorador
+      await window.electronAPI.abrirPDF(pdfResult.pdfPath);
+    } else {
+      showNotification('Error al generar PDF: ' + pdfResult.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error generando PDF:', error);
+    showNotification('Error al generar PDF: ' + error.message, 'error');
+  }
+}
+
+async function abrirPDFFactura(factura) {
+  try {
+    showNotification('Generando PDF...', 'info');
+    
+    const dteFirmado = JSON.parse(factura.json_dte);
+    
+    // Debug: Verificar estructura del DTE
+    console.log('Estructura del DTE:', {
+      tieneIdentificacion: !!dteFirmado.identificacion,
+      tieneDteJson: !!dteFirmado.dteJson,
+      tieneDte: !!dteFirmado.dte,
+      propiedades: Object.keys(dteFirmado)
+    });
+    
+    const pdfResult = await window.electronAPI.generarPDF({
+      factura: factura,
+      dte: dteFirmado,
+      config: state.configuracion,
+      selloRecepcion: factura.sello_recepcion
+    });
+    
+    if (pdfResult.success) {
+      // Abrir con visor predeterminado
+      await window.electronAPI.abrirPDF(pdfResult.pdfPath);
+      showNotification('✓ PDF abierto', 'success');
+    } else {
+      showNotification('Error al generar PDF: ' + pdfResult.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error abriendo PDF:', error);
+    showNotification('Error al abrir PDF: ' + error.message, 'error');
+  }
+}
+
+window.descargarPDFFactura = descargarPDFFactura;
+window.abrirPDFFactura = abrirPDFFactura;
 

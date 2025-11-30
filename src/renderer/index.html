@@ -474,12 +474,39 @@
             </div>
 
             <div class="form-section">
-              <h3>Certificado Digital</h3>
+              <h3>Método de Firma Digital</h3>
               <div class="form-grid">
                 <div class="form-group full-width">
-                  <label>Ruta del Certificado (.crt, .p12, .pfx)</label>
+                  <label>Tipo de Firma</label>
+                  <select id="config-tipo-firma" class="form-control">
+                    <option value="web">Firmador Web del MH (Recomendado para pruebas)</option>
+                    <option value="local">Certificado Local (.p12/.pfx)</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Opciones para Firmador Web -->
+              <div id="firma-web-options" class="form-grid" style="margin-top: 1rem;">
+                <div class="form-group">
+                  <label>Usuario del Firmador MH</label>
+                  <input type="text" id="config-firmador-usuario" placeholder="Usuario del firmador">
+                </div>
+                <div class="form-group">
+                  <label>Contraseña del Firmador MH</label>
+                  <input type="password" id="config-firmador-password" placeholder="Contraseña del firmador">
+                </div>
+                <div class="form-group">
+                  <label>PIN del Certificado</label>
+                  <input type="password" id="config-firmador-pin" placeholder="PIN del certificado">
+                </div>
+              </div>
+              
+              <!-- Opciones para Certificado Local -->
+              <div id="firma-local-options" class="form-grid" style="margin-top: 1rem; display: none;">
+                <div class="form-group full-width">
+                  <label>Ruta del Certificado (.p12, .pfx)</label>
                   <div style="display: flex; gap: 0.5rem;">
-                    <input type="text" id="config-certificado-path" placeholder="/ruta/al/certificado.crt" readonly style="flex: 1;">
+                    <input type="text" id="config-certificado-path" placeholder="/ruta/al/certificado.p12" readonly style="flex: 1;">
                     <button type="button" class="btn btn-secondary" id="btn-select-certificado">
                       📁 Seleccionar
                     </button>
@@ -598,6 +625,12 @@
           </button>
           <button type="button" class="btn btn-primary" id="btn-enviar-factura" style="display: none;">
             📤 Enviar a Hacienda
+          </button>
+          <button type="button" class="btn btn-info" id="btn-descargar-pdf" style="display: none;">
+            📄 Descargar PDF
+          </button>
+          <button type="button" class="btn btn-info" id="btn-imprimir-pdf" style="display: none;">
+            🖨️ Imprimir PDF
           </button>
         </div>
       </div>

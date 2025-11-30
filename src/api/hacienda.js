@@ -96,14 +96,91 @@ class HaciendaAPI {
         raw: response.data
       };
     } catch (error) {
-      const errorMsg = error.response?.data?.mensaje || error.message;
-      return {
-        success: false,
-        error: errorMsg,
-        estado: error.response?.data?.estado,
-        observaciones: error.response?.data?.observaciones
-      };
+      // Manejo detallado de errores del MH
+      const errorResponse = this.procesarErrorHacienda(error);
+      return errorResponse;
     }
+  }
+
+  /**
+   * Procesar errores específicos del Ministerio de Hacienda
+   */
+  procesarErrorHacienda(error) {
+    const errorData = error.response?.data || {};
+    const statusCode = error.response?.status;
+    const errorMsg = errorData.mensaje || errorData.descripcion || error.message;
+    
+    // Códigos de error comunes del MH
+    const codigoError = errorData.codigo || errorData.codigoError;
+    
+    let errorDetallado = {
+      success: false,
+      error: errorMsg,
+      codigo: codigoError,
+      estado: errorData.estado,
+      observaciones: errorData.observaciones || [],
+      statusHttp: statusCode
+    };
+
+    // Error 106: Credenciales inválidas o token expirado
+    if (codigoError === '106' || statusCode === 401) {
+      errorDetallado.tipo = 'AUTENTICACION';
+      errorDetallado.reintentable = true;
+      errorDetallado.mensaje = 'Credenciales inválidas o sesión expirada. Re-autentique e intente nuevamente.';
+    }
+    
+    // Error 500: Error interno del servidor MH
+    else if (statusCode === 500) {
+      errorDetallado.tipo = 'SERVIDOR_MH';
+      errorDetallado.reintentable = true;
+      errorDetallado.mensaje = 'Error en el servidor del Ministerio de Hacienda. Intente más tarde.';
+    }
+    
+    // Error 400: Datos inválidos
+    else if (statusCode === 400) {
+      errorDetallado.tipo = 'VALIDACION';
+      errorDetallado.reintentable = false;
+      errorDetallado.mensaje = 'Datos del DTE inválidos. Revise las observaciones.';
+    }
+    
+    // Error 503: Servicio no disponible
+    else if (statusCode === 503) {
+      errorDetallado.tipo = 'SERVICIO_NO_DISPONIBLE';
+      errorDetallado.reintentable = true;
+      errorDetallado.mensaje = 'Servicio del MH temporalmente no disponible. Intente más tarde.';
+    }
+    
+    // Error de timeout
+    else if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      errorDetallado.tipo = 'TIMEOUT';
+      errorDetallado.reintentable = true;
+      errorDetallado.mensaje = 'Tiempo de espera agotado. Verifique su conexión e intente nuevamente.';
+    }
+    
+    // Error de red
+    else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      errorDetallado.tipo = 'RED';
+      errorDetallado.reintentable = true;
+      errorDetallado.mensaje = 'No se pudo conectar con el servidor del MH. Verifique su conexión a internet.';
+    }
+    
+    // Otros errores
+    else {
+      errorDetallado.tipo = 'DESCONOCIDO';
+      errorDetallado.reintentable = false;
+      errorDetallado.mensaje = errorMsg;
+    }
+
+    // Agregar observaciones detalladas si existen
+    if (errorData.observaciones && Array.isArray(errorData.observaciones)) {
+      errorDetallado.observacionesDetalle = errorData.observaciones.map(obs => ({
+        codigo: obs.codigo,
+        mensaje: obs.mensaje,
+        campo: obs.campo
+      }));
+    }
+
+    return errorDetallado;
   }
 
   /**

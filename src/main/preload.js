@@ -31,6 +31,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Generador de DTEs
   generarDTE: (data) => ipcRenderer.invoke('dte:generar', data),
   
+  // Generador de PDFs
+  generarPDF: (data) => ipcRenderer.invoke('pdf:generar', data),
+  abrirPDF: (pdfPath) => ipcRenderer.invoke('pdf:abrir', pdfPath),
+  
+  // Contingencias
+  registrarContingencia: (data) => ipcRenderer.invoke('contingencia:registrar', data),
+  obtenerContingenciasPendientes: () => ipcRenderer.invoke('contingencia:obtenerPendientes'),
+  reintentarContingencia: (contingenciaId) => ipcRenderer.invoke('contingencia:reintentar', contingenciaId),
+  resolverContingencia: (data) => ipcRenderer.invoke('contingencia:resolver', data),
+  debeActivarContingencia: () => ipcRenderer.invoke('contingencia:debeActivar'),
+  
   // Diálogos del sistema
   selectFile: (options) => ipcRenderer.invoke('dialog:selectFile', options)
 });

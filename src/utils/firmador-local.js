@@ -57,11 +57,71 @@ class FirmadorLocal {
         throw new Error('No se pudo cargar el certificado');
       }
       
-      return { success: true };
+      // Validar certificado
+      const validacion = this.validarCertificado();
+      if (!validacion.valido) {
+        throw new Error(`Certificado inválido: ${validacion.error}`);
+      }
+      
+      return { success: true, info: validacion.info };
     } catch (error) {
       console.error('Error cargando certificado:', error);
       throw new Error(`Error al cargar certificado: ${error.message}`);
     }
+  }
+
+  /**
+   * Validar certificado digital
+   */
+  validarCertificado() {
+    if (!this.certificado) {
+      return { valido: false, error: 'Certificado no cargado' };
+    }
+
+    const ahora = new Date();
+    const validoDesde = this.certificado.validity.notBefore;
+    const validoHasta = this.certificado.validity.notAfter;
+
+    // Verificar vigencia
+    if (ahora < validoDesde) {
+      return { 
+        valido: false, 
+        error: `Certificado aún no es válido. Válido desde: ${validoDesde.toLocaleDateString()}` 
+      };
+    }
+
+    if (ahora > validoHasta) {
+      return { 
+        valido: false, 
+        error: `Certificado expirado. Expiró el: ${validoHasta.toLocaleDateString()}` 
+      };
+    }
+
+    // Verificar que tenga clave privada
+    if (!this.privateKey) {
+      return { 
+        valido: false, 
+        error: 'No se encontró clave privada en el certificado' 
+      };
+    }
+
+    // Advertencia si expira pronto (dentro de 30 días)
+    const diasParaExpiracion = Math.floor((validoHasta - ahora) / (1000 * 60 * 60 * 24));
+    const advertencia = diasParaExpiracion < 30 
+      ? `Advertencia: El certificado expira en ${diasParaExpiracion} días` 
+      : null;
+
+    return { 
+      valido: true, 
+      info: {
+        validoDesde: validoDesde,
+        validoHasta: validoHasta,
+        diasRestantes: diasParaExpiracion,
+        advertencia: advertencia,
+        sujeto: this.certificado.subject.getField('CN')?.value || 'Desconocido',
+        emisor: this.certificado.issuer.getField('CN')?.value || 'Desconocido'
+      }
+    };
   }
 
   /**

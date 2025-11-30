@@ -127,6 +127,107 @@ class DTEGenerator {
   }
 
   /**
+   * Generar Nota de Débito (Tipo 06)
+   */
+  generarNotaDebito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
+    const now = new Date();
+    const codigoGeneracion = this.generarCodigoGeneracion();
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('06', config.codigo_establecimiento, correlativo);
+
+    return {
+      identificacion: {
+        version: 1,
+        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        tipoDte: '06',
+        numeroControl: numeroControl,
+        codigoGeneracion: codigoGeneracion,
+        tipoModelo: 1,
+        tipoOperacion: 1,
+        tipoContingencia: null,
+        motivoContin: null,
+        fecEmi: this.formatearFecha(now),
+        horEmi: this.formatearHora(now),
+        tipoMoneda: 'USD'
+      },
+      documentoRelacionado: [documentoRelacionado],
+      emisor: this.construirEmisorNC(config),
+      receptor: this.construirReceptorCCF(cliente),
+      ventaTercero: opciones.ventaTercero || null,
+      cuerpoDocumento: this.construirCuerpoDocumentoNC(items),
+      resumen: this.construirResumenNC(resumen),
+      extension: opciones.extension || null,
+      apendice: opciones.apendice || null
+    };
+  }
+
+  /**
+   * Generar Factura de Exportación (Tipo 11)
+   */
+  generarFacturaExportacion(config, cliente, items, resumen, opciones = {}) {
+    const now = new Date();
+    const codigoGeneracion = this.generarCodigoGeneracion();
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('11', config.codigo_establecimiento, correlativo);
+
+    return {
+      identificacion: {
+        version: 1,
+        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        tipoDte: '11',
+        numeroControl: numeroControl,
+        codigoGeneracion: codigoGeneracion,
+        tipoModelo: 1,
+        tipoOperacion: 1,
+        tipoContingencia: null,
+        motivoContin: null,
+        fecEmi: this.formatearFecha(now),
+        horEmi: this.formatearHora(now),
+        tipoMoneda: 'USD'
+      },
+      emisor: this.construirEmisor(config),
+      receptor: this.construirReceptorExportacion(cliente),
+      otrosDocumentos: opciones.otrosDocumentos || null,
+      ventaTercero: opciones.ventaTercero || null,
+      cuerpoDocumento: this.construirCuerpoDocumentoExportacion(items),
+      resumen: this.construirResumenExportacion(resumen),
+      apendice: opciones.apendice || null
+    };
+  }
+
+  /**
+   * Generar Factura Sujeto Excluido (Tipo 14)
+   */
+  generarFacturaSujetoExcluido(config, cliente, items, resumen, opciones = {}) {
+    const now = new Date();
+    const codigoGeneracion = this.generarCodigoGeneracion();
+    const correlativo = opciones.correlativo || 1;
+    const numeroControl = this.generarNumeroControl('14', config.codigo_establecimiento, correlativo);
+
+    return {
+      identificacion: {
+        version: 1,
+        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        tipoDte: '14',
+        numeroControl: numeroControl,
+        codigoGeneracion: codigoGeneracion,
+        tipoModelo: 1,
+        tipoOperacion: 1,
+        tipoContingencia: null,
+        motivoContin: null,
+        fecEmi: this.formatearFecha(now),
+        horEmi: this.formatearHora(now),
+        tipoMoneda: 'USD'
+      },
+      emisor: this.construirEmisor(config),
+      sujetoExcluido: this.construirSujetoExcluido(cliente),
+      cuerpoDocumento: this.construirCuerpoDocumentoFSE(items),
+      resumen: this.construirResumenFSE(resumen),
+      apendice: opciones.apendice || null
+    };
+  }
+
+  /**
    * Construir objeto Emisor
    */
   construirEmisor(config) {
@@ -418,6 +519,155 @@ class DTEGenerator {
     if (entero === 0) return 'CERO DÓLARES';
     
     return `${entero} DÓLARES CON ${decimales}/100`;
+  }
+
+  /**
+   * Construir receptor para exportación
+   */
+  construirReceptorExportacion(cliente) {
+    return {
+      tipoDocumento: cliente.tipo_documento || '36',
+      numDocumento: cliente.numero_documento,
+      nombre: cliente.nombre,
+      nombreComercial: cliente.nombre_comercial || null,
+      direccion: {
+        complemento: cliente.direccion,
+        pais: cliente.pais || 'US' // Código ISO del país
+      },
+      telefono: cliente.telefono || null,
+      correo: cliente.email
+    };
+  }
+
+  /**
+   * Construir sujeto excluido
+   */
+  construirSujetoExcluido(cliente) {
+    return {
+      tipoDocumento: cliente.tipo_documento,
+      numDocumento: cliente.numero_documento,
+      nombre: cliente.nombre,
+      codActividad: cliente.giro || '99999',
+      descActividad: cliente.desc_actividad || 'Otros',
+      direccion: cliente.direccion ? {
+        departamento: cliente.departamento,
+        municipio: cliente.municipio,
+        complemento: cliente.direccion
+      } : null,
+      telefono: cliente.telefono || null,
+      correo: cliente.email
+    };
+  }
+
+  /**
+   * Construir cuerpo documento exportación
+   */
+  construirCuerpoDocumentoExportacion(items) {
+    return items.map((item, index) => {
+      const cantidad = parseFloat(item.cantidad);
+      const precioUni = parseFloat(item.precio_unitario);
+      const montoDescu = parseFloat(item.descuento || 0);
+
+      return {
+        numItem: index + 1,
+        cantidad: cantidad,
+        codigo: item.codigo || null,
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        descripcion: item.descripcion,
+        precioUni: precioUni,
+        montoDescu: montoDescu,
+        ventaGravada: (cantidad * precioUni) - montoDescu,
+        noGravado: 0
+      };
+    });
+  }
+
+  /**
+   * Construir cuerpo documento FSE
+   */
+  construirCuerpoDocumentoFSE(items) {
+    return items.map((item, index) => {
+      const cantidad = parseFloat(item.cantidad);
+      const precioUni = parseFloat(item.precio_unitario);
+      const montoDescu = parseFloat(item.descuento || 0);
+
+      return {
+        numItem: index + 1,
+        tipoItem: item.tipo_item || 2,
+        cantidad: cantidad,
+        codigo: item.codigo || null,
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        descripcion: item.descripcion,
+        precioUni: precioUni,
+        montoDescu: montoDescu,
+        compra: (cantidad * precioUni) - montoDescu
+      };
+    });
+  }
+
+  /**
+   * Construir resumen exportación
+   */
+  construirResumenExportacion(resumen) {
+    const subtotal = parseFloat(resumen.subtotal || 0);
+    const total = parseFloat(resumen.total || 0);
+    const descuento = parseFloat(resumen.descuento || 0);
+
+    return {
+      totalGravada: subtotal,
+      descuento: descuento,
+      porcentajeDescuento: 0,
+      totalDescu: descuento,
+      subTotal: subtotal,
+      ivaRete1: 0,
+      reteRenta: 0,
+      montoTotalOperacion: total,
+      totalNoGravado: 0,
+      totalPagar: total,
+      totalLetras: this.numeroALetras(total),
+      condicionOperacion: resumen.condicion_operacion || 1,
+      pagos: resumen.pagos || [
+        {
+          codigo: '01',
+          montoPago: total,
+          referencia: null,
+          plazo: null,
+          periodo: null
+        }
+      ],
+      observaciones: resumen.observaciones || null
+    };
+  }
+
+  /**
+   * Construir resumen FSE
+   */
+  construirResumenFSE(resumen) {
+    const total = parseFloat(resumen.total || 0);
+    const descuento = parseFloat(resumen.descuento || 0);
+
+    return {
+      totalCompra: total,
+      descu: descuento,
+      totalDescu: descuento,
+      subTotal: total - descuento,
+      ivaRete1: 0,
+      reteRenta: 0,
+      montoTotalOperacion: total,
+      totalPagar: total,
+      totalLetras: this.numeroALetras(total),
+      condicionOperacion: resumen.condicion_operacion || 1,
+      pagos: resumen.pagos || [
+        {
+          codigo: '01',
+          montoPago: total,
+          referencia: null,
+          plazo: null,
+          periodo: null
+        }
+      ],
+      observaciones: resumen.observaciones || null
+    };
   }
 }
 

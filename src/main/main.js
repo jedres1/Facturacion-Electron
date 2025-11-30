@@ -5,10 +5,14 @@ const HaciendaAPI = require('../api/hacienda');
 const Firmador = require('../utils/firmador');
 const FirmadorLocal = require('../utils/firmador-local');
 const DTEGenerator = require('../utils/dte-generator');
+const PDFGenerator = require('../utils/pdf-generator');
+const ContingenciaManager = require('../utils/contingencias');
 
 let mainWindow;
 let db;
 let dteGenerator;
+let pdfGenerator;
+let contingenciaManager;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -40,6 +44,12 @@ app.whenReady().then(() => {
   
   // Inicializar generador de DTEs
   dteGenerator = new DTEGenerator();
+  
+  // Inicializar generador de PDFs
+  pdfGenerator = new PDFGenerator();
+  
+  // Inicializar gestor de contingencias
+  contingenciaManager = new ContingenciaManager(db.db);
   
   createWindow();
 
@@ -231,6 +241,15 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
       case '05': // Nota de Crédito
         dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opciones.documentoRelacionado, opcionesConCorrelativo);
         break;
+      case '06': // Nota de Débito
+        dte = dteGenerator.generarNotaDebito(config, cliente, items, resumen, opciones.documentoRelacionado, opcionesConCorrelativo);
+        break;
+      case '11': // Factura de Exportación
+        dte = dteGenerator.generarFacturaExportacion(config, cliente, items, resumen, opcionesConCorrelativo);
+        break;
+      case '14': // Factura Sujeto Excluido
+        dte = dteGenerator.generarFacturaSujetoExcluido(config, cliente, items, resumen, opcionesConCorrelativo);
+        break;
       default:
         throw new Error('Tipo de DTE no soportado: ' + tipo);
     }
@@ -239,6 +258,75 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+// IPC Handler para generar PDF
+ipcMain.handle('pdf:generar', async (event, { factura, dte, config }) => {
+  try {
+    // Parsear el DTE si viene como string
+    let dteObj = dte;
+    if (typeof dte === 'string') {
+      try {
+        dteObj = JSON.parse(dte);
+      } catch (parseError) {
+        console.error('Error parseando DTE:', parseError);
+        return { success: false, error: 'DTE inválido: no se puede parsear' };
+      }
+    }
+    
+    const pdfBuffer = await pdfGenerator.generarPDFFactura(factura, dteObj, config);
+    
+    // Guardar PDF en carpeta temporal
+    const userDataPath = app.getPath('userData');
+    const pdfDir = path.join(userDataPath, 'pdfs');
+    const fs = require('fs').promises;
+    
+    // Crear directorio si no existe
+    await fs.mkdir(pdfDir, { recursive: true });
+    
+    const pdfPath = path.join(pdfDir, `DTE_${dteObj.identificacion.codigoGeneracion}.pdf`);
+    await fs.writeFile(pdfPath, pdfBuffer);
+    
+    return { 
+      success: true, 
+      pdfBuffer: pdfBuffer.toString('base64'), // Enviar como base64
+      pdfPath: pdfPath 
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC Handler para abrir PDF
+ipcMain.handle('pdf:abrir', async (event, pdfPath) => {
+  try {
+    const { shell } = require('electron');
+    await shell.openPath(pdfPath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC Handlers para contingencias
+ipcMain.handle('contingencia:registrar', async (event, { facturaId, tipo, motivo }) => {
+  return await contingenciaManager.registrarContingencia(facturaId, tipo, motivo);
+});
+
+ipcMain.handle('contingencia:obtenerPendientes', async () => {
+  return await contingenciaManager.obtenerDTEsPendientes();
+});
+
+ipcMain.handle('contingencia:reintentar', async (event, contingenciaId) => {
+  return await contingenciaManager.reintentarEnvio(contingenciaId);
+});
+
+ipcMain.handle('contingencia:resolver', async (event, { contingenciaId, sello }) => {
+  return await contingenciaManager.resolverContingencia(contingenciaId, sello);
+});
+
+ipcMain.handle('contingencia:debeActivar', async () => {
+  return await contingenciaManager.debeActivarContingencia();
 });
 
 
