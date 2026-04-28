@@ -38,6 +38,13 @@ class DatabaseManager {
         firmador_pin TEXT,
         certificado_path TEXT,
         certificado_password TEXT,
+        correo_smtp_host TEXT DEFAULT 'smtp.gmail.com',
+        correo_smtp_port INTEGER DEFAULT 465,
+        correo_smtp_secure INTEGER DEFAULT 1,
+        correo_usuario TEXT,
+        correo_password TEXT,
+        correo_remitente TEXT,
+        correo_nombre TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -153,6 +160,22 @@ class DatabaseManager {
     } catch (error) {
       // La columna ya existe, ignorar error
     }
+
+    [
+      [`correo_smtp_host`, `TEXT DEFAULT 'smtp.gmail.com'`],
+      [`correo_smtp_port`, `INTEGER DEFAULT 465`],
+      [`correo_smtp_secure`, `INTEGER DEFAULT 1`],
+      [`correo_usuario`, `TEXT`],
+      [`correo_password`, `TEXT`],
+      [`correo_remitente`, `TEXT`],
+      [`correo_nombre`, `TEXT`]
+    ].forEach(([columna, tipo]) => {
+      try {
+        this.db.exec(`ALTER TABLE configuracion ADD COLUMN ${columna} ${tipo}`);
+      } catch (error) {
+        // La columna ya existe, ignorar error
+      }
+    });
 
     // Tabla de productos/servicios
     this.db.exec(`
@@ -344,7 +367,10 @@ class DatabaseManager {
             codigo_establecimiento = ?, punto_venta = ?, 
             hacienda_usuario = ?, hacienda_password = ?, hacienda_ambiente = ?,
             tipo_firma = ?, firmador_usuario = ?, firmador_password = ?, firmador_pin = ?,
-            certificado_path = ?, certificado_password = ?, updated_at = CURRENT_TIMESTAMP
+            certificado_path = ?, certificado_password = ?,
+            correo_smtp_host = ?, correo_smtp_port = ?, correo_smtp_secure = ?,
+            correo_usuario = ?, correo_password = ?, correo_remitente = ?, correo_nombre = ?,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
       return stmt.run(
@@ -354,7 +380,15 @@ class DatabaseManager {
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.tipo_firma || 'web', config.firmador_usuario, config.firmador_password, config.firmador_pin,
-        config.certificado_path, config.certificado_password, existing.id
+        config.certificado_path, config.certificado_password,
+        config.correo_smtp_host || 'smtp.gmail.com',
+        Number(config.correo_smtp_port || 465),
+        Number(config.correo_smtp_secure ?? 1),
+        config.correo_usuario,
+        config.correo_password,
+        config.correo_remitente,
+        config.correo_nombre,
+        existing.id
       );
     } else {
       const stmt = this.db.prepare(`
@@ -363,8 +397,10 @@ class DatabaseManager {
          telefono, email, direccion, departamento, municipio, 
          distrito, codigo_establecimiento, punto_venta, hacienda_usuario, 
          hacienda_password, hacienda_ambiente, tipo_firma, firmador_usuario, 
-         firmador_password, firmador_pin, certificado_path, certificado_password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         firmador_password, firmador_pin, certificado_path, certificado_password,
+         correo_smtp_host, correo_smtp_port, correo_smtp_secure, correo_usuario,
+         correo_password, correo_remitente, correo_nombre)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
@@ -373,7 +409,14 @@ class DatabaseManager {
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
         config.tipo_firma || 'web', config.firmador_usuario, config.firmador_password, config.firmador_pin,
-        config.certificado_path, config.certificado_password
+        config.certificado_path, config.certificado_password,
+        config.correo_smtp_host || 'smtp.gmail.com',
+        Number(config.correo_smtp_port || 465),
+        Number(config.correo_smtp_secure ?? 1),
+        config.correo_usuario,
+        config.correo_password,
+        config.correo_remitente,
+        config.correo_nombre
       );
     }
   }
@@ -385,6 +428,7 @@ class DatabaseManager {
   }
 
   addCliente(cliente) {
+    this.validarEmailCliente(cliente);
     const stmt = this.db.prepare(`
       INSERT INTO clientes 
       (tipo_documento, numero_documento, nrc, nombre, nombre_comercial, tipo_persona,
@@ -400,6 +444,7 @@ class DatabaseManager {
   }
 
   updateCliente(id, cliente) {
+    this.validarEmailCliente(cliente);
     const stmt = this.db.prepare(`
       UPDATE clientes 
       SET tipo_documento = ?, numero_documento = ?, nrc = ?, nombre = ?, nombre_comercial = ?,
@@ -413,6 +458,17 @@ class DatabaseManager {
       cliente.direccion, cliente.departamento, cliente.municipio, 
       cliente.distrito, cliente.giro, id
     );
+  }
+
+  validarEmailCliente(cliente) {
+    const email = String(cliente?.email || '').trim();
+    if (!email) {
+      throw new Error('El correo electrónico del cliente es obligatorio.');
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('El correo electrónico del cliente no es válido.');
+    }
   }
 
   deleteCliente(id) {

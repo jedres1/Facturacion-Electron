@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Generador de PDFs
   generarPDF: (data) => ipcRenderer.invoke('pdf:generar', data),
   abrirPDF: (pdfPath) => ipcRenderer.invoke('pdf:abrir', pdfPath),
+  enviarCorreoDTE: (data) => ipcRenderer.invoke('correo:enviarDTE', data),
   
   // Contingencias
   registrarContingencia: (data) => ipcRenderer.invoke('contingencia:registrar', data),

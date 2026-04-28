@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const nodemailer = require('nodemailer');
 const Database = require('../database/database');
 const HaciendaAPI = require('../api/hacienda');
 const Firmador = require('../utils/firmador');
@@ -354,10 +355,10 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
         dte = dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opcionesConCorrelativo);
         break;
       case '05': // Nota de Crédito
-        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opciones.documentoRelacionado, opcionesConCorrelativo);
+        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
         break;
       case '06': // Nota de Débito
-        dte = dteGenerator.generarNotaDebito(config, cliente, items, resumen, opciones.documentoRelacionado, opcionesConCorrelativo);
+        dte = dteGenerator.generarNotaDebito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
         break;
       case '11': // Factura de Exportación
         dte = dteGenerator.generarFacturaExportacion(config, cliente, items, resumen, opcionesConCorrelativo);
@@ -431,6 +432,72 @@ ipcMain.handle('pdf:abrir', async (event, pdfPath) => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('correo:enviarDTE', async (event, { factura, dte, config, destinatario, asunto, mensaje }) => {
+  try {
+    const correoConfig = normalizarConfigCorreo(config || db.getConfiguracion());
+    if (!correoConfig.auth.user || !correoConfig.auth.pass) {
+      return {
+        success: false,
+        error: 'Configure el usuario Gmail y la contraseña de aplicación en Configuración.'
+      };
+    }
+
+    if (!destinatario) {
+      return { success: false, error: 'Ingrese el correo del destinatario.' };
+    }
+
+    let dteObj = dte;
+    if (typeof dteObj === 'string') {
+      dteObj = JSON.parse(dteObj);
+    }
+
+    const dteParaNombre = pdfGenerator.normalizarDTE(dteObj);
+    const codigo = dteParaNombre.identificacion?.codigoGeneracion || factura?.codigo_generacion || factura?.numero_control || 'DTE';
+    const nombreArchivo = String(codigo).replace(/[^A-Za-z0-9_-]/g, '_');
+    const pdfBuffer = await pdfGenerator.generarPDFFactura(factura, dteObj, config);
+    const jsonBuffer = Buffer.from(JSON.stringify(dteObj, null, 2), 'utf8');
+    const transporter = nodemailer.createTransport(correoConfig);
+    const remitenteCorreo = config?.correo_remitente || correoConfig.auth.user;
+    const remitenteNombre = config?.correo_nombre || config?.nombre_empresa || remitenteCorreo;
+
+    const info = await transporter.sendMail({
+      from: `"${remitenteNombre}" <${remitenteCorreo}>`,
+      to: destinatario,
+      subject: asunto || `Documento Tributario Electronico ${codigo}`,
+      text: mensaje || `Adjunto encontrara el PDF y JSON del Documento Tributario Electronico ${codigo}.`,
+      attachments: [
+        {
+          filename: `DTE_${nombreArchivo}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        },
+        {
+          filename: `DTE_${nombreArchivo}.json`,
+          content: jsonBuffer,
+          contentType: 'application/json'
+        }
+      ]
+    });
+
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+function normalizarConfigCorreo(config = {}) {
+  const port = Number(config.correo_smtp_port || 465);
+  return {
+    host: config.correo_smtp_host || 'smtp.gmail.com',
+    port,
+    secure: String(config.correo_smtp_secure ?? '1') === '1' || port === 465,
+    auth: {
+      user: config.correo_usuario || config.correo_remitente || '',
+      pass: config.correo_password || ''
+    }
+  };
+}
 
 // IPC Handlers para contingencias
 ipcMain.handle('contingencia:registrar', async (event, { facturaId, tipo, motivo }) => {

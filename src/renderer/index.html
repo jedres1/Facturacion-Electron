@@ -130,7 +130,7 @@
                   <select id="tipo-dte" required>
                     <option value="01">Factura</option>
                     <option value="03">Comprobante Crédito Fiscal</option>
-                    <option value="14">Nota de Crédito</option>
+                    <option value="05">Nota de Crédito</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -140,6 +140,39 @@
                     <option value="2">Crédito</option>
                     <option value="3">Otro</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section" id="nota-credito-section" style="display: none;">
+              <h3>Documento Relacionado</h3>
+              <div class="alert alert-info" style="margin-bottom: 1rem;">
+                <small>
+                  Para Nota de Crédito tipo 05, Hacienda requiere relacionar un CCF o comprobante de retención previo.
+                </small>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Tipo de Documento Relacionado</label>
+                  <select id="nc-tipo-documento">
+                    <option value="03">03 - Comprobante Crédito Fiscal</option>
+                    <option value="07">07 - Comprobante de Retención</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Tipo de Generación</label>
+                  <select id="nc-tipo-generacion">
+                    <option value="2">2 - DTE</option>
+                    <option value="1">1 - Físico</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Número / Código de Generación</label>
+                  <input type="text" id="nc-numero-documento" maxlength="36" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
+                </div>
+                <div class="form-group">
+                  <label>Fecha de Emisión Relacionada</label>
+                  <input type="date" id="nc-fecha-emision">
                 </div>
               </div>
             </div>
@@ -527,6 +560,48 @@
               </div>
             </div>
 
+            <div class="form-section">
+              <h3>Correo Electrónico</h3>
+              <div class="alert alert-info" style="margin-bottom: 1rem;">
+                <small>
+                  Para Gmail usa smtp.gmail.com, puerto 465, SSL activo y una contraseña de aplicación de Google.
+                </small>
+              </div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Servidor SMTP</label>
+                  <input type="text" id="config-correo-smtp-host" value="smtp.gmail.com" placeholder="smtp.gmail.com">
+                </div>
+                <div class="form-group">
+                  <label>Puerto SMTP</label>
+                  <input type="number" id="config-correo-smtp-port" value="465" min="1" max="65535">
+                </div>
+                <div class="form-group">
+                  <label>Seguridad</label>
+                  <select id="config-correo-smtp-secure">
+                    <option value="1">SSL/TLS (465)</option>
+                    <option value="0">STARTTLS (587)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Usuario Gmail</label>
+                  <input type="email" id="config-correo-usuario" placeholder="tu-correo@gmail.com">
+                </div>
+                <div class="form-group">
+                  <label>Contraseña de aplicación</label>
+                  <input type="password" id="config-correo-password" placeholder="16 caracteres de Google">
+                </div>
+                <div class="form-group">
+                  <label>Correo remitente</label>
+                  <input type="email" id="config-correo-remitente" placeholder="tu-correo@gmail.com">
+                </div>
+                <div class="form-group">
+                  <label>Nombre remitente</label>
+                  <input type="text" id="config-correo-nombre" placeholder="Nombre de la empresa">
+                </div>
+              </div>
+            </div>
+
             <div class="form-actions">
               <button type="button" class="btn btn-secondary" id="btn-test-conexion">
                 Probar Conexión
@@ -646,11 +721,47 @@
           <button type="button" class="btn btn-info" id="btn-guardar-json" style="display: none;">
             Guardar JSON
           </button>
+          <button type="button" class="btn btn-info" id="btn-enviar-correo" style="display: none;">
+            Enviar por Correo
+          </button>
           <button type="button" class="btn btn-info" id="btn-imprimir-pdf" style="display: none;">
             🖨️ Imprimir PDF
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal para enviar DTE por correo -->
+  <div id="modal-correo" class="modal">
+    <div class="modal-content" style="max-width: 560px;">
+      <div class="modal-header">
+        <h2>Enviar PDF y JSON</h2>
+        <button class="close-modal" onclick="cerrarModalCorreo()">×</button>
+      </div>
+      <form id="form-correo" class="modal-form">
+        <input type="hidden" id="correo-factura-id">
+
+        <div class="form-group full-width">
+          <label>Destinatario *</label>
+          <input type="email" id="correo-destinatario" required placeholder="cliente@correo.com">
+        </div>
+
+        <div class="form-group full-width">
+          <label>Asunto *</label>
+          <input type="text" id="correo-asunto" required>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Mensaje</label>
+          <textarea id="correo-mensaje" rows="6"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalCorreo()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-confirmar-correo">Enviar Correo</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -833,8 +944,8 @@
         </div>
 
         <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="cliente-email">
+          <label>Email *</label>
+          <input type="email" id="cliente-email" required>
         </div>
 
         <div class="form-group">

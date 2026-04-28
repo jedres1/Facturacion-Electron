@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Configurar event listeners
   setupEventListeners();
+  actualizarCamposNotaCredito();
   
   // Actualizar dashboard
   updateDashboard();
@@ -541,6 +542,13 @@ async function loadConfiguracion() {
       // Certificado local
       document.getElementById('config-certificado-path').value = config.certificado_path || '';
       document.getElementById('config-certificado-password').value = config.certificado_password || '';
+      document.getElementById('config-correo-smtp-host').value = config.correo_smtp_host || 'smtp.gmail.com';
+      document.getElementById('config-correo-smtp-port').value = config.correo_smtp_port || 465;
+      document.getElementById('config-correo-smtp-secure').value = String(config.correo_smtp_secure ?? 1);
+      document.getElementById('config-correo-usuario').value = config.correo_usuario || '';
+      document.getElementById('config-correo-password').value = config.correo_password || '';
+      document.getElementById('config-correo-remitente').value = config.correo_remitente || config.correo_usuario || '';
+      document.getElementById('config-correo-nombre').value = config.correo_nombre || config.nombre_empresa || '';
     }
   } catch (error) {
     console.error('Error cargando configuración:', error);
@@ -594,6 +602,9 @@ function setupEventListeners() {
     e.preventDefault();
     await generarFactura();
   });
+
+  document.getElementById('tipo-dte')?.addEventListener('change', actualizarCamposNotaCredito);
+  document.getElementById('nc-tipo-generacion')?.addEventListener('change', actualizarPlaceholderDocumentoRelacionado);
   
   document.getElementById('btn-agregar-item')?.addEventListener('click', agregarItem);
   document.getElementById('btn-cancelar')?.addEventListener('click', () => {
@@ -638,6 +649,11 @@ function setupEventListeners() {
   document.getElementById('form-anulacion')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     await procesarAnulacionFactura();
+  });
+
+  document.getElementById('form-correo')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await procesarEnvioCorreoFactura();
   });
   
   // Botón seleccionar certificado
@@ -899,7 +915,14 @@ async function guardarConfiguracion() {
       firmador_password: document.getElementById('config-firmador-password').value,
       firmador_pin: document.getElementById('config-firmador-pin').value,
       certificado_path: document.getElementById('config-certificado-path').value,
-      certificado_password: document.getElementById('config-certificado-password').value
+      certificado_password: document.getElementById('config-certificado-password').value,
+      correo_smtp_host: document.getElementById('config-correo-smtp-host').value || 'smtp.gmail.com',
+      correo_smtp_port: Number(document.getElementById('config-correo-smtp-port').value || 465),
+      correo_smtp_secure: Number(document.getElementById('config-correo-smtp-secure').value),
+      correo_usuario: document.getElementById('config-correo-usuario').value,
+      correo_password: document.getElementById('config-correo-password').value,
+      correo_remitente: document.getElementById('config-correo-remitente').value,
+      correo_nombre: document.getElementById('config-correo-nombre').value
     };
     
     await window.electronAPI.updateConfiguracion(config);
@@ -947,6 +970,12 @@ async function generarFactura() {
     
     // Obtener tipo de DTE
     const tipoDte = document.getElementById('tipo-dte').value;
+    const esNotaCredito = tipoDte === '05';
+    const documentoRelacionado = esNotaCredito ? obtenerDocumentoRelacionadoNotaCredito() : null;
+
+    if (esNotaCredito && !documentoRelacionado) {
+      return;
+    }
 
     const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion);
     if (errorReceptor) {
@@ -981,6 +1010,8 @@ async function generarFactura() {
       unidad_medida: item.unidad_medida || 'UND',
       descripcion: item.descripcion,
       precio_unitario: item.precioUnitario,
+      numero_documento: esNotaCredito ? documentoRelacionado.numeroDocumento : null,
+      numeroDocumento: esNotaCredito ? documentoRelacionado.numeroDocumento : null,
       montoDescu: item.descuento || 0,
       descuento: item.descuento || 0,
       exento: item.exento,
@@ -1047,7 +1078,8 @@ async function generarFactura() {
       resumen: resumenDte,
       opciones: {
         tipoTransmision: 1, // 1=Normal
-        tipoContingencia: null
+        tipoContingencia: null,
+        documentoRelacionado
       }
     });
     
@@ -1148,7 +1180,74 @@ function limpiarFormularioFactura() {
   document.getElementById('form-factura').reset();
   state.currentFactura = { items: [], cliente: null };
   document.getElementById('items-body').innerHTML = '<tr><td colspan="6" class="text-center">No hay items agregados</td></tr>';
+  actualizarCamposNotaCredito();
   actualizarResumenFactura();
+}
+
+function actualizarCamposNotaCredito() {
+  const tipoDte = document.getElementById('tipo-dte')?.value;
+  const section = document.getElementById('nota-credito-section');
+  const submitButton = document.querySelector('#form-factura button[type="submit"]');
+  const requerido = tipoDte === '05';
+
+  if (section) {
+    section.style.display = requerido ? 'block' : 'none';
+  }
+
+  ['nc-tipo-documento', 'nc-tipo-generacion', 'nc-numero-documento', 'nc-fecha-emision'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = requerido;
+  });
+
+  if (submitButton) {
+    submitButton.textContent = requerido ? 'Generar Nota de Crédito' : 'Generar Factura';
+  }
+
+  actualizarPlaceholderDocumentoRelacionado();
+}
+
+function actualizarPlaceholderDocumentoRelacionado() {
+  const tipoGeneracion = document.getElementById('nc-tipo-generacion')?.value;
+  const numeroInput = document.getElementById('nc-numero-documento');
+  if (!numeroInput) return;
+
+  numeroInput.placeholder = tipoGeneracion === '2'
+    ? 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX'
+    : 'Número del documento físico relacionado';
+}
+
+function obtenerDocumentoRelacionadoNotaCredito() {
+  const tipoDocumento = document.getElementById('nc-tipo-documento')?.value;
+  const tipoGeneracion = Number(document.getElementById('nc-tipo-generacion')?.value);
+  const numeroDocumento = String(document.getElementById('nc-numero-documento')?.value || '').trim().toUpperCase();
+  const fechaEmision = document.getElementById('nc-fecha-emision')?.value;
+
+  if (!['03', '07'].includes(tipoDocumento)) {
+    showNotification('El documento relacionado de una Nota de Crédito debe ser tipo 03 o 07.', 'error');
+    return null;
+  }
+
+  if (![1, 2].includes(tipoGeneracion)) {
+    showNotification('Seleccione un tipo de generación válido para el documento relacionado.', 'error');
+    return null;
+  }
+
+  if (!numeroDocumento || !fechaEmision) {
+    showNotification('Complete el número y fecha del documento relacionado para la Nota de Crédito.', 'error');
+    return null;
+  }
+
+  if (tipoGeneracion === 2 && !/^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$/.test(numeroDocumento)) {
+    showNotification('Para documento relacionado DTE, ingrese el código de generación UUID de 36 caracteres.', 'error');
+    return null;
+  }
+
+  return {
+    tipoDocumento,
+    tipoGeneracion,
+    numeroDocumento,
+    fechaEmision
+  };
 }
 
 // Actualizar resumen de factura
@@ -1626,10 +1725,21 @@ function cerrarModalCliente() {
 async function guardarCliente() {
   try {
     const clienteId = document.getElementById('cliente-id').value;
+    const emailCliente = document.getElementById('cliente-email').value.trim();
     
     const giroValue = extraerCodigoActividad(document.getElementById('cliente-giro'));
     if (!validarCodigoActividad(giroValue)) {
       showNotification('Seleccione una actividad económica válida de 5 dígitos para el cliente', 'error');
+      return;
+    }
+
+    if (!emailCliente) {
+      showNotification('Ingrese el correo electrónico del cliente para poder enviarle el PDF y JSON.', 'error');
+      return;
+    }
+
+    if (!document.getElementById('cliente-email').checkValidity()) {
+      showNotification('Ingrese un correo electrónico válido para el cliente.', 'error');
       return;
     }
     
@@ -1641,7 +1751,7 @@ async function guardarCliente() {
       nombre_comercial: document.getElementById('cliente-nombre-comercial').value,
       tipo_persona: document.getElementById('cliente-tipo-persona').value,
       telefono: document.getElementById('cliente-telefono').value,
-      email: document.getElementById('cliente-email').value,
+      email: emailCliente,
       departamento: document.getElementById('cliente-departamento').value,
       municipio: document.getElementById('cliente-municipio').value,
       distrito: document.getElementById('cliente-distrito').value,
@@ -2173,6 +2283,7 @@ function abrirModalVerFactura(factura) {
   const btnAnular = document.getElementById('btn-anular-factura');
   const btnDescargarPDF = document.getElementById('btn-descargar-pdf');
   const btnImprimirPDF = document.getElementById('btn-imprimir-pdf');
+  const btnEnviarCorreo = document.getElementById('btn-enviar-correo');
   const btnVerJson = document.getElementById('btn-ver-json');
   const btnGuardarJson = document.getElementById('btn-guardar-json');
   const estadoFactura = normalizarEstadoFactura(factura.estado);
@@ -2182,6 +2293,7 @@ function abrirModalVerFactura(factura) {
   if (btnAnular) btnAnular.style.display = 'none';
   if (btnVerJson) btnVerJson.style.display = 'none';
   if (btnGuardarJson) btnGuardarJson.style.display = 'none';
+  if (btnEnviarCorreo) btnEnviarCorreo.style.display = 'none';
   
   if (estadoFactura === 'PENDIENTE') {
     btnFirmar.style.display = 'inline-flex';
@@ -2208,6 +2320,11 @@ function abrirModalVerFactura(factura) {
     if (btnGuardarJson) {
       btnGuardarJson.style.display = 'inline-flex';
       btnGuardarJson.onclick = () => guardarJsonDTE(factura);
+    }
+
+    if (btnEnviarCorreo && ['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estadoFactura)) {
+      btnEnviarCorreo.style.display = 'inline-flex';
+      btnEnviarCorreo.onclick = () => abrirModalCorreo(factura);
     }
 
     if (btnDescargarPDF) {
@@ -3228,11 +3345,98 @@ window.eliminarCliente = eliminarCliente;
 window.cerrarModalCliente = cerrarModalCliente;
 
 // Funciones para PDF
+function obtenerFacturaActualizadaParaPDF(factura) {
+  const facturaActualizada = state.facturas.find(f => Number(f.id) === Number(factura.id)) || factura;
+  return {
+    ...factura,
+    ...facturaActualizada,
+    estado: normalizarEstadoFactura(facturaActualizada.estado || factura.estado)
+  };
+}
+
+function abrirModalCorreo(factura) {
+  const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
+  const clienteData = typeof facturaPDF.cliente_datos === 'string'
+    ? JSON.parse(facturaPDF.cliente_datos)
+    : facturaPDF.cliente_datos || {};
+  const codigo = facturaPDF.codigo_generacion || facturaPDF.numero_control || '';
+  const modal = document.getElementById('modal-correo');
+  const form = document.getElementById('form-correo');
+
+  form.reset();
+  document.getElementById('correo-factura-id').value = facturaPDF.id;
+  document.getElementById('correo-destinatario').value = clienteData.email || '';
+  document.getElementById('correo-asunto').value = `Documento Tributario Electronico ${codigo}`;
+  document.getElementById('correo-mensaje').value =
+    `Estimado cliente,\n\nAdjunto encontrara el PDF y JSON enviados a Hacienda correspondientes al Documento Tributario Electronico ${codigo}.\n\nSaludos.`;
+  modal.classList.add('active');
+}
+
+function cerrarModalCorreo() {
+  document.getElementById('modal-correo')?.classList.remove('active');
+}
+
+async function procesarEnvioCorreoFactura() {
+  const btn = document.getElementById('btn-confirmar-correo');
+  try {
+    const facturaId = Number(document.getElementById('correo-factura-id').value);
+    const factura = state.facturas.find(f => Number(f.id) === facturaId);
+    const facturaPDF = factura ? obtenerFacturaActualizadaParaPDF(factura) : null;
+
+    if (!facturaPDF) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+
+    if (!state.configuracion?.correo_usuario || !state.configuracion?.correo_password) {
+      showNotification('Configure el correo Gmail y la contraseña de aplicación en Configuración.', 'error');
+      return;
+    }
+
+    const estadoFactura = normalizarEstadoFactura(facturaPDF.estado);
+    if (!['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estadoFactura)) {
+      showNotification('Solo puede enviar por correo documentos ya enviados a Hacienda.', 'warning');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+    }
+
+    const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
+    const resultado = await window.electronAPI.enviarCorreoDTE({
+      factura: facturaPDF,
+      dte: dteFirmado,
+      config: state.configuracion,
+      destinatario: document.getElementById('correo-destinatario').value.trim(),
+      asunto: document.getElementById('correo-asunto').value.trim(),
+      mensaje: document.getElementById('correo-mensaje').value
+    });
+
+    if (resultado.success) {
+      showNotification('Correo enviado exitosamente', 'success');
+      cerrarModalCorreo();
+    } else {
+      showNotification('Error al enviar correo: ' + resultado.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error enviando correo:', error);
+    showNotification('Error al enviar correo: ' + error.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Enviar Correo';
+    }
+  }
+}
+
 async function descargarPDFFactura(factura) {
   try {
     showNotification('Generando PDF...', 'info');
+    const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
     
-    const dteFirmado = parseDTEGuardado(factura.json_dte);
+    const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
     
     // Debug: Verificar estructura del DTE
     console.log('Estructura del DTE:', {
@@ -3243,10 +3447,10 @@ async function descargarPDFFactura(factura) {
     });
     
     const pdfResult = await window.electronAPI.generarPDF({
-      factura: factura,
+      factura: facturaPDF,
       dte: dteFirmado,
       config: state.configuracion,
-      selloRecepcion: factura.sello_recepcion
+      selloRecepcion: facturaPDF.sello_recepcion
     });
     
     if (pdfResult.success) {
@@ -3265,8 +3469,9 @@ async function descargarPDFFactura(factura) {
 async function abrirPDFFactura(factura) {
   try {
     showNotification('Generando PDF...', 'info');
+    const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
     
-    const dteFirmado = parseDTEGuardado(factura.json_dte);
+    const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
     
     // Debug: Verificar estructura del DTE
     console.log('Estructura del DTE:', {
@@ -3277,10 +3482,10 @@ async function abrirPDFFactura(factura) {
     });
     
     const pdfResult = await window.electronAPI.generarPDF({
-      factura: factura,
+      factura: facturaPDF,
       dte: dteFirmado,
       config: state.configuracion,
-      selloRecepcion: factura.sello_recepcion
+      selloRecepcion: facturaPDF.sello_recepcion
     });
     
     if (pdfResult.success) {
@@ -3298,3 +3503,4 @@ async function abrirPDFFactura(factura) {
 
 window.descargarPDFFactura = descargarPDFFactura;
 window.abrirPDFFactura = abrirPDFFactura;
+window.cerrarModalCorreo = cerrarModalCorreo;

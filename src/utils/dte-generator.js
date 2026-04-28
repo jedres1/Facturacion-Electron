@@ -97,6 +97,10 @@ class DTEGenerator {
    * Generar Nota de Crédito (Tipo 05)
    */
   generarNotaCredito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
+    if (!documentoRelacionado) {
+      throw new Error('La Nota de Crédito requiere un documento relacionado según schema MH.');
+    }
+
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
@@ -132,6 +136,10 @@ class DTEGenerator {
    * Generar Nota de Débito (Tipo 06)
    */
   generarNotaDebito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
+    if (!documentoRelacionado) {
+      throw new Error('La Nota de Débito requiere un documento relacionado según schema MH.');
+    }
+
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
@@ -412,7 +420,7 @@ class DTEGenerator {
       return {
         numItem: index + 1,
         tipoItem: item.tipo_item || 2,
-        numeroDocumento: item.numero_documento || null,
+        numeroDocumento: item.numero_documento || item.numeroDocumento || null,
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
         codTributo: null,
@@ -458,7 +466,7 @@ class DTEGenerator {
       totalLetras: this.numeroALetras(total),
       totalIva: totalIva,
       saldoFavor: 0,
-      condicionOperacion: resumen.condicion_operacion || 1, // 1=Contado, 2=Crédito, 3=Otro
+      condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1, // 1=Contado, 2=Crédito, 3=Otro
       pagos: this.normalizarPagos(resumen.pagos, total),
       numPagoElectronico: null
     };
@@ -504,7 +512,7 @@ class DTEGenerator {
       reteRenta: 0,
       montoTotalOperacion: total,
       totalLetras: this.numeroALetras(total),
-      condicionOperacion: resumen.condicion_operacion || 1
+      condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1
     };
   }
 

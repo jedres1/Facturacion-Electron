@@ -1,4 +1,4 @@
-const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const { PDFDocument, degrees, rgb, StandardFonts } = require('pdf-lib');
 const QRCode = require('qrcode');
 const fs = require('fs').promises;
 const path = require('path');
@@ -9,8 +9,8 @@ const path = require('path');
  */
 class PDFGenerator {
   constructor() {
-    this.pageWidth = 595.28; // A4 width in points
-    this.pageHeight = 841.89; // A4 height in points
+    this.pageWidth = 612; // Letter width in points
+    this.pageHeight = 792; // Letter height in points
     this.margin = 50;
     this.currentY = this.pageHeight - this.margin;
   }
@@ -24,13 +24,7 @@ class PDFGenerator {
    */
   async generarPDFFactura(factura, dte, config) {
     try {
-      // Normalizar estructura del DTE (puede venir con dteJson o directamente)
-      let dteData = dte.dteJson || dte;
-      
-      // Si no tiene identificacion directamente, podría estar en un nivel más profundo
-      if (!dteData.identificacion && dteData.dte) {
-        dteData = dteData.dte;
-      }
+      const dteData = this.normalizarDTE(dte);
       
       // Validar que el DTE tiene la estructura necesaria
       if (!dteData.identificacion) {
@@ -96,6 +90,8 @@ class PDFGenerator {
         this.drawSelloRecepcion(page, fontSmall, factura.sello_recepcion);
       }
 
+      this.drawWatermarks(page, fontBold, dteData, factura, config);
+
       // Generar PDF
       const pdfBytes = await pdfDoc.save();
       return Buffer.from(pdfBytes);
@@ -116,6 +112,97 @@ class PDFGenerator {
       font: font,
       color: rgb(0, 0, 0)
     });
+  }
+
+  normalizarDTE(dte) {
+    if (typeof dte === 'string') {
+      dte = JSON.parse(dte);
+    }
+
+    const candidatos = [
+      dte,
+      dte?.dteJson,
+      dte?.dte,
+      dte?.documentoFirmado,
+      dte?.documento
+    ];
+
+    for (let candidato of candidatos) {
+      if (typeof candidato === 'string') {
+        try {
+          candidato = JSON.parse(candidato);
+        } catch {
+          continue;
+        }
+      }
+
+      if (candidato?.identificacion) {
+        return candidato;
+      }
+    }
+
+    return dte || {};
+  }
+
+  esDocumentoPrueba(dte, config = {}) {
+    const ambienteDte = String(dte?.identificacion?.ambiente || '').toLowerCase();
+    const ambienteConfig = String(config?.hacienda_ambiente || '').toLowerCase();
+    return ambienteDte === '00' || ambienteDte === 'pruebas' || ambienteConfig === 'pruebas';
+  }
+
+  drawWatermarks(page, font, dte, factura, config) {
+    if (this.esDocumentoPrueba(dte, config)) {
+      this.drawCenteredWatermark(page, font, 'DOCUMENTO DE PRUEBA', {
+        size: 54,
+        yOffset: this.esDocumentoAnulado(factura) ? 95 : 0,
+        color: rgb(0.45, 0.45, 0.45),
+        opacity: 0.36
+      });
+    }
+
+    if (this.esDocumentoAnulado(factura)) {
+      this.drawCenteredWatermark(page, font, 'ANULADO', {
+        size: 96,
+        yOffset: -20,
+        color: rgb(0.7, 0, 0),
+        opacity: 0.58
+      });
+    }
+  }
+
+  drawCenteredWatermark(page, font, texto, opciones = {}) {
+    const size = opciones.size || 62;
+    const textWidth = font.widthOfTextAtSize(texto, size);
+    const textHeight = font.heightAtSize(size);
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
+    const angle = opciones.rotate ?? 35;
+    const radians = angle * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const centerX = pageWidth / 2;
+    const centerY = (pageHeight / 2) + (opciones.yOffset || 0);
+    const rotatedCenterOffsetX = (textWidth * cos - textHeight * sin) / 2;
+    const rotatedCenterOffsetY = (textWidth * sin + textHeight * cos) / 2;
+
+    page.drawText(texto, {
+      x: centerX - rotatedCenterOffsetX,
+      y: centerY - rotatedCenterOffsetY,
+      size,
+      font,
+      color: opciones.color || rgb(0.45, 0.45, 0.45),
+      opacity: opciones.opacity ?? 0.34,
+      rotate: degrees(angle)
+    });
+  }
+
+  esDocumentoAnulado(factura = {}) {
+    const estado = String(factura?.estado || '').toUpperCase();
+    return ['ANULADO', 'INVALIDADO', 'ANULADA', 'INVALIDADA'].includes(estado) ||
+      Boolean(factura?.sello_anulacion) ||
+      Boolean(factura?.json_anulacion) ||
+      Boolean(factura?.fecha_anulacion) ||
+      Boolean(factura?.motivo_anulacion);
   }
 
   /**
@@ -262,6 +349,7 @@ class PDFGenerator {
    * Dibujar tabla de items
    */
   async drawItemsTable(page, fontBold, fontRegular, items) {
+    items = Array.isArray(items) ? items : [];
     const tableWidth = this.pageWidth - 2 * this.margin;
     const colWidths = [40, 200, 60, 80, 80, 90]; // Cant, Desc, P.Unit, Desc, Exento/Gravado, Total
     
@@ -313,43 +401,48 @@ class PDFGenerator {
       }
       
       x = this.margin;
+      const cantidad = this.toMoneyNumber(item.cantidad);
+      const precioUni = this.toMoneyNumber(item.precioUni ?? item.precio_unitario);
+      const montoDescu = this.toMoneyNumber(item.montoDescu ?? item.descuento);
+      const ventaGravada = this.toMoneyNumber(item.ventaGravada);
+      const ventaExenta = this.toMoneyNumber(item.ventaExenta);
       
       // Cantidad
-      page.drawText(item.cantidad.toString(), {
+      page.drawText(cantidad.toString(), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[0];
       
       // Descripción (truncar si es muy largo)
-      const desc = this.truncateText(item.descripcion, 35);
+      const desc = this.truncateText(String(item.descripcion || ''), 35);
       page.drawText(desc, {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[1];
       
       // Precio Unitario
-      page.drawText(`$${item.precioUni.toFixed(2)}`, {
+      page.drawText(this.formatMoney(precioUni), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[2];
       
       // Descuento
-      page.drawText(`$${item.montoDescu.toFixed(2)}`, {
+      page.drawText(this.formatMoney(montoDescu), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[3];
       
       // Gravado/Exento
-      const valor = item.ventaGravada > 0 ? item.ventaGravada : item.ventaExenta;
-      const tipo = item.ventaGravada > 0 ? 'G' : 'E';
-      page.drawText(`$${valor.toFixed(2)} (${tipo})`, {
+      const valor = ventaGravada > 0 ? ventaGravada : ventaExenta;
+      const tipo = ventaGravada > 0 ? 'G' : 'E';
+      page.drawText(`${this.formatMoney(valor)} (${tipo})`, {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[4];
       
       // Total
-      const total = (item.cantidad * item.precioUni) - item.montoDescu;
-      page.drawText(`$${total.toFixed(2)}`, {
+      const total = (cantidad * precioUni) - montoDescu;
+      page.drawText(this.formatMoney(total), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       
@@ -371,6 +464,7 @@ class PDFGenerator {
    * Dibujar resumen de totales
    */
   async drawResumen(page, fontBold, fontRegular, resumen) {
+    resumen = resumen || {};
     const rightX = this.pageWidth - this.margin - 150;
     let y = this.currentY;
     
@@ -383,11 +477,12 @@ class PDFGenerator {
       { label: 'IVA (13%):', valor: resumen.totalIva || (resumen.tributos?.[0]?.valor || 0) },
       { label: 'IVA Retenido:', valor: resumen.ivaRete1 || 0 },
       { label: 'Retención Renta:', valor: resumen.reteRenta || 0 },
-      { label: 'TOTAL A PAGAR:', valor: resumen.totalPagar, bold: true, large: true }
+      { label: 'TOTAL A PAGAR:', valor: resumen.totalPagar ?? resumen.montoTotalOperacion ?? 0, bold: true, large: true }
     ];
     
     totales.forEach(item => {
-      if (item.valor === 0 && !item.bold) return; // Omitir líneas en cero
+      const valor = this.toMoneyNumber(item.valor);
+      if (valor === 0 && !item.bold) return; // Omitir líneas en cero
       
       const font = item.bold ? fontBold : fontRegular;
       const size = item.large ? 12 : 9;
@@ -399,7 +494,7 @@ class PDFGenerator {
         font: font
       });
       
-      page.drawText(`$${item.valor.toFixed(2)}`, {
+      page.drawText(this.formatMoney(valor), {
         x: rightX + 120,
         y: y,
         size: size,
@@ -418,7 +513,7 @@ class PDFGenerator {
       font: fontBold
     });
     
-    const letras = this.wrapText(resumen.totalLetras, 70);
+    const letras = this.wrapText(String(resumen.totalLetras || ''), 70);
     page.drawText(letras, {
       x: this.margin + 35,
       y: y,
@@ -535,6 +630,15 @@ class PDFGenerator {
       '14': 'FACTURA SUJETO EXCLUIDO'
     };
     return tipos[tipo] || 'DOCUMENTO TRIBUTARIO ELECTRÓNICO';
+  }
+
+  toMoneyNumber(valor) {
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero : 0;
+  }
+
+  formatMoney(valor) {
+    return `$${this.toMoneyNumber(valor).toFixed(2)}`;
   }
 
   formatCodigoGeneracion(codigo) {
