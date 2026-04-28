@@ -21,6 +21,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ajv": "^6.12.6",
     "axios": "^1.6.2",
     "better-sqlite3": "^9.2.2",
     "electron-store": "^8.1.0",

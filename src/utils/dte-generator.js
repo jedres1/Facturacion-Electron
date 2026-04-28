@@ -4,6 +4,8 @@
  */
 
 const crypto = require('crypto');
+const actividadesEconomicas = require('../data/actividades-economicas.json');
+const divisionGeografica = require('../data/division-geografica.json');
 
 class DTEGenerator {
   constructor() {
@@ -26,12 +28,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 1,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '01',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -48,7 +50,7 @@ class DTEGenerator {
       receptor: this.construirReceptorFactura(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumento(items),
+      cuerpoDocumento: this.construirCuerpoDocumentoFactura(items),
       resumen: this.construirResumenFactura(resumen),
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
@@ -62,12 +64,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('03', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('03', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 3,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '03',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -98,12 +100,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('05', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('05', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 3,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '05',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -133,12 +135,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('06', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('06', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 1,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '06',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -168,12 +170,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('11', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('11', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 1,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '11',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -202,12 +204,12 @@ class DTEGenerator {
     const now = new Date();
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
-    const numeroControl = this.generarNumeroControl('14', config.codigo_establecimiento, correlativo);
+    const numeroControl = this.generarNumeroControl('14', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
       identificacion: {
         version: 1,
-        ambiente: config.hacienda_ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
         tipoDte: '14',
         numeroControl: numeroControl,
         codigoGeneracion: codigoGeneracion,
@@ -232,16 +234,16 @@ class DTEGenerator {
    */
   construirEmisor(config) {
     return {
-      nit: config.nit,
-      nrc: config.nrc,
+      nit: this.limpiarDocumento(config.nit),
+      nrc: this.limpiarDocumento(config.nrc),
       nombre: config.nombre_empresa,
-      codActividad: config.actividad_economica,
-      descActividad: config.desc_actividad || '',
+      codActividad: this.normalizarCodigoActividad(config.actividad_economica),
+      descActividad: this.normalizarDescripcionActividad(config.actividad_economica, config.desc_actividad),
       nombreComercial: config.nombre_comercial || null,
       tipoEstablecimiento: '01',
       direccion: {
         departamento: config.departamento,
-        municipio: config.municipio,
+        municipio: this.normalizarMunicipio(config.departamento, config.municipio),
         complemento: config.direccion
       },
       telefono: config.telefono,
@@ -271,17 +273,18 @@ class DTEGenerator {
    */
   construirReceptorFactura(cliente) {
     if (!cliente) return null;
+    const tipoDocumento = cliente.tipo_documento || null;
 
     return {
-      tipoDocumento: cliente.tipo_documento || null,
-      numDocumento: cliente.numero_documento || null,
-      nrc: cliente.nrc || null,
+      tipoDocumento,
+      numDocumento: this.normalizarDocumentoReceptor(tipoDocumento, cliente.numero_documento) || null,
+      nrc: tipoDocumento === '36' ? (this.limpiarDocumento(cliente.nrc) || null) : null,
       nombre: cliente.nombre || null,
-      codActividad: cliente.giro || null,
-      descActividad: cliente.desc_actividad || null,
+      codActividad: cliente.giro ? this.normalizarCodigoActividad(cliente.giro) : null,
+      descActividad: cliente.giro ? this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad) : null,
       direccion: cliente.direccion ? {
         departamento: cliente.departamento,
-        municipio: cliente.municipio,
+        municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
         complemento: cliente.direccion
       } : null,
       telefono: cliente.telefono || null,
@@ -294,15 +297,15 @@ class DTEGenerator {
    */
   construirReceptorCCF(cliente) {
     return {
-      nit: cliente.numero_documento,
-      nrc: cliente.nrc,
+      nit: this.limpiarDocumento(cliente.numero_documento),
+      nrc: this.limpiarDocumento(cliente.nrc),
       nombre: cliente.nombre,
-      codActividad: cliente.giro,
-      descActividad: cliente.desc_actividad || '',
+      codActividad: this.normalizarCodigoActividad(cliente.giro),
+      descActividad: this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad),
       nombreComercial: cliente.nombre_comercial || null,
       direccion: {
         departamento: cliente.departamento,
-        municipio: cliente.municipio,
+        municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
         complemento: cliente.direccion
       },
       telefono: cliente.telefono || null,
@@ -323,7 +326,7 @@ class DTEGenerator {
       let ventaExenta = 0;
       let ventaNoSuj = 0;
 
-      const subtotal = (cantidad * precioUni) - montoDescu;
+      const subtotal = this.redondear((cantidad * precioUni) - montoDescu, 8);
 
       if (item.exento) {
         ventaExenta = subtotal;
@@ -335,17 +338,52 @@ class DTEGenerator {
         numItem: index + 1,
         tipoItem: item.tipo_item || 2, // 1=Bien, 2=Servicio, 3=Ambos
         numeroDocumento: null,
-        cantidad: cantidad,
+        cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
-        codTributo: item.exento ? null : '20', // 20=IVA
+        codTributo: null,
         uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
         descripcion: item.descripcion,
-        precioUni: precioUni,
-        montoDescu: montoDescu,
-        ventaNoSuj: ventaNoSuj,
-        ventaExenta: ventaExenta,
-        ventaGravada: ventaGravada,
-        tributos: item.exento ? null : ['20']
+        precioUni: this.redondear(precioUni, 8),
+        montoDescu: this.redondear(montoDescu, 8),
+        ventaNoSuj: this.redondear(ventaNoSuj, 8),
+        ventaExenta: this.redondear(ventaExenta, 8),
+        ventaGravada: this.redondear(ventaGravada, 8),
+        tributos: item.exento ? null : ['20'],
+        psv: 0,
+        noGravado: 0
+      };
+    });
+  }
+
+  construirCuerpoDocumentoFactura(items) {
+    return items.map((item, index) => {
+      const cantidad = parseFloat(item.cantidad);
+      const precioUni = parseFloat(item.precio_unitario);
+      const montoDescu = parseFloat(item.descuento || 0);
+      const subtotal = this.redondear((cantidad * precioUni) - montoDescu, 8);
+      const precioUniFactura = item.exento ? precioUni : this.redondear(precioUni * 1.13, 8);
+      const montoDescuFactura = item.exento ? montoDescu : this.redondear(montoDescu * 1.13, 8);
+      const subtotalFactura = item.exento ? subtotal : this.redondear(subtotal * 1.13, 8);
+      const ventaGravada = item.exento ? 0 : subtotalFactura;
+
+      return {
+        numItem: index + 1,
+        tipoItem: item.tipo_item || 2,
+        numeroDocumento: null,
+        cantidad: this.redondear(cantidad, 8),
+        codigo: item.codigo || null,
+        codTributo: null,
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        descripcion: item.descripcion,
+        precioUni: this.redondear(precioUniFactura, 8),
+        montoDescu: this.redondear(montoDescuFactura, 8),
+        ventaNoSuj: 0,
+        ventaExenta: this.redondear(item.exento ? subtotal : 0, 8),
+        ventaGravada: this.redondear(ventaGravada, 8),
+        tributos: null,
+        psv: 0,
+        noGravado: 0,
+        ivaItem: this.redondear(subtotal * 0.13)
       };
     });
   }
@@ -363,7 +401,7 @@ class DTEGenerator {
       let ventaExenta = 0;
       let ventaNoSuj = 0;
 
-      const subtotal = (cantidad * precioUni) - montoDescu;
+      const subtotal = this.redondear((cantidad * precioUni) - montoDescu, 8);
 
       if (item.exento) {
         ventaExenta = subtotal;
@@ -375,16 +413,16 @@ class DTEGenerator {
         numItem: index + 1,
         tipoItem: item.tipo_item || 2,
         numeroDocumento: item.numero_documento || null,
-        cantidad: cantidad,
+        cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
-        codTributo: item.exento ? null : '20',
+        codTributo: null,
         uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
         descripcion: item.descripcion,
-        precioUni: precioUni,
-        montoDescu: montoDescu,
-        ventaNoSuj: ventaNoSuj,
-        ventaExenta: ventaExenta,
-        ventaGravada: ventaGravada,
+        precioUni: this.redondear(precioUni, 8),
+        montoDescu: this.redondear(montoDescu, 8),
+        ventaNoSuj: this.redondear(ventaNoSuj, 8),
+        ventaExenta: this.redondear(ventaExenta, 8),
+        ventaGravada: this.redondear(ventaGravada, 8),
         tributos: item.exento ? null : ['20']
       };
     });
@@ -394,40 +432,34 @@ class DTEGenerator {
    * Construir resumen para Factura
    */
   construirResumenFactura(resumen) {
-    const totalIva = parseFloat(resumen.iva || 0);
-    const subtotal = parseFloat(resumen.subtotal || 0);
-    const total = parseFloat(resumen.total || 0);
+    const totalIva = this.redondear(resumen.iva || 0);
+    const subtotal = this.redondear(resumen.subtotal || 0);
+    const total = this.redondear(resumen.total || 0);
+    const montoTotalOperacion = this.redondear(resumen.montoTotalOperacion ?? subtotal);
+    const descuento = this.redondear(resumen.descuento || 0);
 
     return {
       totalNoSuj: 0,
-      totalExenta: parseFloat(resumen.exenta || 0),
-      totalGravada: parseFloat(resumen.gravada || 0),
+      totalExenta: this.redondear(resumen.exenta || 0),
+      totalGravada: this.redondear(resumen.gravada || 0),
       subTotalVentas: subtotal,
       descuNoSuj: 0,
       descuExenta: 0,
-      descuGravada: parseFloat(resumen.descuento || 0),
+      descuGravada: descuento,
       porcentajeDescuento: 0,
-      totalDescu: parseFloat(resumen.descuento || 0),
-      tributos: totalIva > 0 ? [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: totalIva }] : null,
+      totalDescu: descuento,
+      tributos: null,
       subTotal: subtotal,
       ivaRete1: 0,
       reteRenta: 0,
-      montoTotalOperacion: total,
+      montoTotalOperacion,
       totalNoGravado: 0,
       totalPagar: total,
       totalLetras: this.numeroALetras(total),
       totalIva: totalIva,
       saldoFavor: 0,
       condicionOperacion: resumen.condicion_operacion || 1, // 1=Contado, 2=Crédito, 3=Otro
-      pagos: resumen.pagos || [
-        {
-          codigo: '01', // 01=Billetes y monedas
-          montoPago: total,
-          referencia: null,
-          plazo: null,
-          periodo: null
-        }
-      ],
+      pagos: this.normalizarPagos(resumen.pagos, total),
       numPagoElectronico: null
     };
   }
@@ -437,7 +469,13 @@ class DTEGenerator {
    */
   construirResumenCCF(resumen) {
     const resultado = this.construirResumenFactura(resumen);
+    const totalIva = this.redondear(resumen.iva || 0);
+    const total = this.redondear(resumen.total || 0);
+    resultado.tributos = totalIva > 0
+      ? [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: totalIva }]
+      : null;
     resultado.ivaPerci1 = 0; // IVA percibido
+    resultado.montoTotalOperacion = total;
     delete resultado.totalIva; // No existe en CCF
     return resultado;
   }
@@ -481,17 +519,129 @@ class DTEGenerator {
    * Generar número de control
    * Formato: DTE-{tipoDte}-{codEstablecimiento}-{correlativo}
    */
-  generarNumeroControl(tipoDte, codEstablecimiento, correlativo = 1) {
-    const establecimiento = (codEstablecimiento || '0000').padStart(4, '0');
+  generarNumeroControl(tipoDte, codEstablecimiento, puntoVenta, correlativo = 1) {
+    const establecimiento = this.normalizarCodigoControl(codEstablecimiento, '0000');
+    const punto = this.normalizarCodigoControl(puntoVenta, '0000');
     const numeroCorrelativo = correlativo.toString().padStart(15, '0');
-    return `DTE-${tipoDte}-${establecimiento}-${numeroCorrelativo}`;
+    return `DTE-${tipoDte}-${establecimiento}${punto}-${numeroCorrelativo}`;
+  }
+
+  normalizarCodigoControl(valor, fallback) {
+    return String(valor || fallback)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .padStart(4, '0')
+      .slice(0, 4);
+  }
+
+  limpiarDocumento(valor) {
+    return String(valor || '').replace(/[^0-9]/g, '');
+  }
+
+  normalizarDocumentoReceptor(tipoDocumento, valor) {
+    const limpio = this.limpiarDocumento(valor);
+    if (!limpio) return '';
+    if (tipoDocumento === '13' && limpio.length === 9) {
+      return `${limpio.slice(0, 8)}-${limpio.slice(8)}`;
+    }
+    if (tipoDocumento === '36') {
+      return limpio;
+    }
+    return limpio;
+  }
+
+  normalizarMunicipio(departamento, municipio) {
+    const depto = this.limpiarDocumento(departamento).padStart(2, '0');
+    const valor = String(municipio || '').trim();
+    const municipioCatalogo = this.buscarMunicipioCatalogo(depto, valor);
+    if (municipioCatalogo) {
+      return municipioCatalogo.codigo.slice(2, 4);
+    }
+
+    const limpio = this.limpiarDocumento(valor);
+    if (!limpio) return limpio;
+
+    if (limpio.length >= 4 && limpio.startsWith(depto)) {
+      return limpio.slice(2, 4);
+    }
+
+    if (limpio.length > 2) {
+      return limpio.slice(-2);
+    }
+
+    return limpio.padStart(2, '0');
+  }
+
+  buscarMunicipioCatalogo(departamento, valor) {
+    const municipios = divisionGeografica.municipios?.[departamento] || [];
+    const valorNormalizado = String(valor || '').trim().toLowerCase();
+    if (!valorNormalizado) return null;
+
+    return municipios.find(municipio =>
+      municipio.codigo === valor ||
+      municipio.nombre.toLowerCase() === valorNormalizado
+    ) || null;
+  }
+
+  normalizarDescripcionActividad(codigo, descripcion) {
+    const descripcionLimpia = String(descripcion || '').trim();
+    if (descripcionLimpia) return descripcionLimpia;
+
+    const actividad = this.buscarActividad(codigo);
+
+    return actividad?.descripcion || '';
+  }
+
+  normalizarCodigoActividad(codigo) {
+    return this.buscarActividad(codigo)?.codigo || String(codigo || '').trim();
+  }
+
+  buscarActividad(codigo) {
+    const codigoLimpio = String(codigo || '').trim();
+    if (!codigoLimpio) return null;
+
+    return actividadesEconomicas.find(act => act.codigo === codigoLimpio) ||
+      actividadesEconomicas.find(act => act.codigo.startsWith(codigoLimpio)) ||
+      null;
+  }
+
+  normalizarPagos(pagos, total) {
+    const pagosBase = Array.isArray(pagos) && pagos.length > 0
+      ? pagos
+      : [{
+          codigo: '01',
+          montoPago: total,
+          referencia: null,
+          plazo: null,
+          periodo: null
+        }];
+
+    return pagosBase.map(pago => ({
+      ...pago,
+      montoPago: this.redondear(pago.montoPago),
+      referencia: pago.referencia || null,
+      plazo: pago.plazo || null,
+      periodo: pago.periodo || null
+    }));
+  }
+
+  redondear(valor, decimales = 2) {
+    return Number(Number(valor || 0).toFixed(decimales));
+  }
+
+  obtenerCodigoAmbiente(ambiente) {
+    const valor = String(ambiente || '').toLowerCase();
+    return valor === 'produccion' || valor === '01' ? '01' : '00';
   }
 
   /**
    * Formatear fecha YYYY-MM-DD
    */
   formatearFecha(date) {
-    return date.toISOString().split('T')[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   /**
@@ -626,15 +776,7 @@ class DTEGenerator {
       totalPagar: total,
       totalLetras: this.numeroALetras(total),
       condicionOperacion: resumen.condicion_operacion || 1,
-      pagos: resumen.pagos || [
-        {
-          codigo: '01',
-          montoPago: total,
-          referencia: null,
-          plazo: null,
-          periodo: null
-        }
-      ],
+      pagos: this.normalizarPagos(resumen.pagos, total),
       observaciones: resumen.observaciones || null
     };
   }
@@ -657,15 +799,7 @@ class DTEGenerator {
       totalPagar: total,
       totalLetras: this.numeroALetras(total),
       condicionOperacion: resumen.condicion_operacion || 1,
-      pagos: resumen.pagos || [
-        {
-          codigo: '01',
-          montoPago: total,
-          referencia: null,
-          plazo: null,
-          periodo: null
-        }
-      ],
+      pagos: this.normalizarPagos(resumen.pagos, total),
       observaciones: resumen.observaciones || null
     };
   }

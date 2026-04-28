@@ -15,7 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProductoById: (id) => ipcRenderer.invoke('db:getProductoById', id),
   getFacturas: (filtros) => ipcRenderer.invoke('db:getFacturas', filtros),
   addFactura: (factura) => ipcRenderer.invoke('db:addFactura', factura),
-  updateFacturaEstado: (id, estado, selloRecepcion) => ipcRenderer.invoke('db:updateFacturaEstado', { id, estado, selloRecepcion }),
+  updateFacturaEstado: (id, estado, selloRecepcion, observaciones, jsonDte) =>
+    ipcRenderer.invoke('db:updateFacturaEstado', { id, estado, selloRecepcion, observaciones, jsonDte }),
+  registrarAnulacion: (id, anulacion) =>
+    ipcRenderer.invoke('db:registrarAnulacion', { id, anulacion }),
   getSiguienteCorrelativo: (tipoDte) => ipcRenderer.invoke('db:getSiguienteCorrelativo', tipoDte),
   getConfiguracion: () => ipcRenderer.invoke('db:getConfiguracion'),
   updateConfiguracion: (config) => ipcRenderer.invoke('db:updateConfiguracion', config),
@@ -23,13 +26,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API de Hacienda
   autenticar: (credenciales) => ipcRenderer.invoke('hacienda:autenticar', credenciales),
   enviarDTE: (data) => ipcRenderer.invoke('hacienda:enviarDTE', data),
+  anularDTE: (data) => ipcRenderer.invoke('hacienda:anularDTE', data),
   consultarDTE: (data) => ipcRenderer.invoke('hacienda:consultarDTE', data),
   
   // Firmador
   firmarDocumento: (data) => ipcRenderer.invoke('firmador:firmarDocumento', data),
+  verificarFirmadorSVFE: () => ipcRenderer.invoke('firmador:estadoSVFE'),
+  validarCertificado: (data) => ipcRenderer.invoke('firmador:validarCertificado', data),
   
   // Generador de DTEs
   generarDTE: (data) => ipcRenderer.invoke('dte:generar', data),
+  guardarJsonDTE: (data) => ipcRenderer.invoke('dte:guardarJson', data),
   
   // Generador de PDFs
   generarPDF: (data) => ipcRenderer.invoke('pdf:generar', data),
@@ -45,4 +52,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Diálogos del sistema
   selectFile: (options) => ipcRenderer.invoke('dialog:selectFile', options)
 });
-

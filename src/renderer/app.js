@@ -12,7 +12,7 @@ let state = {
 };
 
 // Actividades Económicas - Clasificación BCR Rev. 4.0
-const actividadesEconomicas = [
+let actividadesEconomicas = [
   { codigo: '01', descripcion: 'Producción agrícola, pecuaria, caza y actividades de servicios conexas' },
   { codigo: '02', descripcion: 'Silvicultura y extracción de madera' },
   { codigo: '03', descripcion: 'Pesca y acuicultura' },
@@ -105,9 +105,51 @@ const actividadesEconomicas = [
 
 // División geográfica se carga desde JSON externo en window.divisionGeografica
 
+async function cargarCatalogoActividadesEconomicas() {
+  try {
+    const response = await fetch('../data/actividades-economicas.json');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const catalogo = await response.json();
+    if (!Array.isArray(catalogo) || catalogo.length === 0) {
+      throw new Error('Catálogo vacío o inválido');
+    }
+
+    actividadesEconomicas = catalogo
+      .filter(act => act.codigo && act.descripcion)
+      .map(act => ({
+        codigo: String(act.codigo).trim(),
+        descripcion: String(act.descripcion).trim()
+      }));
+
+    poblarDatalistActividades('actividades-economicas');
+    poblarDatalistActividades('config-actividades-economicas');
+    console.log(`Catálogo de actividades económicas cargado: ${actividadesEconomicas.length} registros`);
+  } catch (error) {
+    console.error('Error cargando catálogo de actividades económicas:', error);
+    console.warn('Se usará el catálogo resumido embebido como respaldo.');
+  }
+}
+
+function poblarDatalistActividades(datalistId) {
+  const datalist = document.getElementById(datalistId);
+  if (!datalist) return;
+
+  datalist.innerHTML = '';
+  actividadesEconomicas.forEach(act => {
+    const option = document.createElement('option');
+    option.value = `${act.codigo} - ${act.descripcion}`;
+    datalist.appendChild(option);
+  });
+}
+
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Aplicación iniciada');
+
+  await cargarCatalogoActividadesEconomicas();
   
   // Configurar navegación
   setupNavigation();
@@ -135,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Establecer fecha actual en filtros
 function establecerFechaActualFiltros() {
   const hoy = new Date();
-  const fechaStr = hoy.toISOString().split('T')[0];
+  const fechaStr = formatearFechaLocal(hoy);
   
   const fechaDesde = document.getElementById('fecha-desde');
   const fechaHasta = document.getElementById('fecha-hasta');
@@ -246,17 +288,26 @@ function verificarEstadoConexion() {
 
 // Actualizar dashboard
 function updateDashboard() {
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = formatearFechaLocal(new Date());
   const facturasHoy = state.facturas.filter(f => f.fecha_emision?.startsWith(hoy));
+  const esEnviadaHacienda = (factura) => {
+    const estado = normalizarEstadoFactura(factura.estado);
+    return estado === 'ENVIADO' || estado === 'ACEPTADO';
+  };
+  const esAnulada = (factura) => normalizarEstadoFactura(factura.estado) === 'ANULADO';
   
-  const totalHoy = facturasHoy.reduce((sum, f) => sum + (f.total || 0), 0);
-  const enviadas = state.facturas.filter(f => f.estado === 'ENVIADO' || f.estado === 'ACEPTADO').length;
-  const pendientes = state.facturas.filter(f => f.estado === 'PENDIENTE').length;
+  const totalHoy = facturasHoy
+    .filter(esEnviadaHacienda)
+    .reduce((sum, f) => sum + (f.total || 0), 0);
+  const enviadas = state.facturas.filter(esEnviadaHacienda).length;
+  const pendientes = state.facturas.filter(f => !esEnviadaHacienda(f) && !esAnulada(f)).length;
+  const anuladas = state.facturas.filter(esAnulada).length;
   
   document.getElementById('facturas-hoy').textContent = facturasHoy.length;
   document.getElementById('total-hoy').textContent = formatCurrency(totalHoy);
   document.getElementById('enviadas-hacienda').textContent = enviadas;
   document.getElementById('pendientes').textContent = pendientes;
+  document.getElementById('anuladas-hacienda').textContent = anuladas;
   
   // Tabla de recientes
   const tbody = document.querySelector('#tabla-recientes tbody');
@@ -283,6 +334,7 @@ function updateDashboard() {
 async function loadFacturas() {
   try {
     state.facturas = await window.electronAPI.getFacturas({});
+    updateDashboard();
     
     // Aplicar filtros
     let facturasFiltradas = [...state.facturas];
@@ -306,7 +358,7 @@ async function loadFacturas() {
     }
     
     if (estadoFiltro) {
-      facturasFiltradas = facturasFiltradas.filter(f => f.estado === estadoFiltro);
+      facturasFiltradas = facturasFiltradas.filter(f => normalizarEstadoFactura(f.estado) === estadoFiltro);
     }
     
     const tbody = document.querySelector('#tabla-facturas tbody');
@@ -316,6 +368,7 @@ async function loadFacturas() {
     } else {
       tbody.innerHTML = facturasFiltradas.map(f => {
         const clienteData = JSON.parse(f.cliente_datos || '{}');
+        const estado = normalizarEstadoFactura(f.estado);
         return `
           <tr>
             <td>${formatDate(f.fecha_emision)}</td>
@@ -325,7 +378,9 @@ async function loadFacturas() {
             <td><span class="badge badge-${getEstadoBadgeClass(f.estado)}">${f.estado}</span></td>
             <td>
               <button class="btn btn-small btn-primary" onclick="verFactura(${f.id})">Ver</button>
-              ${f.estado === 'PENDIENTE' ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
+              ${estado === 'PENDIENTE' ? `<button class="btn btn-small btn-success" onclick="firmarFactura(${f.id})">Firmar</button>` : ''}
+              ${estado === 'FIRMADO' ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
+              ${estado === 'ENVIADO' ? `<button class="btn btn-small btn-danger" onclick="anularFactura(${f.id})">Anular</button>` : ''}
             </td>
           </tr>
         `;
@@ -438,8 +493,10 @@ async function loadConfiguracion() {
         const actividad = actividadesEconomicas.find(a => a.codigo === config.actividad_economica);
         if (actividad) {
           document.getElementById('config-actividad').value = `${actividad.codigo} - ${actividad.descripcion}`;
+          document.getElementById('config-actividad').setAttribute('data-codigo', actividad.codigo);
         } else {
           document.getElementById('config-actividad').value = config.actividad_economica;
+          document.getElementById('config-actividad').removeAttribute('data-codigo');
         }
       }
       
@@ -470,7 +527,7 @@ async function loadConfiguracion() {
       document.getElementById('config-punto-venta').value = config.punto_venta || '';
       
       // Tipo de firma y credenciales
-      const tipoFirma = config.tipo_firma || 'web';
+      const tipoFirma = config.tipo_firma || 'svfe';
       document.getElementById('config-tipo-firma').value = tipoFirma;
       
       // Mostrar/ocultar opciones según tipo de firma
@@ -495,7 +552,7 @@ function toggleFirmaOptions(tipo) {
   const webOptions = document.getElementById('firma-web-options');
   const localOptions = document.getElementById('firma-local-options');
   
-  if (tipo === 'web') {
+  if (tipo === 'web' || tipo === 'svfe') {
     webOptions.style.display = 'grid';
     localOptions.style.display = 'none';
   } else {
@@ -575,6 +632,12 @@ function setupEventListeners() {
   document.getElementById('form-firmador')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     await procesarFirmaDocumento();
+  });
+
+  // Form anulación
+  document.getElementById('form-anulacion')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await procesarAnulacionFactura();
   });
   
   // Botón seleccionar certificado
@@ -807,13 +870,10 @@ function cargarDistritosConfig(codigoMunicipio) {
 // Guardar configuración
 async function guardarConfiguracion() {
   try {
-    // Obtener valor de actividad y extraer solo el código
-    const actividadInput = document.getElementById('config-actividad');
-    let actividadValue = actividadInput.value;
-    
-    // Si tiene el formato "XX - Descripción", extraer solo el código
-    if (actividadValue.includes(' - ')) {
-      actividadValue = actividadValue.split(' - ')[0].trim();
+    const actividadValue = extraerCodigoActividad(document.getElementById('config-actividad'));
+    if (!validarCodigoActividad(actividadValue)) {
+      showNotification('Seleccione una actividad económica válida de 5 dígitos para la empresa', 'error');
+      return;
     }
     
     const config = {
@@ -887,26 +947,28 @@ async function generarFactura() {
     
     // Obtener tipo de DTE
     const tipoDte = document.getElementById('tipo-dte').value;
+
+    const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion);
+    if (errorReceptor) {
+      showNotification(errorReceptor, 'error');
+      return;
+    }
     
     // Preparar datos del cliente para el generador
     const clienteDatos = {
-      tipoDocumento: cliente.tipo_documento,
-      numeroDocumento: cliente.numero_documento,
+      tipo_documento: cliente.tipo_documento,
+      numero_documento: cliente.numero_documento,
+      nrc: cliente.nrc,
       nombre: cliente.nombre,
+      nombre_comercial: cliente.nombre_comercial,
+      giro: cliente.giro,
+      desc_actividad: cliente.giro ? obtenerDescripcionActividad(cliente.giro) : null,
       telefono: cliente.telefono,
       email: cliente.email,
-      direccion: {
-        complemento: cliente.direccion,
-        municipio: cliente.municipio,
-        departamento: cliente.departamento
-      }
+      direccion: cliente.direccion,
+      municipio: cliente.municipio,
+      departamento: cliente.departamento
     };
-    
-    // Si es CCF, agregar NIT y NRC si están disponibles
-    if (tipoDte === '03') {
-      if (cliente.nit) clienteDatos.nit = cliente.nit;
-      if (cliente.nrc) clienteDatos.nrc = cliente.nrc;
-    }
     
     // Preparar items para el generador
     const items = state.currentFactura.items.map((item, index) => ({
@@ -916,21 +978,37 @@ async function generarFactura() {
       cantidad: item.cantidad,
       codigo: item.codigo,
       codTributo: item.exento ? null : '20', // '20' = IVA 13%
-      uniMedida: 99, // 99 = Unidad
+      unidad_medida: item.unidad_medida || 'UND',
       descripcion: item.descripcion,
-      precioUni: item.precioUnitario,
+      precio_unitario: item.precioUnitario,
       montoDescu: item.descuento || 0,
+      descuento: item.descuento || 0,
+      exento: item.exento,
       ventaNoSuj: item.exento ? (item.cantidad * item.precioUnitario) - (item.descuento || 0) : 0,
       ventaExenta: 0,
       ventaGravada: !item.exento ? (item.cantidad * item.precioUnitario) - (item.descuento || 0) : 0
     }));
     
     // Preparar resumen para el generador
+    const esFacturaConsumidorFinal = tipoDte === '01';
+    const totalGravadoDte = esFacturaConsumidorFinal
+      ? roundMoney(resumen.subtotalGravado + resumen.totalIva)
+      : resumen.subtotalGravado;
+    const subtotalDte = esFacturaConsumidorFinal
+      ? roundMoney(totalGravadoDte + resumen.subtotalExento)
+      : resumen.subtotalTotal;
+
     const resumenDte = {
+      subtotal: subtotalDte,
+      total: resumen.total,
+      iva: resumen.totalIva,
+      gravada: totalGravadoDte,
+      exenta: 0,
+      descuento: resumen.totalDescuento,
       totalNoSuj: resumen.subtotalExento,
       totalExenta: 0,
-      totalGravada: resumen.subtotalGravado,
-      subTotalVentas: resumen.subtotalTotal,
+      totalGravada: totalGravadoDte,
+      subTotalVentas: subtotalDte,
       descuNoSuj: 0,
       descuExenta: 0,
       descuGravada: resumen.totalDescuento,
@@ -940,17 +1018,17 @@ async function generarFactura() {
         descripcion: 'Impuesto al Valor Agregado 13%',
         valor: resumen.totalIva
       }] : null,
-      subTotal: resumen.subtotalTotal,
+      subTotal: subtotalDte,
       ivaRete1: 0,
       reteRenta: 0,
-      montoTotalOperacion: resumen.total,
+      montoTotalOperacion: roundMoney(resumen.total),
       totalNoGravado: 0,
-      totalPagar: resumen.total,
+      totalPagar: roundMoney(resumen.total),
       totalLetras: numeroALetras(resumen.total),
       condicionOperacion: parseInt(document.getElementById('condicion-operacion').value),
       pagos: [{
         codigo: '01', // Efectivo
-        montoPago: resumen.total,
+        montoPago: roundMoney(resumen.total),
         referencia: null,
         plazo: null,
         periodo: null
@@ -960,7 +1038,10 @@ async function generarFactura() {
     // Generar DTE usando el generador oficial
     const resultadoDte = await window.electronAPI.generarDTE({
       tipo: tipoDte,
-      config: state.configuracion,
+      config: {
+        ...state.configuracion,
+        desc_actividad: obtenerDescripcionActividad(state.configuracion.actividad_economica)
+      },
       cliente: clienteDatos,
       items: items,
       resumen: resumenDte,
@@ -1001,13 +1082,14 @@ async function generarFactura() {
       descuento: resumen.totalDescuento,
       condicion_operacion: resumenDte.condicionOperacion,
       estado: 'PENDIENTE',
-      json_dte: JSON.stringify(dte)
+      json_dte: dte
     };
 
     // Guardar en base de datos
     const result = await window.electronAPI.addFactura(factura);
     
     if (result) {
+      const facturaGuardadaId = Number(result.lastInsertRowid || result.id);
       showNotification('Factura generada exitosamente según schema oficial MH', 'success');
       
       // Generar PDF automáticamente
@@ -1024,7 +1106,7 @@ async function generarFactura() {
         
         if (pdfResult.success) {
           console.log('PDF generado en:', pdfResult.pdfPath);
-          showNotification('✓ PDF generado exitosamente', 'success');
+          showNotification('✓ PDF generado exitosamente: ' + pdfResult.pdfPath, 'success');
         } else {
           console.error('Error generando PDF:', pdfResult.error);
           showNotification('⚠ Factura guardada pero no se pudo generar PDF', 'warning');
@@ -1039,9 +1121,21 @@ async function generarFactura() {
       // Actualizar estadísticas
       await loadInitialData();
       updateDashboard();
+
+      // Asegurar que la factura recién generada sea visible aunque haya filtros activos.
+      const fechaDesde = document.getElementById('fecha-desde');
+      const fechaHasta = document.getElementById('fecha-hasta');
+      if (fechaDesde) fechaDesde.value = dte.identificacion.fecEmi;
+      if (fechaHasta) fechaHasta.value = dte.identificacion.fecEmi;
       
       // Cambiar a vista de facturas
       switchView('facturas');
+      await loadFacturas();
+
+      const facturaGuardada = state.facturas.find(f => f.id === facturaGuardadaId);
+      if (facturaGuardada) {
+        abrirModalVerFactura(facturaGuardada);
+      }
     }
   } catch (error) {
     console.error('Error generando factura:', error);
@@ -1077,20 +1171,25 @@ function calcularResumenFactura() {
   let totalDescuento = 0;
 
   state.currentFactura.items.forEach(item => {
-    const subtotal = (item.cantidad * item.precioUnitario) - item.descuento;
+    const subtotal = roundMoney((item.cantidad * item.precioUnitario) - item.descuento);
     
     if (item.exento) {
       subtotalExento += subtotal;
     } else {
       subtotalGravado += subtotal;
-      totalIva += subtotal * 0.13;
+      totalIva += roundMoney(subtotal * 0.13);
     }
     
     totalDescuento += item.descuento;
   });
 
-  const subtotalTotal = subtotalGravado + subtotalExento;
-  const total = subtotalTotal + totalIva;
+  subtotalGravado = roundMoney(subtotalGravado);
+  subtotalExento = roundMoney(subtotalExento);
+  totalIva = roundMoney(totalIva);
+  totalDescuento = roundMoney(totalDescuento);
+
+  const subtotalTotal = roundMoney(subtotalGravado + subtotalExento);
+  const total = roundMoney(subtotalTotal + totalIva);
 
   return {
     subtotalGravado,
@@ -1100,6 +1199,10 @@ function calcularResumenFactura() {
     total,
     totalDescuento
   };
+}
+
+function roundMoney(value) {
+  return Number(Number(value || 0).toFixed(2));
 }
 
 // Generar número de control
@@ -1185,8 +1288,100 @@ function formatCurrency(value) {
 
 function formatDate(dateString) {
   if (!dateString) return 'N/A';
+  const soloFecha = String(dateString).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (soloFecha) {
+    const [, year, month, day] = soloFecha;
+    return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('es-SV');
+  }
+
   const date = new Date(dateString);
   return date.toLocaleDateString('es-SV');
+}
+
+function formatearFechaLocal(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatearHoraLocal(date) {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function refrescarFechaEmisionDTE(dte) {
+  if (!dte?.identificacion) return dte;
+
+  const ahora = new Date();
+  dte.identificacion.fecEmi = formatearFechaLocal(ahora);
+  dte.identificacion.horEmi = formatearHoraLocal(ahora);
+  delete dte.firmaMh;
+  delete dte.documentoFirmado;
+  delete dte.documento;
+  delete dte.firma;
+
+  return dte;
+}
+
+function limpiarDocumentoFiscal(valor) {
+  return String(valor || '').replace(/[^0-9]/g, '');
+}
+
+function validarReceptorParaHacienda(tipoDte, cliente, config) {
+  if (!['03', '05', '06'].includes(String(tipoDte || ''))) return null;
+
+  const nitEmisor = limpiarDocumentoFiscal(config?.nit || config?.hacienda_usuario);
+  const nitReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
+
+  if (!nitReceptor || nitReceptor.length !== 14) {
+    return 'Para CCF/Notas el receptor debe tener NIT válido de 14 dígitos.';
+  }
+
+  if (nitEmisor && nitReceptor === nitEmisor) {
+    return 'Para CCF/Notas el receptor no puede ser el mismo NIT del emisor. Seleccione un cliente/contribuyente distinto.';
+  }
+
+  return null;
+}
+
+function validarReceptorDTEParaHacienda(dte, config) {
+  const tipoDte = dte?.identificacion?.tipoDte;
+  if (!['03', '05', '06'].includes(String(tipoDte || ''))) return null;
+
+  const nitEmisor = limpiarDocumentoFiscal(config?.nit || dte?.emisor?.nit);
+  const nitReceptor = limpiarDocumentoFiscal(dte?.receptor?.nit);
+
+  if (!nitReceptor || nitReceptor.length !== 14) {
+    return 'El DTE firmado tiene receptor.nit inválido. Genere nuevamente el DTE con un receptor contribuyente válido.';
+  }
+
+  if (nitEmisor && nitReceptor === nitEmisor) {
+    return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+  }
+
+  return null;
+}
+
+function formatearObservaciones(observaciones) {
+  const lista = Array.isArray(observaciones) ? observaciones : [observaciones];
+
+  return lista
+    .filter(obs => obs !== null && obs !== undefined && obs !== '')
+    .map(obs => {
+      if (typeof obs === 'string') return obs;
+      if (typeof obs !== 'object') return String(obs);
+
+      const partes = [
+        obs.codigo || obs.cod || obs.codigoError,
+        obs.campo || obs.path || obs.propiedad,
+        obs.mensaje || obs.message || obs.descripcion || obs.error
+      ].filter(Boolean);
+
+      return partes.length ? partes.join(' - ') : JSON.stringify(obs);
+    });
 }
 
 function getEstadoBadgeClass(estado) {
@@ -1194,10 +1389,109 @@ function getEstadoBadgeClass(estado) {
     'PENDIENTE': 'warning',
     'FIRMADO': 'info',
     'ENVIADO': 'info',
+    'PROCESADO': 'info',
+    'RECIBIDO': 'info',
     'ACEPTADO': 'success',
+    'ANULADO': 'danger',
+    'INVALIDADO': 'danger',
     'RECHAZADO': 'danger'
   };
   return classes[estado] || 'secondary';
+}
+
+function normalizarEstadoFactura(estado) {
+  if (!estado) return 'PENDIENTE';
+
+  const estadoNormalizado = estado.toString().toUpperCase();
+
+  if (['PROCESADO', 'RECIBIDO', 'ENVIADO'].includes(estadoNormalizado)) {
+    return 'ENVIADO';
+  }
+
+  if (['ANULADO', 'INVALIDADO'].includes(estadoNormalizado)) {
+    return 'ANULADO';
+  }
+
+  return estadoNormalizado;
+}
+
+function parseDTEGuardado(jsonDte) {
+  if (!jsonDte) return {};
+  let parsed = typeof jsonDte === 'string' ? JSON.parse(jsonDte) : jsonDte;
+  if (typeof parsed === 'string') {
+    parsed = JSON.parse(parsed);
+  }
+  return parsed;
+}
+
+function obtenerJsonDTEFormateado(factura) {
+  const dte = parseDTEGuardado(factura.json_dte);
+  return JSON.stringify(dte, null, 2);
+}
+
+function obtenerNombreArchivoJson(factura) {
+  const codigo = factura.codigo_generacion || factura.numero_control || `factura-${factura.id}`;
+  return `DTE_${String(codigo).replace(/[^A-Za-z0-9_-]/g, '_')}.json`;
+}
+
+function escaparHtml(valor) {
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function verJsonDTE(factura) {
+  try {
+    const json = obtenerJsonDTEFormateado(factura);
+    const ventana = window.open('', '_blank');
+
+    if (!ventana) {
+      showNotification('No se pudo abrir la ventana del JSON. Revise el bloqueo de ventanas emergentes.', 'error');
+      return;
+    }
+
+    ventana.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${escaparHtml(obtenerNombreArchivoJson(factura))}</title>
+          <style>
+            body { margin: 0; background: #f8f9fa; color: #1f2933; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+            header { position: sticky; top: 0; padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #d9e2ec; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            pre { margin: 0; padding: 16px; white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.45; }
+          </style>
+        </head>
+        <body>
+          <header>${escaparHtml(obtenerNombreArchivoJson(factura))}</header>
+          <pre>${escaparHtml(json)}</pre>
+        </body>
+      </html>
+    `);
+    ventana.document.close();
+  } catch (error) {
+    showNotification('Error al mostrar JSON: ' + error.message, 'error');
+  }
+}
+
+async function guardarJsonDTE(factura) {
+  try {
+    const result = await window.electronAPI.guardarJsonDTE({
+      nombreArchivo: obtenerNombreArchivoJson(factura),
+      contenido: obtenerJsonDTEFormateado(factura)
+    });
+
+    if (result.success) {
+      showNotification('JSON guardado en: ' + result.filePath, 'success');
+    } else if (!result.canceled) {
+      showNotification('No se pudo guardar JSON: ' + (result.error || 'Error desconocido'), 'error');
+    }
+  } catch (error) {
+    showNotification('Error al guardar JSON: ' + error.message, 'error');
+  }
 }
 
 function showNotification(message, type = 'info') {
@@ -1240,7 +1534,7 @@ window.enviarFactura = async function(id) {
     return;
   }
   
-  await enviarFacturaHacienda(factura);
+  await enviarFacturaHacienda(id);
 };
 
 window.editarCliente = function(id) {
@@ -1306,8 +1600,10 @@ function abrirModalCliente(cliente = null) {
       const actividad = actividadesEconomicas.find(a => a.codigo === cliente.giro);
       if (actividad) {
         document.getElementById('cliente-giro').value = `${actividad.codigo} - ${actividad.descripcion}`;
+        document.getElementById('cliente-giro').setAttribute('data-codigo', actividad.codigo);
       } else {
         document.getElementById('cliente-giro').value = cliente.giro;
+        document.getElementById('cliente-giro').removeAttribute('data-codigo');
       }
     }
   } else {
@@ -1331,13 +1627,10 @@ async function guardarCliente() {
   try {
     const clienteId = document.getElementById('cliente-id').value;
     
-    // Obtener valor del giro y extraer solo el código
-    const giroInput = document.getElementById('cliente-giro');
-    let giroValue = giroInput.value;
-    
-    // Si tiene el formato "XX - Descripción", extraer solo el código
-    if (giroValue.includes(' - ')) {
-      giroValue = giroValue.split(' - ')[0].trim();
+    const giroValue = extraerCodigoActividad(document.getElementById('cliente-giro'));
+    if (!validarCodigoActividad(giroValue)) {
+      showNotification('Seleccione una actividad económica válida de 5 dígitos para el cliente', 'error');
+      return;
     }
     
     const clienteData = {
@@ -1437,13 +1730,13 @@ function validarDocumento() {
   const tipo = document.getElementById('cliente-tipo-documento').value;
   const numero = document.getElementById('cliente-numero-documento').value;
   
-  if (tipo === '13') { // NIT
-    const nitRegex = /^\d{4}-\d{6}-\d{3}-\d$/;
+  if (tipo === '36') { // NIT
+    const nitRegex = /^(\d{4}-\d{6}-\d{3}-\d|\d{14}|\d{9})$/;
     if (!nitRegex.test(numero)) {
       showNotification('Formato de NIT inválido. Use: 0000-000000-000-0', 'error');
       return false;
     }
-  } else if (tipo === '36') { // DUI
+  } else if (tipo === '13') { // DUI
     const duiRegex = /^\d{8}-\d$/;
     if (!duiRegex.test(numero)) {
       showNotification('Formato de DUI inválido. Use: 00000000-0', 'error');
@@ -1468,9 +1761,9 @@ document.addEventListener('DOMContentLoaded', () => {
       numeroDocInput.value = '';
       const tipo = tipoDocSelect.value;
       
-      if (tipo === '13') {
+      if (tipo === '36') {
         numeroDocInput.placeholder = '0000-000000-000-0';
-      } else if (tipo === '36') {
+      } else if (tipo === '13') {
         numeroDocInput.placeholder = '00000000-0';
       } else {
         numeroDocInput.placeholder = 'Número de documento';
@@ -1877,24 +2170,46 @@ function abrirModalVerFactura(factura) {
   // Mostrar botones según el estado
   const btnFirmar = document.getElementById('btn-firmar-factura');
   const btnEnviar = document.getElementById('btn-enviar-factura');
+  const btnAnular = document.getElementById('btn-anular-factura');
   const btnDescargarPDF = document.getElementById('btn-descargar-pdf');
   const btnImprimirPDF = document.getElementById('btn-imprimir-pdf');
+  const btnVerJson = document.getElementById('btn-ver-json');
+  const btnGuardarJson = document.getElementById('btn-guardar-json');
+  const estadoFactura = normalizarEstadoFactura(factura.estado);
   
   btnFirmar.style.display = 'none';
   btnEnviar.style.display = 'none';
+  if (btnAnular) btnAnular.style.display = 'none';
+  if (btnVerJson) btnVerJson.style.display = 'none';
+  if (btnGuardarJson) btnGuardarJson.style.display = 'none';
   
-  if (factura.estado === 'PENDIENTE') {
+  if (estadoFactura === 'PENDIENTE') {
     btnFirmar.style.display = 'inline-flex';
     btnFirmar.onclick = () => firmarFactura(factura.id);
   }
   
-  if (factura.estado === 'FIRMADO') {
+  if (estadoFactura === 'FIRMADO') {
     btnEnviar.style.display = 'inline-flex';
     btnEnviar.onclick = () => enviarFacturaHacienda(factura.id);
+  }
+
+  if (estadoFactura === 'ENVIADO' && btnAnular) {
+    btnAnular.style.display = 'inline-flex';
+    btnAnular.onclick = () => anularFacturaHacienda(factura.id);
   }
   
   // Botones PDF siempre visibles (si hay DTE generado)
   if (factura.json_dte) {
+    if (btnVerJson) {
+      btnVerJson.style.display = 'inline-flex';
+      btnVerJson.onclick = () => verJsonDTE(factura);
+    }
+
+    if (btnGuardarJson) {
+      btnGuardarJson.style.display = 'inline-flex';
+      btnGuardarJson.onclick = () => guardarJsonDTE(factura);
+    }
+
     if (btnDescargarPDF) {
       btnDescargarPDF.style.display = 'inline-flex';
       btnDescargarPDF.onclick = () => descargarPDFFactura(factura);
@@ -1931,11 +2246,13 @@ async function firmarFactura(facturaId) {
     }
     
     // Verificar tipo de firma configurado
-    const tipoFirma = state.configuracion.tipo_firma || 'web';
+    const tipoFirma = state.configuracion.tipo_firma || 'svfe';
     
-    if (tipoFirma === 'local' && state.configuracion.certificado_path && state.configuracion.certificado_password) {
-      // Usar certificado local
+    if (state.configuracion.certificado_path && state.configuracion.certificado_password) {
+      // Usar firmador interno con certificado local
       await firmarConCertificadoLocal(facturaId);
+    } else if (tipoFirma === 'svfe' && state.configuracion.firmador_pin) {
+      await firmarConFirmadorSVFE(facturaId);
     } else if (tipoFirma === 'web' && state.configuracion.firmador_usuario && state.configuracion.firmador_password) {
       // Usar firmador web con credenciales guardadas
       await firmarConFirmadorWeb(facturaId);
@@ -1983,7 +2300,7 @@ async function firmarConCertificadoLocal(facturaId) {
       });
       
       if (!validacion.valido) {
-        showNotification('❌ Certificado inválido: ' + (validacion.info?.error || 'Certificado no válido'), 'error');
+        showNotification('❌ Certificado inválido: ' + (validacion.error || 'Certificado no válido'), 'error');
         return;
       }
       
@@ -2003,12 +2320,13 @@ async function firmarConCertificadoLocal(facturaId) {
       showNotification('⚠️ No se pudo validar el certificado, pero se intentará firmar', 'warning');
     }
     
-    showNotification('Firmando documento con certificado local...', 'info');
+    showNotification('Firmando documento con firmador interno...', 'info');
     
     // Parsear el JSON DTE de la factura
     let jsonDte = {};
     try {
-      jsonDte = JSON.parse(factura.json_dte || '{}');
+      jsonDte = parseDTEGuardado(factura.json_dte);
+      refrescarFechaEmisionDTE(jsonDte);
     } catch (e) {
       console.error('Error parseando JSON DTE:', e);
     }
@@ -2018,19 +2336,27 @@ async function firmarConCertificadoLocal(facturaId) {
     
     // Llamar al firmador con el certificado configurado
     const result = await window.electronAPI.firmarDocumento({
+      metodo: 'interno',
       documento: documento,
       pin: state.configuracion.certificado_password,
-      usuario: null,
+      usuario: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit,
       password: null,
       certificadoPath: state.configuracion.certificado_path,
-      certificadoPassword: state.configuracion.certificado_password
+      certificadoPassword: state.configuracion.certificado_password,
+      nit: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit
     });
     
     if (result.success) {
       showNotification('✓ Documento firmado exitosamente', 'success');
       
       // Actualizar estado en base de datos
-      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'FIRMADO',
+        null,
+        null,
+        result.documentoFirmado
+      );
       
       cerrarModalVerFactura();
       await loadFacturas();
@@ -2040,6 +2366,57 @@ async function firmarConCertificadoLocal(facturaId) {
   } catch (error) {
     console.error('Error firmando factura:', error);
     showNotification('Error al firmar factura: ' + error.message, 'error');
+  }
+}
+
+// Firmar con el firmador interno compatible con MH/SVFE
+async function firmarConFirmadorSVFE(facturaId) {
+  try {
+    const factura = state.facturas.find(f => f.id === facturaId);
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+
+    showNotification('Firmando documento con firmador interno MH...', 'info');
+
+    let jsonDte = {};
+    try {
+      jsonDte = parseDTEGuardado(factura.json_dte);
+      refrescarFechaEmisionDTE(jsonDte);
+    } catch (e) {
+      showNotification('Error al parsear DTE: ' + e.message, 'error');
+      return;
+    }
+
+    const result = await window.electronAPI.firmarDocumento({
+      metodo: 'interno',
+      documento: jsonDte,
+      pin: state.configuracion.certificado_password || state.configuracion.firmador_pin,
+      usuario: state.configuracion.firmador_usuario || state.configuracion.nit,
+      password: state.configuracion.firmador_password || 'http://localhost:8113',
+      nit: state.configuracion.firmador_usuario || state.configuracion.nit,
+      certificadoPassword: state.configuracion.certificado_password
+    });
+
+    if (result.success) {
+      showNotification('✓ Documento firmado internamente', 'success');
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'FIRMADO',
+        null,
+        null,
+        result.documentoFirmado
+      );
+
+      cerrarModalVerFactura();
+      await loadFacturas();
+    } else {
+      showNotification('✗ Error al firmar: ' + result.error, 'error');
+    }
+  } catch (error) {
+    console.error('Error firmando con SVFE:', error);
+    showNotification('Error al firmar con SVFE: ' + error.message, 'error');
   }
 }
 
@@ -2057,7 +2434,8 @@ async function firmarConFirmadorWeb(facturaId) {
     // Parsear el JSON DTE de la factura
     let jsonDte = {};
     try {
-      jsonDte = JSON.parse(factura.json_dte || '{}');
+      jsonDte = parseDTEGuardado(factura.json_dte);
+      refrescarFechaEmisionDTE(jsonDte);
     } catch (e) {
       console.error('Error parseando JSON DTE:', e);
     }
@@ -2079,7 +2457,13 @@ async function firmarConFirmadorWeb(facturaId) {
       showNotification('✓ Documento firmado exitosamente', 'success');
       
       // Actualizar estado en base de datos
-      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'FIRMADO',
+        null,
+        null,
+        result.documentoFirmado
+      );
       
       cerrarModalVerFactura();
       await loadFacturas();
@@ -2106,9 +2490,8 @@ async function procesarFirmaDocumento() {
       return;
     }
     
-    // Validar credenciales del firmador web
-    if (!usuarioFirmador || !passwordFirmador || !pinCertificado) {
-      showNotification('Por favor ingrese todas las credenciales del firmador web', 'error');
+    if (!pinCertificado) {
+      showNotification('Ingrese la contraseña de la llave privada/certificado', 'error');
       return;
     }
     
@@ -2120,70 +2503,41 @@ async function procesarFirmaDocumento() {
     
     // Cerrar modal y mostrar progreso
     cerrarModalFirmador();
-    showNotification('Firmando documento... Este proceso puede tomar varios minutos.', 'info');
+    showNotification('Firmando documento con el firmador interno MH...', 'info');
     
     // Parsear el JSON DTE de la factura
     let jsonDte = {};
     try {
-      jsonDte = JSON.parse(factura.json_dte || '{}');
+      jsonDte = parseDTEGuardado(factura.json_dte);
+      refrescarFechaEmisionDTE(jsonDte);
     } catch (e) {
-      console.error('Error parseando JSON DTE:', e);
+      showNotification('Error al parsear DTE: ' + e.message, 'error');
+      return;
     }
-    
-    // Construir documento completo para firmar
-    const documento = {
-      identificacion: {
-        version: 1,
-        ambiente: state.configuracion.hacienda_ambiente === 'produccion' ? '00' : '01',
-        tipoDte: factura.tipo_dte,
-        numeroControl: factura.numero_control,
-        codigoGeneracion: factura.codigo_generacion,
-        tipoModelo: '1',
-        tipoOperacion: '1',
-        fecEmi: new Date(factura.fecha_emision).toISOString().split('T')[0],
-        horEmi: new Date(factura.fecha_emision).toTimeString().split(' ')[0],
-        tipoMoneda: 'USD'
-      },
-      emisor: {
-        nit: state.configuracion.nit,
-        nrc: state.configuracion.nrc,
-        nombre: state.configuracion.nombre_empresa,
-        codActividad: state.configuracion.actividad_economica,
-        descActividad: obtenerDescripcionActividad(state.configuracion.actividad_economica),
-        nombreComercial: state.configuracion.nombre_comercial,
-        tipoEstablecimiento: '01',
-        direccion: {
-          departamento: state.configuracion.departamento,
-          municipio: state.configuracion.municipio,
-          complemento: state.configuracion.direccion
-        },
-        telefono: state.configuracion.telefono,
-        correo: state.configuracion.email,
-        codEstableMH: state.configuracion.codigo_establecimiento,
-        codEstable: state.configuracion.codigo_establecimiento,
-        codPuntoVentaMH: state.configuracion.punto_venta,
-        codPuntoVenta: state.configuracion.punto_venta
-      },
-      receptor: jsonDte.receptor || {},
-      cuerpoDocumento: jsonDte.cuerpoDocumento || [],
-      resumen: jsonDte.resumen || {}
-    };
     
     // Llamar al firmador
     const result = await window.electronAPI.firmarDocumento({
-      documento: documento,
+      metodo: 'interno',
+      documento: jsonDte,
       pin: pinCertificado,
-      usuario: usuarioFirmador,
-      password: passwordFirmador,
+      usuario: usuarioFirmador || state.configuracion.nit,
+      password: passwordFirmador || 'http://localhost:8113',
       certificadoPath: state.configuracion.certificado_path,
-      certificadoPassword: state.configuracion.certificado_password || pinCertificado
+      certificadoPassword: pinCertificado || state.configuracion.certificado_password,
+      nit: usuarioFirmador || state.configuracion.nit
     });
     
     if (result.success) {
       showNotification('✓ Documento firmado exitosamente', 'success');
       
       // Actualizar estado en base de datos
-      await window.electronAPI.updateFacturaEstado(facturaId, 'FIRMADO', null);
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'FIRMADO',
+        null,
+        null,
+        result.documentoFirmado
+      );
       
       cerrarModalVerFactura();
       await loadFacturas();
@@ -2198,8 +2552,24 @@ async function procesarFirmaDocumento() {
 
 // Obtener descripción de actividad económica
 function obtenerDescripcionActividad(codigo) {
-  const actividad = actividadesEconomicas.find(a => a.codigo === codigo);
+  const codigoNormalizado = String(codigo || '').trim();
+  const actividad = actividadesEconomicas.find(a => a.codigo === codigoNormalizado);
   return actividad ? actividad.descripcion : '';
+}
+
+function extraerCodigoActividad(input) {
+  if (!input) return '';
+
+  const dataCodigo = input.getAttribute('data-codigo');
+  if (dataCodigo) return dataCodigo.trim();
+
+  const value = input.value.trim();
+  const match = value.match(/^(\d{5})\b/);
+  return match ? match[1] : value;
+}
+
+function validarCodigoActividad(codigo) {
+  return /^\d{5}$/.test(codigo) && actividadesEconomicas.some(a => a.codigo === codigo);
 }
 
 // Cerrar modal del firmador
@@ -2207,6 +2577,12 @@ function cerrarModalFirmador() {
   const modal = document.getElementById('modal-firmador');
   modal.classList.remove('active');
   document.getElementById('form-firmador').reset();
+}
+
+function cerrarModalAnulacion() {
+  const modal = document.getElementById('modal-anulacion');
+  modal.classList.remove('active');
+  document.getElementById('form-anulacion')?.reset();
 }
 
 // Seleccionar certificado digital
@@ -2331,9 +2707,15 @@ async function enviarFacturaHacienda(facturaId) {
     // Parsear el DTE firmado
     let dteFirmado;
     try {
-      dteFirmado = JSON.parse(factura.json_dte);
+      dteFirmado = parseDTEGuardado(factura.json_dte);
     } catch (e) {
       showNotification('Error al parsear DTE: ' + e.message, 'error');
+      return;
+    }
+
+    const errorReceptor = validarReceptorDTEParaHacienda(dteFirmado, state.configuracion);
+    if (errorReceptor) {
+      showNotification(errorReceptor, 'error');
       return;
     }
     
@@ -2341,7 +2723,7 @@ async function enviarFacturaHacienda(facturaId) {
     const resultado = await window.electronAPI.enviarDTE({
       dteFirmado: dteFirmado,
       nit: state.configuracion.nit,
-      passwordPri: null // Se puede agregar si se usa certificado con password
+      passwordPri: state.configuracion.firmador_pin || state.configuracion.certificado_password || null
     });
     
     if (resultado.success) {
@@ -2360,9 +2742,11 @@ async function enviarFacturaHacienda(facturaId) {
       // Actualizar estado en base de datos
       await window.electronAPI.updateFacturaEstado(
         facturaId, 
-        'PROCESADO',
-        resultado.selloRecibido || null
+        normalizarEstadoFactura(resultado.estado),
+        resultado.selloRecibido || null,
+        resultado.observaciones ? JSON.stringify(resultado.observaciones) : null
       );
+      await loadFacturas();
       
       // Regenerar PDF con sello de recepción si está disponible
       if (resultado.selloRecibido) {
@@ -2383,7 +2767,6 @@ async function enviarFacturaHacienda(facturaId) {
       }
       
       cerrarModalVerFactura();
-      await loadFacturas();
     } else {
       // Procesar error usando la nueva estructura de errores
       let errorMsg = 'Error al enviar a Hacienda';
@@ -2401,7 +2784,9 @@ async function enviarFacturaHacienda(facturaId) {
           case 'VALIDACION':
             errorMsg = '❌ Error de validación: ' + error.mensaje;
             if (error.observacionesDetalle && error.observacionesDetalle.length > 0) {
-              errorMsg += '\n\nDetalles:\n• ' + error.observacionesDetalle.join('\n• ');
+              errorMsg += '\n\nDetalles:\n• ' + formatearObservaciones(error.observacionesDetalle).join('\n• ');
+            } else if (error.observaciones && error.observaciones.length > 0) {
+              errorMsg += '\n\nDetalles:\n• ' + formatearObservaciones(error.observaciones).join('\n• ');
             }
             break;
           case 'SERVIDOR_MH':
@@ -2418,9 +2803,8 @@ async function enviarFacturaHacienda(facturaId) {
             try {
               await window.electronAPI.registrarContingencia({
                 facturaId: facturaId,
-                jsonDte: factura.json_dte,
-                tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
-                numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+                tipo: '2',
+                motivo: error.mensaje
               });
             } catch (e) {
               console.error('Error registrando contingencia:', e);
@@ -2436,9 +2820,8 @@ async function enviarFacturaHacienda(facturaId) {
             try {
               await window.electronAPI.registrarContingencia({
                 facturaId: facturaId,
-                jsonDte: factura.json_dte,
-                tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
-                numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+                tipo: '1',
+                motivo: error.mensaje
               });
             } catch (e) {
               console.error('Error registrando contingencia:', e);
@@ -2457,7 +2840,7 @@ async function enviarFacturaHacienda(facturaId) {
         // Formato de error antiguo
         errorMsg = 'Error al enviar: ' + resultado.error;
         if (resultado.observaciones && resultado.observaciones.length > 0) {
-          errorMsg += '\nObservaciones: ' + resultado.observaciones.join(', ');
+          errorMsg += '\nObservaciones: ' + formatearObservaciones(resultado.observaciones).join(', ');
         }
       }
       
@@ -2478,12 +2861,10 @@ async function enviarFacturaHacienda(facturaId) {
     try {
       const factura = state.facturas.find(f => f.id === facturaId);
       if (factura && factura.json_dte) {
-        const dteFirmado = JSON.parse(factura.json_dte);
         await window.electronAPI.registrarContingencia({
           facturaId: facturaId,
-          jsonDte: factura.json_dte,
-          tipo: dteFirmado.dteJson?.identificacion?.tipoDte || '01',
-          numeroControl: dteFirmado.dteJson?.identificacion?.numeroControl
+          tipo: '5',
+          motivo: error.message
         });
         showNotification('⚠️ Error inesperado. Factura guardada en contingencia.', 'warning');
       } else {
@@ -2494,6 +2875,246 @@ async function enviarFacturaHacienda(facturaId) {
     }
   }
 }
+
+function generarUuidMayusculas() {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID().toUpperCase();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  }).toUpperCase();
+}
+
+function redondearDos(valor) {
+  return Number((Number(valor || 0) + Number.EPSILON).toFixed(2));
+}
+
+function obtenerDocumentoReceptorParaAnulacion(dte, config) {
+  const receptor = dte?.receptor || {};
+  const tipoDocumento = receptor.tipoDocumento || (receptor.nit ? '36' : null) || '36';
+  const numeroDocumento = receptor.numDocumento || receptor.nit || receptor.numeroDocumento || config?.nit || '';
+
+  return {
+    tipoDocumento,
+    numeroDocumento: String(numeroDocumento || '')
+  };
+}
+
+function obtenerMontoIvaDTE(dte) {
+  const resumen = dte?.resumen || {};
+  const tributoIva = Array.isArray(resumen.tributos)
+    ? resumen.tributos.find(t => t?.codigo === '20')
+    : null;
+
+  return redondearDos(resumen.totalIva || tributoIva?.valor || dte?.iva || 0);
+}
+
+function crearEventoAnulacion(factura, dte, opciones = {}) {
+  dte = dte || {};
+  const ahora = new Date();
+  const config = state.configuracion || {};
+  const receptor = dte.receptor || {};
+  const receptorDocumento = obtenerDocumentoReceptorParaAnulacion(dte, config);
+  const nitEmisor = limpiarDocumentoFiscal(dte.emisor?.nit || config.nit || config.hacienda_usuario);
+  const nombreEmisor = dte.emisor?.nombre || config.nombre_empresa;
+  const telefonoEmisor = dte.emisor?.telefono || config.telefono || null;
+  const correoEmisor = dte.emisor?.correo || config.email || null;
+  const tipDocSolicita = receptorDocumento.tipoDocumento || '36';
+  const numDocSolicita = receptorDocumento.numeroDocumento || config.nit || nitEmisor;
+
+  return {
+    identificacion: {
+      version: 2,
+      ambiente: dte.identificacion?.ambiente || (config.hacienda_ambiente === 'produccion' ? '01' : '00'),
+      codigoGeneracion: generarUuidMayusculas(),
+      fecAnula: formatearFechaLocal(ahora),
+      horAnula: formatearHoraLocal(ahora)
+    },
+    emisor: {
+      nit: nitEmisor,
+      nombre: nombreEmisor,
+      tipoEstablecimiento: dte.emisor?.tipoEstablecimiento || '01',
+      nomEstablecimiento: dte.emisor?.nombreComercial || config.nombre_comercial || nombreEmisor,
+      codEstableMH: dte.emisor?.codEstableMH || null,
+      codEstable: dte.emisor?.codEstable || config.codigo_establecimiento || null,
+      codPuntoVentaMH: dte.emisor?.codPuntoVentaMH || null,
+      codPuntoVenta: dte.emisor?.codPuntoVenta || config.punto_venta || null,
+      telefono: telefonoEmisor,
+      correo: correoEmisor
+    },
+    documento: {
+      tipoDte: dte.identificacion?.tipoDte || factura.tipo_dte,
+      codigoGeneracion: dte.identificacion?.codigoGeneracion || factura.codigo_generacion,
+      selloRecibido: factura.sello_recepcion,
+      numeroControl: dte.identificacion?.numeroControl || factura.numero_control,
+      fecEmi: dte.identificacion?.fecEmi || String(factura.fecha_emision || '').slice(0, 10),
+      montoIva: obtenerMontoIvaDTE(dte),
+      codigoGeneracionR: null,
+      tipoDocumento: receptorDocumento.tipoDocumento,
+      numDocumento: receptorDocumento.numeroDocumento,
+      nombre: receptor.nombre || 'CONSUMIDOR FINAL',
+      telefono: receptor.telefono || null,
+      correo: receptor.correo || null
+    },
+    motivo: {
+      tipoAnulacion: Number(opciones.tipoAnulacion || 2),
+      motivoAnulacion: opciones.motivoAnulacion,
+      nombreResponsable: nombreEmisor,
+      tipDocResponsable: '36',
+      numDocResponsable: nitEmisor,
+      nombreSolicita: receptor.nombre || nombreEmisor,
+      tipDocSolicita,
+      numDocSolicita: String(numDocSolicita || '')
+    }
+  };
+}
+
+function obtenerMensajeErrorHacienda(resultado, accion = 'procesar solicitud') {
+  if (!resultado?.errorDetalle) {
+    return `Error al ${accion}: ${resultado?.error || 'Error desconocido'}`;
+  }
+
+  const error = resultado.errorDetalle;
+  let mensaje = error.mensaje || resultado.error || 'Datos inválidos. Revise las observaciones.';
+
+  if (error.observacionesDetalle?.length) {
+    mensaje += '\n\nDetalles:\n• ' + formatearObservaciones(error.observacionesDetalle).join('\n• ');
+  } else if (error.observaciones?.length) {
+    mensaje += '\n\nDetalles:\n• ' + formatearObservaciones(error.observaciones).join('\n• ');
+  }
+
+  if (error.codigo) {
+    mensaje += `\n\nCódigo: ${error.codigo}`;
+  }
+
+  return mensaje;
+}
+
+async function anularFacturaHacienda(facturaId) {
+  const factura = state.facturas.find(f => f.id === facturaId);
+  if (!factura) {
+    showNotification('Factura no encontrada', 'error');
+    return;
+  }
+
+  if (normalizarEstadoFactura(factura.estado) !== 'ENVIADO') {
+    showNotification('Solo se pueden anular facturas enviadas a Hacienda', 'warning');
+    return;
+  }
+
+  if (!factura.sello_recepcion) {
+    showNotification('La factura no tiene sello de recepción de Hacienda', 'error');
+    return;
+  }
+
+  document.getElementById('anulacion-factura-id').value = facturaId;
+  document.getElementById('anulacion-tipo').value = '2';
+  document.getElementById('anulacion-motivo').value = 'Rescindir operación realizada';
+  document.getElementById('modal-anulacion').classList.add('active');
+}
+
+async function procesarAnulacionFactura() {
+  const btnConfirmar = document.getElementById('btn-confirmar-anulacion');
+
+  try {
+    const facturaId = Number(document.getElementById('anulacion-factura-id').value);
+    const tipo = Number(document.getElementById('anulacion-tipo').value);
+    const motivo = document.getElementById('anulacion-motivo').value.trim();
+    const factura = state.facturas.find(f => f.id === facturaId);
+
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return;
+    }
+
+    if (normalizarEstadoFactura(factura.estado) !== 'ENVIADO') {
+      showNotification('Solo se pueden anular facturas enviadas a Hacienda', 'warning');
+      return;
+    }
+
+    if (!factura.sello_recepcion) {
+      showNotification('La factura no tiene sello de recepción de Hacienda', 'error');
+      return;
+    }
+
+    if (![1, 2, 3].includes(tipo)) {
+      showNotification('Tipo de anulación inválido. Use 1, 2 o 3.', 'error');
+      return;
+    }
+
+    if (!motivo) {
+      showNotification('Ingrese el motivo de anulación', 'error');
+      return;
+    }
+
+    if (btnConfirmar) {
+      btnConfirmar.disabled = true;
+      btnConfirmar.textContent = 'Enviando...';
+    }
+
+    const dte = parseDTEGuardado(factura.json_dte);
+    const evento = crearEventoAnulacion(factura, dte, {
+      tipoAnulacion: tipo,
+      motivoAnulacion: motivo
+    });
+
+    showNotification('Firmando evento de anulación...', 'info');
+    const firmado = await window.electronAPI.firmarDocumento({
+      documento: evento,
+      metodo: 'interno',
+      certificadoPath: state.configuracion.certificado_path,
+      certificadoPassword: state.configuracion.certificado_password || state.configuracion.firmador_pin,
+      pin: state.configuracion.certificado_password || state.configuracion.firmador_pin,
+      usuario: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit,
+      nit: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit
+    });
+
+    if (!firmado.success) {
+      showNotification('Error al firmar anulación: ' + firmado.error, 'error');
+      return;
+    }
+
+    const eventoFirmado = firmado.documentoFirmado || { ...evento, firmaMh: firmado.firmaMh };
+
+    showNotification('Enviando anulación a Hacienda...', 'info');
+    const resultado = await window.electronAPI.anularDTE({ eventoFirmado });
+
+    if (!resultado.success) {
+      const mensaje = obtenerMensajeErrorHacienda(resultado, 'anular factura');
+      showNotification('Error de anulación: ' + mensaje, 'error');
+      console.error('Error anulando factura:', resultado);
+      return;
+    }
+
+    await window.electronAPI.registrarAnulacion(facturaId, {
+      selloAnulacion: resultado.selloRecibido || null,
+      motivo,
+      observaciones: resultado.observaciones || resultado.raw || null,
+      jsonAnulacion: {
+        evento: eventoFirmado,
+        respuesta: resultado.raw || resultado
+      }
+    });
+
+    showNotification('✓ Factura anulada exitosamente en Hacienda', 'success');
+    cerrarModalVerFactura();
+    cerrarModalAnulacion();
+    await loadFacturas();
+  } catch (error) {
+    console.error('Error anulando factura:', error);
+    showNotification('Error al anular factura: ' + error.message, 'error');
+  } finally {
+    if (btnConfirmar) {
+      btnConfirmar.disabled = false;
+      btnConfirmar.textContent = 'Enviar Anulación';
+    }
+  }
+}
+
+window.anularFactura = anularFacturaHacienda;
 
 // Función de autocompletado para actividades económicas
 function setupActividadAutocomplete(inputId, dropdownId) {
@@ -2552,6 +3173,7 @@ function setupActividadAutocomplete(inputId, dropdownId) {
   
   // Event listeners
   input.addEventListener('input', (e) => {
+    input.removeAttribute('data-codigo');
     const filtered = filterActividades(e.target.value);
     showDropdown(filtered);
   });
@@ -2600,6 +3222,7 @@ function setupActividadAutocomplete(inputId, dropdownId) {
 // Hacer funciones globales
 window.cerrarModalVerFactura = cerrarModalVerFactura;
 window.cerrarModalFirmador = cerrarModalFirmador;
+window.cerrarModalAnulacion = cerrarModalAnulacion;
 window.editarCliente = editarCliente;
 window.eliminarCliente = eliminarCliente;
 window.cerrarModalCliente = cerrarModalCliente;
@@ -2609,7 +3232,7 @@ async function descargarPDFFactura(factura) {
   try {
     showNotification('Generando PDF...', 'info');
     
-    const dteFirmado = JSON.parse(factura.json_dte);
+    const dteFirmado = parseDTEGuardado(factura.json_dte);
     
     // Debug: Verificar estructura del DTE
     console.log('Estructura del DTE:', {
@@ -2643,7 +3266,7 @@ async function abrirPDFFactura(factura) {
   try {
     showNotification('Generando PDF...', 'info');
     
-    const dteFirmado = JSON.parse(factura.json_dte);
+    const dteFirmado = parseDTEGuardado(factura.json_dte);
     
     // Debug: Verificar estructura del DTE
     console.log('Estructura del DTE:', {
@@ -2675,4 +3298,3 @@ async function abrirPDFFactura(factura) {
 
 window.descargarPDFFactura = descargarPDFFactura;
 window.abrirPDFFactura = abrirPDFFactura;
-

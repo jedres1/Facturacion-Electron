@@ -78,7 +78,7 @@ class PDFGenerator {
       await this.drawResumen(page, fontBold, fontRegular, dteData.resumen);
 
       // 7. Código QR (obligatorio)
-      const qrDataUrl = await this.generarQR(dteData, config.hacienda_ambiente);
+      const qrDataUrl = await this.generarQR(dteData);
       const qrImage = await pdfDoc.embedPng(qrDataUrl);
       const qrSize = 120;
       page.drawImage(qrImage, {
@@ -433,7 +433,8 @@ class PDFGenerator {
    * Generar código QR
    */
   async generarQR(dte, ambiente) {
-    const ambienteCode = ambiente === 'produccion' ? '00' : '01';
+    const valorAmbiente = String(ambiente || dte?.identificacion?.ambiente || '').toLowerCase();
+    const ambienteCode = valorAmbiente === 'produccion' || valorAmbiente === '01' ? '01' : '00';
     const url = `https://admin.factura.gob.sv/consultaPublica?ambiente=${ambienteCode}&codGen=${dte.identificacion.codigoGeneracion}`;
     
     try {
@@ -451,6 +452,11 @@ class PDFGenerator {
       console.error('Error generando QR:', error);
       throw error;
     }
+  }
+
+  getAmbienteNombre(ambiente) {
+    const valor = String(ambiente || '').toLowerCase();
+    return valor === 'produccion' || valor === '01' ? 'Producción' : 'Pruebas';
   }
 
   /**
@@ -478,7 +484,7 @@ class PDFGenerator {
     });
     y -= 20;
     
-    page.drawText(`Ambiente: ${dte.identificacion.ambiente === '00' ? 'Producción' : 'Pruebas'}`, {
+    page.drawText(`Ambiente: ${this.getAmbienteNombre(dte.identificacion.ambiente)}`, {
       x: qrInfoX,
       y: y,
       size: 7,

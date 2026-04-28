@@ -32,8 +32,12 @@ class DatabaseManager {
         hacienda_usuario TEXT,
         hacienda_password TEXT,
         hacienda_ambiente TEXT DEFAULT 'pruebas',
+        tipo_firma TEXT DEFAULT 'web',
+        firmador_usuario TEXT,
+        firmador_password TEXT,
+        firmador_pin TEXT,
         certificado_path TEXT,
-        pin_certificado TEXT,
+        certificado_password TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -126,6 +130,30 @@ class DatabaseManager {
       // La columna ya existe, ignorar error
     }
 
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN tipo_firma TEXT DEFAULT 'web'`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN firmador_usuario TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN firmador_password TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE configuracion ADD COLUMN firmador_pin TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
     // Tabla de productos/servicios
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS productos (
@@ -164,24 +192,130 @@ class DatabaseManager {
         sello_recepcion TEXT,
         fecha_procesamiento DATETIME,
         observaciones TEXT,
+        sello_anulacion TEXT,
+        fecha_anulacion DATETIME,
+        motivo_anulacion TEXT,
+        json_anulacion TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (cliente_id) REFERENCES clientes(id)
       )
     `);
 
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN sello_anulacion TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN fecha_anulacion DATETIME`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN motivo_anulacion TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN json_anulacion TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
     // Tabla de eventos contingencia
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS contingencias (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         factura_id INTEGER NOT NULL,
-        tipo_evento TEXT NOT NULL,
-        fecha_evento DATETIME NOT NULL,
+        tipo_contingencia TEXT NOT NULL,
+        fecha_contingencia DATETIME NOT NULL,
         motivo TEXT,
+        estado TEXT DEFAULT 'PENDIENTE',
+        intentos_reenvio INTEGER DEFAULT 0,
+        ultimo_intento DATETIME,
+        fecha_resolucion DATETIME,
+        sello_resolucion TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (factura_id) REFERENCES facturas(id)
       )
     `);
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN tipo_contingencia TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN fecha_contingencia DATETIME`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN estado TEXT DEFAULT 'PENDIENTE'`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN intentos_reenvio INTEGER DEFAULT 0`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN ultimo_intento DATETIME`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN fecha_resolucion DATETIME`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN sello_resolucion TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    const contingenciaColumns = this.db.prepare(`PRAGMA table_info(contingencias)`).all();
+    const contingencyColumnNames = contingenciaColumns.map((column) => column.name);
+
+    if (contingencyColumnNames.includes('tipo_evento')) {
+      this.db.exec(`
+        UPDATE contingencias
+        SET tipo_contingencia = COALESCE(tipo_contingencia, tipo_evento, '5')
+        WHERE tipo_contingencia IS NULL
+      `);
+    } else {
+      this.db.exec(`
+        UPDATE contingencias
+        SET tipo_contingencia = COALESCE(tipo_contingencia, '5')
+        WHERE tipo_contingencia IS NULL
+      `);
+    }
+
+    if (contingencyColumnNames.includes('fecha_evento')) {
+      this.db.exec(`
+        UPDATE contingencias
+        SET fecha_contingencia = COALESCE(fecha_contingencia, fecha_evento, CURRENT_TIMESTAMP)
+        WHERE fecha_contingencia IS NULL
+      `);
+    } else {
+      this.db.exec(`
+        UPDATE contingencias
+        SET fecha_contingencia = COALESCE(fecha_contingencia, CURRENT_TIMESTAMP)
+        WHERE fecha_contingencia IS NULL
+      `);
+    }
 
     // Índices
     this.db.exec(`
@@ -209,6 +343,7 @@ class DatabaseManager {
             departamento = ?, municipio = ?, distrito = ?,
             codigo_establecimiento = ?, punto_venta = ?, 
             hacienda_usuario = ?, hacienda_password = ?, hacienda_ambiente = ?,
+            tipo_firma = ?, firmador_usuario = ?, firmador_password = ?, firmador_pin = ?,
             certificado_path = ?, certificado_password = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
@@ -218,6 +353,7 @@ class DatabaseManager {
         config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
+        config.tipo_firma || 'web', config.firmador_usuario, config.firmador_password, config.firmador_pin,
         config.certificado_path, config.certificado_password, existing.id
       );
     } else {
@@ -226,8 +362,9 @@ class DatabaseManager {
         (nit, nrc, nombre_empresa, nombre_comercial, tipo_persona, actividad_economica, 
          telefono, email, direccion, departamento, municipio, 
          distrito, codigo_establecimiento, punto_venta, hacienda_usuario, 
-         hacienda_password, hacienda_ambiente, certificado_path, certificado_password)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         hacienda_password, hacienda_ambiente, tipo_firma, firmador_usuario, 
+         firmador_password, firmador_pin, certificado_path, certificado_password)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
@@ -235,6 +372,7 @@ class DatabaseManager {
         config.departamento, config.municipio, config.distrito,
         config.codigo_establecimiento, config.punto_venta,
         config.hacienda_usuario, config.hacienda_password, config.hacienda_ambiente,
+        config.tipo_firma || 'web', config.firmador_usuario, config.firmador_password, config.firmador_pin,
         config.certificado_path, config.certificado_password
       );
     }
@@ -367,18 +505,60 @@ class DatabaseManager {
       factura.fecha_emision, factura.cliente_id, JSON.stringify(factura.cliente_datos),
       JSON.stringify(factura.items), factura.subtotal, factura.iva, factura.total,
       factura.descuento || 0, factura.retencion || 0, factura.condicion_operacion,
-      factura.estado || 'PENDIENTE', JSON.stringify(factura.json_dte)
+      factura.estado || 'PENDIENTE',
+      typeof factura.json_dte === 'string' ? factura.json_dte : JSON.stringify(factura.json_dte)
     );
   }
 
-  updateFacturaEstado(id, estado, selloRecepcion = null, observaciones = null) {
+  updateFacturaEstado(id, estado, selloRecepcion = null, observaciones = null, jsonDte = null) {
+    const campos = [
+      'estado = ?',
+      'sello_recepcion = ?',
+      'observaciones = ?',
+      'fecha_procesamiento = CURRENT_TIMESTAMP',
+      'updated_at = CURRENT_TIMESTAMP'
+    ];
+    const params = [estado, selloRecepcion, observaciones];
+
+    if (jsonDte !== null) {
+      campos.push('json_dte = ?');
+      params.push(typeof jsonDte === 'string' ? jsonDte : JSON.stringify(jsonDte));
+    }
+
+    params.push(id);
+
     const stmt = this.db.prepare(`
-      UPDATE facturas 
-      SET estado = ?, sello_recepcion = ?, fecha_procesamiento = CURRENT_TIMESTAMP,
-          observaciones = ?, updated_at = CURRENT_TIMESTAMP
+      UPDATE facturas
+      SET ${campos.join(', ')}
       WHERE id = ?
     `);
-    return stmt.run(estado, selloRecepcion, observaciones, id);
+    return stmt.run(...params);
+  }
+
+  registrarAnulacion(id, anulacion = {}) {
+    const stmt = this.db.prepare(`
+      UPDATE facturas
+      SET estado = 'ANULADO',
+          sello_anulacion = ?,
+          fecha_anulacion = CURRENT_TIMESTAMP,
+          motivo_anulacion = ?,
+          json_anulacion = ?,
+          observaciones = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+
+    return stmt.run(
+      anulacion.selloAnulacion || anulacion.selloRecibido || null,
+      anulacion.motivo || null,
+      anulacion.jsonAnulacion
+        ? (typeof anulacion.jsonAnulacion === 'string' ? anulacion.jsonAnulacion : JSON.stringify(anulacion.jsonAnulacion))
+        : null,
+      anulacion.observaciones
+        ? (typeof anulacion.observaciones === 'string' ? anulacion.observaciones : JSON.stringify(anulacion.observaciones))
+        : null,
+      id
+    );
   }
 
   // Obtener siguiente correlativo para número de control

@@ -4,13 +4,17 @@ const Database = require('../database/database');
 const HaciendaAPI = require('../api/hacienda');
 const Firmador = require('../utils/firmador');
 const FirmadorLocal = require('../utils/firmador-local');
+const FirmadorSVFE = require('../utils/firmador-svfe');
+const FirmadorInternoMH = require('../utils/firmador-interno-mh');
 const DTEGenerator = require('../utils/dte-generator');
+const DTEValidator = require('../utils/dte-validator');
 const PDFGenerator = require('../utils/pdf-generator');
 const ContingenciaManager = require('../utils/contingencias');
 
 let mainWindow;
 let db;
 let dteGenerator;
+let dteValidator;
 let pdfGenerator;
 let contingenciaManager;
 
@@ -44,6 +48,7 @@ app.whenReady().then(() => {
   
   // Inicializar generador de DTEs
   dteGenerator = new DTEGenerator();
+  dteValidator = new DTEValidator();
   
   // Inicializar generador de PDFs
   pdfGenerator = new PDFGenerator();
@@ -115,8 +120,12 @@ ipcMain.handle('db:addFactura', async (event, factura) => {
   return db.addFactura(factura);
 });
 
-ipcMain.handle('db:updateFacturaEstado', async (event, { id, estado, selloRecepcion }) => {
-  return db.updateFacturaEstado(id, estado, selloRecepcion);
+ipcMain.handle('db:updateFacturaEstado', async (event, { id, estado, selloRecepcion, observaciones, jsonDte }) => {
+  return db.updateFacturaEstado(id, estado, selloRecepcion, observaciones, jsonDte);
+});
+
+ipcMain.handle('db:registrarAnulacion', async (event, { id, anulacion }) => {
+  return db.registrarAnulacion(id, anulacion);
 });
 
 ipcMain.handle('db:getSiguienteCorrelativo', async (event, tipoDte) => {
@@ -167,6 +176,26 @@ ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPr
   }
 });
 
+ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
+  try {
+    const config = db.getConfiguracion();
+    if (!config || !config.hacienda_usuario || !config.hacienda_password) {
+      return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    const api = new HaciendaAPI({
+      ambiente: config.hacienda_ambiente || 'pruebas',
+      usuario: config.hacienda_usuario,
+      password: config.hacienda_password
+    });
+
+    await api.autenticar();
+    return await api.anularDTE(eventoFirmado);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('hacienda:consultarDTE', async (event, { codigoGeneracion, token }) => {
   try {
     const api = new HaciendaAPI({ token });
@@ -178,14 +207,48 @@ ipcMain.handle('hacienda:consultarDTE', async (event, { codigoGeneracion, token 
 });
 
 // IPC Handler para el firmador
-ipcMain.handle('firmador:firmarDocumento', async (event, { documento, pin, usuario, password, certificadoPath, certificadoPassword }) => {
+ipcMain.handle('firmador:firmarDocumento', async (event, { documento, pin, usuario, password, certificadoPath, certificadoPassword, metodo, nit }) => {
   try {
+    if (metodo === 'interno') {
+      const config = db.getConfiguracion() || {};
+      const firmador = new FirmadorInternoMH({
+        certificadoPath: certificadoPath || config.certificado_path,
+        nit: nit || usuario || config.firmador_usuario || config.hacienda_usuario || config.nit,
+        passwordPri: certificadoPassword || config.certificado_password || pin || config.firmador_pin
+      });
+
+      return await firmador.firmarDocumento(documento);
+    }
+
+    if (metodo === 'svfe') {
+      const config = db.getConfiguracion() || {};
+
+      if (config.certificado_path && (config.certificado_password || certificadoPassword || pin)) {
+        const firmadorInterno = new FirmadorInternoMH({
+          certificadoPath: certificadoPath || config.certificado_path,
+          nit: nit || usuario || config.firmador_usuario || config.hacienda_usuario || config.nit,
+          passwordPri: certificadoPassword || config.certificado_password || pin || config.firmador_pin
+        });
+
+        return await firmadorInterno.firmarDocumento(documento);
+      }
+
+      const baseURL = password && /^https?:\/\//i.test(password) ? password : undefined;
+      const firmador = new FirmadorSVFE({ baseURL });
+      return await firmador.firmarDocumento(documento, {
+        nit: nit || usuario || config.nit,
+        passwordPri: certificadoPassword || config.certificado_password || pin || config.firmador_pin
+      });
+    }
+
     // Si hay ruta de certificado, usar firmador local
     if (certificadoPath) {
-      const firmadorLocal = new FirmadorLocal();
-      await firmadorLocal.cargarCertificado(certificadoPath, certificadoPassword || pin);
-      const result = await firmadorLocal.firmarDocumento(documento);
-      return result;
+      const firmadorInterno = new FirmadorInternoMH({
+        certificadoPath,
+        nit: nit || usuario,
+        passwordPri: certificadoPassword || pin
+      });
+      return await firmadorInterno.firmarDocumento(documento);
     } else {
       // Usar firmador web con Puppeteer
       const firmador = new Firmador({ 
@@ -197,6 +260,36 @@ ipcMain.handle('firmador:firmarDocumento', async (event, { documento, pin, usuar
     }
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('firmador:estadoSVFE', async () => {
+  try {
+    const firmador = new FirmadorSVFE();
+    return await firmador.verificarEstado();
+  } catch (error) {
+    return { disponible: false, error: error.message };
+  }
+});
+
+ipcMain.handle('firmador:validarCertificado', async (event, { certificadoPath, certificadoPassword }) => {
+  try {
+    const config = db.getConfiguracion() || {};
+    const firmadorLocal = new FirmadorInternoMH({
+      certificadoPath,
+      nit: config.firmador_usuario || config.hacienda_usuario || config.nit,
+      passwordPri: certificadoPassword || config.certificado_password
+    });
+    const resultado = await firmadorLocal.cargarCertificado();
+    return {
+      valido: true,
+      info: resultado.info
+    };
+  } catch (error) {
+    return {
+      valido: false,
+      error: error.message
+    };
   }
 });
 
@@ -214,6 +307,28 @@ ipcMain.handle('dialog:selectFile', async (event, options) => {
     return { canceled: true };
   } else {
     return { canceled: false, filePath: result.filePaths[0] };
+  }
+});
+
+ipcMain.handle('dte:guardarJson', async (event, { nombreArchivo, contenido }) => {
+  try {
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: nombreArchivo || 'dte.json',
+      filters: [
+        { name: 'JSON', extensions: ['json'] },
+        { name: 'Todos los archivos', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, canceled: true };
+    }
+
+    const fs = require('fs').promises;
+    await fs.writeFile(result.filePath, contenido, 'utf8');
+    return { success: true, filePath: result.filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -253,7 +368,16 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
       default:
         throw new Error('Tipo de DTE no soportado: ' + tipo);
     }
-    
+
+    const validacion = dteValidator.validar(dte);
+    if (!validacion.valido) {
+      return {
+        success: false,
+        error: `DTE no cumple el schema oficial: ${validacion.errores.slice(0, 8).join(' | ')}`,
+        errores: validacion.errores
+      };
+    }
+
     return { success: true, dte };
   } catch (error) {
     return { success: false, error: error.message };
@@ -328,5 +452,3 @@ ipcMain.handle('contingencia:resolver', async (event, { contingenciaId, sello })
 ipcMain.handle('contingencia:debeActivar', async () => {
   return await contingenciaManager.debeActivarContingencia();
 });
-
-

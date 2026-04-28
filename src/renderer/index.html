@@ -65,7 +65,7 @@
             <div class="stat-card">
               <div class="stat-icon">💰</div>
               <div class="stat-info">
-                <h3>Total Hoy</h3>
+                <h3>Total Enviado Hoy</h3>
                 <p class="stat-value" id="total-hoy">$0.00</p>
               </div>
             </div>
@@ -81,6 +81,13 @@
               <div class="stat-info">
                 <h3>Pendientes</h3>
                 <p class="stat-value" id="pendientes">0</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">↩</div>
+              <div class="stat-info">
+                <h3>Anuladas</h3>
+                <p class="stat-value" id="anuladas-hacienda">0</p>
               </div>
             </div>
           </div>
@@ -479,7 +486,8 @@
                 <div class="form-group full-width">
                   <label>Tipo de Firma</label>
                   <select id="config-tipo-firma" class="form-control">
-                    <option value="web">Firmador Web del MH (Recomendado para pruebas)</option>
+                    <option value="svfe">Firmador local MH/SVFE (Recomendado para pruebas)</option>
+                    <option value="web">Firmador Web del MH (experimental)</option>
                     <option value="local">Certificado Local (.p12/.pfx)</option>
                   </select>
                 </div>
@@ -488,16 +496,16 @@
               <!-- Opciones para Firmador Web -->
               <div id="firma-web-options" class="form-grid" style="margin-top: 1rem;">
                 <div class="form-group">
-                  <label>Usuario del Firmador MH</label>
-                  <input type="text" id="config-firmador-usuario" placeholder="Usuario del firmador">
+                  <label>NIT del certificado</label>
+                  <input type="text" id="config-firmador-usuario" placeholder="NIT sin guiones">
                 </div>
                 <div class="form-group">
-                  <label>Contraseña del Firmador MH</label>
-                  <input type="password" id="config-firmador-password" placeholder="Contraseña del firmador">
+                  <label>URL Firmador SVFE</label>
+                  <input type="text" id="config-firmador-password" placeholder="http://localhost:8113">
                 </div>
                 <div class="form-group">
-                  <label>PIN del Certificado</label>
-                  <input type="password" id="config-firmador-pin" placeholder="PIN del certificado">
+                  <label>Contraseña llave privada</label>
+                  <input type="password" id="config-firmador-pin" placeholder="Contraseña del certificado MH">
                 </div>
               </div>
               
@@ -626,8 +634,17 @@
           <button type="button" class="btn btn-primary" id="btn-enviar-factura" style="display: none;">
             📤 Enviar a Hacienda
           </button>
+          <button type="button" class="btn btn-danger" id="btn-anular-factura" style="display: none;">
+            Anular
+          </button>
           <button type="button" class="btn btn-info" id="btn-descargar-pdf" style="display: none;">
             📄 Descargar PDF
+          </button>
+          <button type="button" class="btn btn-info" id="btn-ver-json" style="display: none;">
+            Ver JSON
+          </button>
+          <button type="button" class="btn btn-info" id="btn-guardar-json" style="display: none;">
+            Guardar JSON
           </button>
           <button type="button" class="btn btn-info" id="btn-imprimir-pdf" style="display: none;">
             🖨️ Imprimir PDF
@@ -641,7 +658,7 @@
   <div id="modal-firmador" class="modal">
     <div class="modal-content" style="max-width: 500px;">
       <div class="modal-header">
-        <h2>🔐 Firmar con Firmador Web</h2>
+        <h2>Firmar con Firmador MH/SVFE</h2>
         <button class="close-modal" onclick="cerrarModalFirmador()">×</button>
       </div>
       <form id="form-firmador" class="modal-form">
@@ -649,37 +666,74 @@
         
         <div class="alert alert-warning" style="margin-bottom: 1rem;">
           <small>
-            ⚠️ No tienes un certificado digital configurado. Se usará el Firmador Web de Hacienda (más lento).
+            Debe estar ejecutándose el firmador local de Hacienda en http://localhost:8113.
             <br><br>
-            <strong>Recomendación:</strong> Configura tu certificado digital en Configuración para firmar instantáneamente.
+            <strong>Recomendación:</strong> guarda estos datos en Configuración para no ingresarlos en cada firma.
           </small>
         </div>
         
         <div class="form-group full-width">
-          <label>Usuario del Firmador de Hacienda *</label>
-          <input type="text" id="firmador-usuario" required placeholder="Usuario del firmador web">
+          <label>NIT del certificado</label>
+          <input type="text" id="firmador-usuario" placeholder="NIT sin guiones">
         </div>
 
         <div class="form-group full-width">
-          <label>Contraseña del Firmador *</label>
-          <input type="password" id="firmador-password" required placeholder="Contraseña del firmador web">
+          <label>URL Firmador SVFE</label>
+          <input type="text" id="firmador-password" placeholder="http://localhost:8113">
         </div>
 
         <div class="form-group full-width">
-          <label>PIN del Certificado Digital *</label>
-          <input type="password" id="firmador-pin" required placeholder="PIN del certificado">
+          <label>Contraseña llave privada *</label>
+          <input type="password" id="firmador-pin" required placeholder="Contraseña del certificado MH">
         </div>
 
         <div class="alert alert-info" style="margin-top: 1rem;">
           <small>
-            ℹ️ Se abrirá el Firmador de Hacienda en una ventana del navegador para completar el proceso de firma.
-            El proceso puede tomar varios minutos.
+            Se llamará al servicio local del firmador. Si no responde, inicia el firmador SVFE y vuelve a intentar.
           </small>
         </div>
 
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="cerrarModalFirmador()">Cancelar</button>
-          <button type="submit" class="btn btn-primary">🔐 Iniciar Firma Web</button>
+          <button type="submit" class="btn btn-primary">Firmar DTE</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal para anulación de DTE -->
+  <div id="modal-anulacion" class="modal">
+    <div class="modal-content" style="max-width: 560px;">
+      <div class="modal-header">
+        <h2>Anular Factura</h2>
+        <button class="close-modal" onclick="cerrarModalAnulacion()">×</button>
+      </div>
+      <form id="form-anulacion" class="modal-form">
+        <input type="hidden" id="anulacion-factura-id">
+
+        <div class="alert alert-warning" style="margin-bottom: 1rem;">
+          <small>
+            Se enviará un evento de invalidación a Hacienda. Si es aceptado, la factura quedará marcada como ANULADO.
+          </small>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Tipo de anulación CAT-024 *</label>
+          <select id="anulacion-tipo" required>
+            <option value="2">2 - Rescindir operación</option>
+            <option value="1">1 - Error en el documento</option>
+            <option value="3">3 - Otro</option>
+          </select>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Motivo *</label>
+          <textarea id="anulacion-motivo" rows="4" required placeholder="Detalle el motivo de la anulación"></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="cerrarModalAnulacion()">Cancelar</button>
+          <button type="submit" class="btn btn-danger" id="btn-confirmar-anulacion">Enviar Anulación</button>
         </div>
       </form>
     </div>
@@ -736,8 +790,8 @@
         <div class="form-group">
           <label>Tipo de Documento *</label>
           <select id="cliente-tipo-documento" required>
-            <option value="13">NIT</option>
-            <option value="36">DUI</option>
+            <option value="36">NIT</option>
+            <option value="13">DUI</option>
             <option value="37">Pasaporte</option>
             <option value="03">Carnet de Residente</option>
             <option value="02">Otro</option>

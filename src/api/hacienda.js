@@ -4,7 +4,8 @@ const crypto = require('crypto');
 class HaciendaAPI {
   constructor(config = {}) {
     this.ambiente = config.ambiente || 'pruebas';
-    this.baseURL = this.ambiente === 'produccion' 
+    this.codigoAmbiente = this.obtenerCodigoAmbiente(this.ambiente);
+    this.baseURL = this.codigoAmbiente === '01'
       ? 'https://api.dtes.mh.gob.sv'
       : 'https://apitest.dtes.mh.gob.sv';
     
@@ -72,11 +73,23 @@ class HaciendaAPI {
     }
 
     try {
+      const identificacion = this.obtenerIdentificacion(dte);
+      const documento = this.obtenerDocumentoFirmado(dte);
+
+      if (!identificacion) {
+        throw new Error('No se encontró la sección identificacion del DTE.');
+      }
+
+      if (!documento) {
+        throw new Error('El DTE no contiene firmaMh/documento firmado. Firme el DTE con el firmador SVFE antes de enviarlo.');
+      }
+
       const payload = {
-        nit: nit,
-        activo: true,
-        passwordPri: passwordPri,
-        dteJson: dte
+        ambiente: this.obtenerCodigoAmbiente(identificacion.ambiente || this.ambiente),
+        idEnvio: Date.now(),
+        version: identificacion.version,
+        tipoDte: identificacion.tipoDte,
+        documento
       };
 
       const response = await this.axiosInstance.post('/fesv/recepciondte', payload, {
@@ -98,8 +111,87 @@ class HaciendaAPI {
     } catch (error) {
       // Manejo detallado de errores del MH
       const errorResponse = this.procesarErrorHacienda(error);
-      return errorResponse;
+      return {
+        success: false,
+        error: errorResponse.error,
+        errorDetalle: errorResponse
+      };
     }
+  }
+
+  /**
+   * Enviar evento de invalidación/anulación de DTE.
+   * El evento debe venir firmado y contener identificacion.version = 2.
+   */
+  async anularDTE(eventoFirmado) {
+    if (!this.token) {
+      throw new Error('No hay token de autenticación. Autentique primero.');
+    }
+
+    try {
+      const identificacion = this.obtenerIdentificacion(eventoFirmado);
+      const documento = this.obtenerDocumentoFirmado(eventoFirmado);
+
+      if (!identificacion) {
+        throw new Error('No se encontró la sección identificacion del evento de invalidación.');
+      }
+
+      if (!documento) {
+        throw new Error('El evento de invalidación no contiene firmaMh/documento firmado.');
+      }
+
+      const payload = {
+        ambiente: this.obtenerCodigoAmbiente(identificacion.ambiente || this.ambiente),
+        idEnvio: Date.now(),
+        version: identificacion.version || 2,
+        documento
+      };
+
+      const response = await this.axiosInstance.post('/fesv/anulardte', payload, {
+        headers: {
+          'Authorization': this.token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return {
+        success: true,
+        estado: response.data.estado,
+        codigoGeneracion: response.data.codigoGeneracion,
+        selloRecibido: response.data.selloRecibido,
+        observaciones: response.data.observaciones,
+        raw: response.data
+      };
+    } catch (error) {
+      const errorResponse = this.procesarErrorHacienda(error);
+      return {
+        success: false,
+        error: errorResponse.error,
+        errorDetalle: errorResponse
+      };
+    }
+  }
+
+  obtenerIdentificacion(dte) {
+    if (typeof dte === 'string') return null;
+    return dte?.identificacion || dte?.dteJson?.identificacion || null;
+  }
+
+  obtenerDocumentoFirmado(dte) {
+    if (!dte) return null;
+    if (typeof dte === 'string') return dte;
+    const documento = dte.firmaMh ||
+      dte.documentoFirmado ||
+      dte.documento ||
+      dte.body ||
+      dte.firma ||
+      null;
+    return typeof documento === 'string' ? documento : null;
+  }
+
+  obtenerCodigoAmbiente(ambiente) {
+    const valor = String(ambiente || '').toLowerCase();
+    return valor === 'produccion' || valor === '01' ? '01' : '00';
   }
 
   /**
@@ -108,16 +200,18 @@ class HaciendaAPI {
   procesarErrorHacienda(error) {
     const errorData = error.response?.data || {};
     const statusCode = error.response?.status;
-    const errorMsg = errorData.mensaje || errorData.descripcion || error.message;
+    const errorMsg = errorData.descripcionMsg || errorData.mensaje || errorData.descripcion || error.message;
     
     // Códigos de error comunes del MH
-    const codigoError = errorData.codigo || errorData.codigoError;
+    const codigoError = errorData.codigo || errorData.codigoError || errorData.codigoMsg;
     
     let errorDetallado = {
       success: false,
       error: errorMsg,
       codigo: codigoError,
       estado: errorData.estado,
+      descripcionMsg: errorData.descripcionMsg,
+      clasificaMsg: errorData.clasificaMsg,
       observaciones: errorData.observaciones || [],
       statusHttp: statusCode
     };
@@ -140,7 +234,7 @@ class HaciendaAPI {
     else if (statusCode === 400) {
       errorDetallado.tipo = 'VALIDACION';
       errorDetallado.reintentable = false;
-      errorDetallado.mensaje = 'Datos del DTE inválidos. Revise las observaciones.';
+      errorDetallado.mensaje = errorData.descripcionMsg || 'Datos del DTE inválidos. Revise las observaciones.';
     }
     
     // Error 503: Servicio no disponible
@@ -172,12 +266,25 @@ class HaciendaAPI {
     }
 
     // Agregar observaciones detalladas si existen
-    if (errorData.observaciones && Array.isArray(errorData.observaciones)) {
-      errorDetallado.observacionesDetalle = errorData.observaciones.map(obs => ({
-        codigo: obs.codigo,
-        mensaje: obs.mensaje,
-        campo: obs.campo
-      }));
+    if (errorData.observaciones) {
+      const observaciones = Array.isArray(errorData.observaciones)
+        ? errorData.observaciones
+        : [errorData.observaciones];
+
+      errorDetallado.observacionesDetalle = observaciones.map(obs => {
+        if (typeof obs === 'string') return obs;
+        if (!obs || typeof obs !== 'object') return String(obs);
+
+        const partes = [
+          obs.codigo || obs.cod || obs.codigoError,
+          obs.campo || obs.path || obs.propiedad,
+          obs.mensaje || obs.message || obs.descripcion || obs.error
+        ].filter(Boolean);
+
+        return partes.length ? partes.join(' - ') : JSON.stringify(obs);
+      });
+    } else if (errorData.descripcionMsg) {
+      errorDetallado.observacionesDetalle = [errorData.descripcionMsg];
     }
 
     return errorDetallado;
@@ -234,7 +341,7 @@ class HaciendaAPI {
     const dteBase = {
       identificacion: {
         version: 1,
-        ambiente: this.ambiente === 'produccion' ? '00' : '01',
+        ambiente: this.obtenerCodigoAmbiente(this.ambiente),
         tipoDte: tipo,
         numeroControl: datos.numeroControl,
         codigoGeneracion: datos.codigoGeneracion || this.generarCodigoGeneracion(),
