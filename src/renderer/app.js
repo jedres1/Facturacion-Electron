@@ -1387,14 +1387,14 @@ function obtenerAyudaDocumentoRelacionado(tipoDte) {
   const ayudas = {
     '05': 'Para Nota de Crédito tipo 05, Hacienda requiere relacionar un CCF o comprobante de retención previo.',
     '06': 'Para Nota de Débito tipo 06, Hacienda requiere relacionar un CCF o comprobante de retención previo.',
-    '07': 'Para Comprobante de Retención tipo 07, relacione el Comprobante de Crédito Fiscal sujeto a retención.'
+    '07': 'Para Comprobante de Retención tipo 07, relacione la Factura o CCF sujeto a retención.'
   };
   return ayudas[tipoDte] || 'Hacienda requiere relacionar el documento tributario afectado.';
 }
 
 function obtenerTiposDocumentoRelacionadoPermitidos(tipoDte) {
   if (tipoDte === '05' || tipoDte === '06') return ['03', '07'];
-  if (tipoDte === '07') return ['03'];
+  if (tipoDte === '07') return ['01', '03'];
   return [];
 }
 
@@ -1668,17 +1668,43 @@ function limpiarDocumentoFiscal(valor) {
 }
 
 function validarReceptorParaHacienda(tipoDte, cliente, config) {
-  if (!['03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
+  const tipo = String(tipoDte || '');
+  if (!['03', '05', '06', '07'].includes(tipo)) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || config?.hacienda_usuario);
-  const nitReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
+  const tipoDocumento = String(cliente?.tipo_documento || '');
+  const numeroReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
 
-  if (!nitReceptor || nitReceptor.length !== 14) {
-    return 'Para CCF, notas y comprobantes de retención el receptor debe tener NIT válido de 14 dígitos.';
+  if (tipo === '07') {
+    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
+      return 'Para Comprobante de Retención con receptor NIT, el documento debe tener 14 dígitos.';
+    }
+
+    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
+      return 'Para Comprobante de Retención con receptor DUI, el documento debe tener 9 dígitos.';
+    }
+
+    if (!['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
+      return 'Seleccione un tipo de documento válido para el sujeto de retención.';
+    }
+
+    if (!String(cliente?.numero_documento || '').trim()) {
+      return 'Ingrese el número de documento del sujeto de retención.';
+    }
+
+    if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
+      return 'Para Comprobante de Retención el receptor no puede ser el mismo NIT del emisor.';
+    }
+
+    return null;
   }
 
-  if (nitEmisor && nitReceptor === nitEmisor) {
-    return 'Para CCF, notas y comprobantes de retención el receptor no puede ser el mismo NIT del emisor.';
+  if (!numeroReceptor || numeroReceptor.length !== 14) {
+    return 'Para CCF y notas el receptor debe tener NIT válido de 14 dígitos.';
+  }
+
+  if (nitEmisor && numeroReceptor === nitEmisor) {
+    return 'Para CCF y notas el receptor no puede ser el mismo NIT del emisor.';
   }
 
   return null;
@@ -1724,13 +1750,41 @@ function validarReceptorDTEParaHacienda(dte, config) {
   if (!['03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || dte?.emisor?.nit);
-  const nitReceptor = tipoDte === '07'
-    ? limpiarDocumentoFiscal(dte?.receptor?.numDocumento)
-    : limpiarDocumentoFiscal(dte?.receptor?.nit);
-  const campoReceptor = tipoDte === '07' ? 'receptor.numDocumento' : 'receptor.nit';
+  if (tipoDte === '07') {
+    const tipoRelacionadoInvalido = (dte?.cuerpoDocumento || [])
+      .map((item) => String(item?.tipoDte || '').padStart(2, '0'))
+      .find((tipoRelacionado) => !['01', '03'].includes(tipoRelacionado));
+
+    if (tipoRelacionadoInvalido) {
+      return `El Comprobante de Retención tiene cuerpoDocumento.tipoDte ${tipoRelacionadoInvalido}, pero Hacienda solo acepta Factura 01 o CCF 03 en ese campo. Genere nuevamente el DTE.`;
+    }
+
+    const tipoDocumento = String(dte?.receptor?.tipoDocumento || '');
+    const numeroReceptor = limpiarDocumentoFiscal(dte?.receptor?.numDocumento);
+
+    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
+      return 'El DTE firmado tiene receptor.numDocumento inválido para NIT. Genere nuevamente el DTE con un NIT de 14 dígitos.';
+    }
+
+    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
+      return 'El DTE firmado tiene receptor.numDocumento inválido para DUI. Genere nuevamente el DTE con un DUI de 9 dígitos.';
+    }
+
+    if (!['13', '36', '37', '03', '02'].includes(tipoDocumento) || !String(dte?.receptor?.numDocumento || '').trim()) {
+      return 'El DTE firmado tiene receptor.tipoDocumento o receptor.numDocumento inválido. Genere nuevamente el DTE.';
+    }
+
+    if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
+      return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+    }
+
+    return null;
+  }
+
+  const nitReceptor = limpiarDocumentoFiscal(dte?.receptor?.nit);
 
   if (!nitReceptor || nitReceptor.length !== 14) {
-    return `El DTE firmado tiene ${campoReceptor} inválido. Genere nuevamente el DTE con un receptor contribuyente válido.`;
+    return 'El DTE firmado tiene receptor.nit inválido. Genere nuevamente el DTE con un receptor contribuyente válido.';
   }
 
   if (nitEmisor && nitReceptor === nitEmisor) {

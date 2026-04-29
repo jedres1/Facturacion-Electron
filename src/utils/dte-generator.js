@@ -961,8 +961,9 @@ class DTEGenerator {
 
   normalizarTipoDteRelacionadoRetencion(tipoDocumento) {
     const tipoDte = String(tipoDocumento || '').padStart(2, '0');
-    if (tipoDte !== '03') {
-      throw new Error(`El Comprobante de Retención solo admite CCF tipo 03 como documento relacionado. Valor recibido: ${tipoDte || 'vacío'}.`);
+    const tiposPermitidos = ['01', '03'];
+    if (!tiposPermitidos.includes(tipoDte)) {
+      throw new Error(`El Comprobante de Retención solo admite Factura tipo 01 o CCF tipo 03 como documento relacionado. Valor recibido: ${tipoDte || 'vacío'}.`);
     }
     return tipoDte;
   }
