@@ -281,6 +281,13 @@ body {
   color: var(--text-primary);
 }
 
+.form-hint {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .form-control,
 input[type="text"],
 input[type="email"],
@@ -654,4 +661,3 @@ textarea {
   border: 1px solid #fca5a5;
   color: #991b1b;
 }
-

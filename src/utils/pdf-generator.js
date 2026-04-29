@@ -61,7 +61,7 @@ class PDFGenerator {
 
       // 4. Información del receptor
       this.currentY -= 40;
-      await this.drawReceptor(page, fontBold, fontRegular, dteData.receptor);
+      await this.drawReceptor(page, fontBold, fontRegular, dteData.receptor || dteData.sujetoExcluido);
 
       // 5. Tabla de productos/servicios
       this.currentY -= 30;
@@ -406,9 +406,13 @@ class PDFGenerator {
       const montoDescu = this.toMoneyNumber(item.montoDescu ?? item.descuento);
       const ventaGravada = this.toMoneyNumber(item.ventaGravada);
       const ventaExenta = this.toMoneyNumber(item.ventaExenta);
+      const compra = this.toMoneyNumber(item.compra);
+      const ivaRetenido = this.toMoneyNumber(item.ivaRetenido);
+      const montoSujetoGrav = this.toMoneyNumber(item.montoSujetoGrav);
+      const esRetencion = montoSujetoGrav > 0 || ivaRetenido > 0;
       
       // Cantidad
-      page.drawText(cantidad.toString(), {
+      page.drawText(esRetencion ? '-' : cantidad.toString(), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[0];
@@ -421,7 +425,7 @@ class PDFGenerator {
       x += colWidths[1];
       
       // Precio Unitario
-      page.drawText(this.formatMoney(precioUni), {
+      page.drawText(esRetencion ? '-' : this.formatMoney(precioUni), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[2];
@@ -433,15 +437,15 @@ class PDFGenerator {
       x += colWidths[3];
       
       // Gravado/Exento
-      const valor = ventaGravada > 0 ? ventaGravada : ventaExenta;
-      const tipo = ventaGravada > 0 ? 'G' : 'E';
+      const valor = ventaGravada > 0 ? ventaGravada : (ventaExenta > 0 ? ventaExenta : (compra > 0 ? compra : (montoSujetoGrav || ivaRetenido)));
+      const tipo = ventaGravada > 0 ? 'G' : (ventaExenta > 0 ? 'E' : (compra > 0 ? 'C' : 'R'));
       page.drawText(`${this.formatMoney(valor)} (${tipo})`, {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
       x += colWidths[4];
       
       // Total
-      const total = (cantidad * precioUni) - montoDescu;
+      const total = ivaRetenido > 0 ? ivaRetenido : ((cantidad * precioUni) - montoDescu);
       page.drawText(this.formatMoney(total), {
         x: x + 5, y: y - 8, size: 8, font: fontRegular
       });
@@ -476,8 +480,9 @@ class PDFGenerator {
       { label: 'Subtotal:', valor: resumen.subTotal, bold: true },
       { label: 'IVA (13%):', valor: resumen.totalIva || (resumen.tributos?.[0]?.valor || 0) },
       { label: 'IVA Retenido:', valor: resumen.ivaRete1 || 0 },
+      { label: 'Total IVA Retenido:', valor: resumen.totalIVAretenido || 0 },
       { label: 'Retención Renta:', valor: resumen.reteRenta || 0 },
-      { label: 'TOTAL A PAGAR:', valor: resumen.totalPagar ?? resumen.montoTotalOperacion ?? 0, bold: true, large: true }
+      { label: 'TOTAL A PAGAR:', valor: resumen.totalPagar ?? resumen.totalIVAretenido ?? resumen.montoTotalOperacion ?? 0, bold: true, large: true }
     ];
     
     totales.forEach(item => {
@@ -626,6 +631,7 @@ class PDFGenerator {
       '03': 'COMPROBANTE DE CRÉDITO FISCAL',
       '05': 'NOTA DE CRÉDITO',
       '06': 'NOTA DE DÉBITO',
+      '07': 'COMPROBANTE DE RETENCIÓN',
       '11': 'FACTURA DE EXPORTACIÓN',
       '14': 'FACTURA SUJETO EXCLUIDO'
     };

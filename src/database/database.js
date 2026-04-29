@@ -67,6 +67,12 @@ class DatabaseManager {
         municipio TEXT,
         distrito TEXT,
         giro TEXT,
+        tipo_dte_default TEXT NOT NULL DEFAULT '01',
+        aplica_exportacion INTEGER DEFAULT 0,
+        cod_pais TEXT,
+        nombre_pais TEXT,
+        tipo_persona_exportacion INTEGER,
+        desc_actividad_exportacion TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -92,6 +98,21 @@ class DatabaseManager {
     } catch (error) {
       // La columna ya existe, ignorar error
     }
+
+    [
+      [`aplica_exportacion`, `INTEGER DEFAULT 0`],
+      [`tipo_dte_default`, `TEXT NOT NULL DEFAULT '01'`],
+      [`cod_pais`, `TEXT`],
+      [`nombre_pais`, `TEXT`],
+      [`tipo_persona_exportacion`, `INTEGER`],
+      [`desc_actividad_exportacion`, `TEXT`]
+    ].forEach(([columna, tipo]) => {
+      try {
+        this.db.exec(`ALTER TABLE clientes ADD COLUMN ${columna} ${tipo}`);
+      } catch (error) {
+        // La columna ya existe, ignorar error
+      }
+    });
     
     // Agregar columnas a configuracion si no existen (para bases de datos existentes)
     try {
@@ -432,14 +453,18 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT INTO clientes 
       (tipo_documento, numero_documento, nrc, nombre, nombre_comercial, tipo_persona,
-       telefono, email, direccion, departamento, municipio, distrito, giro)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       telefono, email, direccion, departamento, municipio, distrito, giro,
+       tipo_dte_default, aplica_exportacion, cod_pais, nombre_pais, tipo_persona_exportacion, desc_actividad_exportacion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
       cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
-      cliente.distrito, cliente.giro
+      cliente.distrito, cliente.giro, cliente.tipo_dte_default || '01',
+      cliente.aplica_exportacion ? 1 : 0,
+      cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
+      cliente.desc_actividad_exportacion
     );
   }
 
@@ -449,14 +474,19 @@ class DatabaseManager {
       UPDATE clientes 
       SET tipo_documento = ?, numero_documento = ?, nrc = ?, nombre = ?, nombre_comercial = ?,
           tipo_persona = ?, telefono = ?, email = ?, direccion = ?, departamento = ?, 
-          municipio = ?, distrito = ?, giro = ?, updated_at = CURRENT_TIMESTAMP
+          municipio = ?, distrito = ?, giro = ?, tipo_dte_default = ?, aplica_exportacion = ?, cod_pais = ?,
+          nombre_pais = ?, tipo_persona_exportacion = ?, desc_actividad_exportacion = ?,
+          updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
       cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
-      cliente.distrito, cliente.giro, id
+      cliente.distrito, cliente.giro, cliente.tipo_dte_default || '01',
+      cliente.aplica_exportacion ? 1 : 0,
+      cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
+      cliente.desc_actividad_exportacion, id
     );
   }
 

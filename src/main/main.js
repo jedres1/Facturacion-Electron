@@ -360,6 +360,9 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
       case '06': // Nota de Débito
         dte = dteGenerator.generarNotaDebito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
         break;
+      case '07': // Comprobante de Retención
+        dte = dteGenerator.generarComprobanteRetencion(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
+        break;
       case '11': // Factura de Exportación
         dte = dteGenerator.generarFacturaExportacion(config, cliente, items, resumen, opcionesConCorrelativo);
         break;

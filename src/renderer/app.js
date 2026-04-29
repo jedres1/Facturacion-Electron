@@ -422,7 +422,7 @@ async function loadClientes() {
           <tr>
             <td>${c.numero_documento}</td>
             <td>${c.nrc || 'N/A'}</td>
-            <td>${c.nombre}</td>
+            <td>${c.nombre}${Number(c.aplica_exportacion) ? ' <span class="badge badge-info">Exportación</span>' : ''}</td>
             <td>${c.tipo_persona || 'N/A'}</td>
             <td>${ubicacion}</td>
             <td>${c.telefono || 'N/A'}</td>
@@ -576,7 +576,7 @@ async function loadClientesSelect() {
   state.clientes.forEach(c => {
     const option = document.createElement('option');
     option.value = c.id;
-    option.textContent = `${c.nombre} - ${c.numero_documento}`;
+    option.textContent = `${c.nombre} - ${c.numero_documento} (${obtenerNombreTipoDte(c.tipo_dte_default || '01')})`;
     select.appendChild(option);
   });
 }
@@ -604,7 +604,11 @@ function setupEventListeners() {
   });
 
   document.getElementById('tipo-dte')?.addEventListener('change', actualizarCamposNotaCredito);
+  document.getElementById('cliente-select')?.addEventListener('change', sugerirTipoDteClienteSeleccionado);
   document.getElementById('nc-tipo-generacion')?.addEventListener('change', actualizarPlaceholderDocumentoRelacionado);
+  document.getElementById('exportacion-tipo-item')?.addEventListener('change', actualizarCamposExportacionFactura);
+  document.getElementById('retencion-monto-sujeto')?.addEventListener('input', actualizarResumenFactura);
+  document.getElementById('retencion-porcentaje')?.addEventListener('input', actualizarResumenFactura);
   
   document.getElementById('btn-agregar-item')?.addEventListener('click', agregarItem);
   document.getElementById('btn-cancelar')?.addEventListener('click', () => {
@@ -669,6 +673,10 @@ function setupEventListeners() {
   // Inicializar autocomplete de actividades económicas
   setupActividadAutocomplete('cliente-giro', 'cliente-giro-dropdown');
   setupActividadAutocomplete('config-actividad', 'config-actividad-dropdown');
+
+  document.getElementById('cliente-aplica-exportacion')?.addEventListener('change', actualizarCamposExportacionCliente);
+  document.getElementById('cliente-tipo-dte-default')?.addEventListener('change', actualizarCamposExportacionCliente);
+  document.getElementById('cliente-cod-pais')?.addEventListener('change', completarPaisExportacionCliente);
 }
 
 // Poblar selects de departamentos
@@ -952,9 +960,19 @@ async function generarFactura() {
       return;
     }
 
-    // Validar que haya items
-    if (state.currentFactura.items.length === 0) {
+    // Obtener tipo de DTE
+    const tipoDte = document.getElementById('tipo-dte').value;
+    const requiereDocumentoRelacionado = ['05', '06', '07'].includes(tipoDte);
+    const esRetencion = tipoDte === '07';
+
+    if (!esRetencion && state.currentFactura.items.length === 0) {
       showNotification('Por favor agregue al menos un producto', 'error');
+      return;
+    }
+
+    const datosRetencion = esRetencion ? obtenerDatosRetencion() : null;
+    if (esRetencion && (!datosRetencion || datosRetencion.montoSujeto <= 0 || datosRetencion.porcentaje <= 0)) {
+      showNotification('Ingrese el monto sujeto y el porcentaje de retención.', 'error');
       return;
     }
 
@@ -968,18 +986,27 @@ async function generarFactura() {
     // Calcular totales
     const resumen = calcularResumenFactura();
     
-    // Obtener tipo de DTE
-    const tipoDte = document.getElementById('tipo-dte').value;
-    const esNotaCredito = tipoDte === '05';
-    const documentoRelacionado = esNotaCredito ? obtenerDocumentoRelacionadoNotaCredito() : null;
+    const documentoRelacionado = requiereDocumentoRelacionado ? obtenerDocumentoRelacionadoNotaCredito() : null;
 
-    if (esNotaCredito && !documentoRelacionado) {
+    if (requiereDocumentoRelacionado && !documentoRelacionado) {
       return;
     }
 
     const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion);
     if (errorReceptor) {
       showNotification(errorReceptor, 'error');
+      return;
+    }
+
+    const errorExportacion = validarClienteExportacion(tipoDte, cliente);
+    if (errorExportacion) {
+      showNotification(errorExportacion, 'error');
+      return;
+    }
+
+    const errorSujetoExcluido = validarClienteSujetoExcluido(tipoDte, cliente);
+    if (errorSujetoExcluido) {
+      showNotification(errorSujetoExcluido, 'error');
       return;
     }
     
@@ -996,11 +1023,16 @@ async function generarFactura() {
       email: cliente.email,
       direccion: cliente.direccion,
       municipio: cliente.municipio,
-      departamento: cliente.departamento
+      departamento: cliente.departamento,
+      aplica_exportacion: cliente.aplica_exportacion,
+      cod_pais: cliente.cod_pais,
+      nombre_pais: cliente.nombre_pais,
+      tipo_persona_exportacion: cliente.tipo_persona_exportacion,
+      desc_actividad_exportacion: cliente.desc_actividad_exportacion
     };
     
     // Preparar items para el generador
-    const items = state.currentFactura.items.map((item, index) => ({
+    const items = esRetencion ? [] : state.currentFactura.items.map((item, index) => ({
       numItem: index + 1,
       tipoItem: 1, // 1=Bien, 2=Servicio
       numeroDocumento: null,
@@ -1010,8 +1042,8 @@ async function generarFactura() {
       unidad_medida: item.unidad_medida || 'UND',
       descripcion: item.descripcion,
       precio_unitario: item.precioUnitario,
-      numero_documento: esNotaCredito ? documentoRelacionado.numeroDocumento : null,
-      numeroDocumento: esNotaCredito ? documentoRelacionado.numeroDocumento : null,
+      numero_documento: requiereDocumentoRelacionado ? documentoRelacionado.numeroDocumento : null,
+      numeroDocumento: requiereDocumentoRelacionado ? documentoRelacionado.numeroDocumento : null,
       montoDescu: item.descuento || 0,
       descuento: item.descuento || 0,
       exento: item.exento,
@@ -1022,18 +1054,30 @@ async function generarFactura() {
     
     // Preparar resumen para el generador
     const esFacturaConsumidorFinal = tipoDte === '01';
+    const esDocumentoSinIva = ['07', '11', '14'].includes(tipoDte);
+    const opcionesExportacion = tipoDte === '11' ? obtenerOpcionesExportacionFactura() : {};
     const totalGravadoDte = esFacturaConsumidorFinal
       ? roundMoney(resumen.subtotalGravado + resumen.totalIva)
       : resumen.subtotalGravado;
     const subtotalDte = esFacturaConsumidorFinal
       ? roundMoney(totalGravadoDte + resumen.subtotalExento)
       : resumen.subtotalTotal;
+    const totalExportacion = tipoDte === '11'
+      ? roundMoney(resumen.subtotalTotal + (opcionesExportacion.flete || 0) + (opcionesExportacion.seguro || 0))
+      : null;
+    const totalDte = esRetencion
+      ? datosRetencion.ivaRetenido
+      : tipoDte === '11'
+      ? totalExportacion
+      : (esDocumentoSinIva ? resumen.subtotalTotal : resumen.total);
+    const ivaDte = esDocumentoSinIva ? 0 : resumen.totalIva;
+    const montoRetencion = esRetencion ? datosRetencion.ivaRetenido : 0;
 
     const resumenDte = {
       subtotal: subtotalDte,
-      total: resumen.total,
-      iva: resumen.totalIva,
-      gravada: totalGravadoDte,
+      total: totalDte,
+      iva: ivaDte,
+      gravada: esDocumentoSinIva ? resumen.subtotalTotal : totalGravadoDte,
       exenta: 0,
       descuento: resumen.totalDescuento,
       totalNoSuj: resumen.subtotalExento,
@@ -1044,26 +1088,28 @@ async function generarFactura() {
       descuExenta: 0,
       descuGravada: resumen.totalDescuento,
       totalDescu: resumen.totalDescuento,
-      tributos: resumen.totalIva > 0 ? [{
+      tributos: ivaDte > 0 ? [{
         codigo: '20',
         descripcion: 'Impuesto al Valor Agregado 13%',
-        valor: resumen.totalIva
+        valor: ivaDte
       }] : null,
       subTotal: subtotalDte,
       ivaRete1: 0,
       reteRenta: 0,
-      montoTotalOperacion: roundMoney(resumen.total),
+      montoTotalOperacion: roundMoney(totalDte),
       totalNoGravado: 0,
-      totalPagar: roundMoney(resumen.total),
-      totalLetras: numeroALetras(resumen.total),
+      totalPagar: roundMoney(totalDte),
+      totalLetras: numeroALetras(totalDte),
       condicionOperacion: parseInt(document.getElementById('condicion-operacion').value),
       pagos: [{
         codigo: '01', // Efectivo
-        montoPago: roundMoney(resumen.total),
+        montoPago: roundMoney(totalDte),
         referencia: null,
         plazo: null,
         periodo: null
-      }]
+      }],
+      totalSujetoRetencion: esRetencion ? datosRetencion.montoSujeto : undefined,
+      totalIVAretenido: esRetencion ? montoRetencion : undefined
     };
     
     // Generar DTE usando el generador oficial
@@ -1079,7 +1125,10 @@ async function generarFactura() {
       opciones: {
         tipoTransmision: 1, // 1=Normal
         tipoContingencia: null,
-        documentoRelacionado
+        documentoRelacionado,
+        codigoRetencionMH: document.getElementById('retencion-codigo')?.value || '22',
+        retencion: datosRetencion,
+        ...opcionesExportacion
       }
     });
     
@@ -1107,11 +1156,12 @@ async function generarFactura() {
         municipio: cliente.municipio,
         departamento: cliente.departamento
       },
-      items: state.currentFactura.items,
-      subtotal: resumen.subtotalTotal,
-      iva: resumen.totalIva,
-      total: resumen.total,
+      items: esRetencion ? [] : state.currentFactura.items,
+      subtotal: esRetencion ? datosRetencion.montoSujeto : resumen.subtotalTotal,
+      iva: ivaDte,
+      total: totalDte,
       descuento: resumen.totalDescuento,
+      retencion: montoRetencion,
       condicion_operacion: resumenDte.condicionOperacion,
       estado: 'PENDIENTE',
       json_dte: dte
@@ -1188,10 +1238,44 @@ function actualizarCamposNotaCredito() {
   const tipoDte = document.getElementById('tipo-dte')?.value;
   const section = document.getElementById('nota-credito-section');
   const submitButton = document.querySelector('#form-factura button[type="submit"]');
-  const requerido = tipoDte === '05';
+  const requerido = ['05', '06', '07'].includes(tipoDte);
+  const esRetencion = tipoDte === '07';
+  const ayuda = document.getElementById('documento-relacionado-ayuda');
+  const retencionCodigoGroup = document.getElementById('retencion-codigo-group');
+  const retencionMontoGroup = document.getElementById('retencion-monto-group');
+  const retencionPorcentajeGroup = document.getElementById('retencion-porcentaje-group');
+  const retencionValorGroup = document.getElementById('retencion-valor-group');
+  const tipoDocumentoSelect = document.getElementById('nc-tipo-documento');
+  const exportacionSection = document.getElementById('exportacion-section');
+  const itemsSection = document.getElementById('items-section');
 
   if (section) {
     section.style.display = requerido ? 'block' : 'none';
+  }
+
+  if (exportacionSection) {
+    exportacionSection.style.display = tipoDte === '11' ? 'block' : 'none';
+  }
+
+  if (ayuda) {
+    ayuda.textContent = obtenerAyudaDocumentoRelacionado(tipoDte);
+  }
+
+  if (retencionCodigoGroup) retencionCodigoGroup.style.display = esRetencion ? 'block' : 'none';
+  if (retencionMontoGroup) retencionMontoGroup.style.display = esRetencion ? 'block' : 'none';
+  if (retencionPorcentajeGroup) retencionPorcentajeGroup.style.display = esRetencion ? 'block' : 'none';
+  if (retencionValorGroup) retencionValorGroup.style.display = esRetencion ? 'block' : 'none';
+  if (itemsSection) itemsSection.style.display = esRetencion ? 'none' : 'block';
+
+  if (tipoDocumentoSelect) {
+    const permitidos = obtenerTiposDocumentoRelacionadoPermitidos(tipoDte);
+    Array.from(tipoDocumentoSelect.options).forEach(option => {
+      option.hidden = permitidos.length > 0 && !permitidos.includes(option.value);
+      option.disabled = option.hidden;
+    });
+    if (permitidos.length > 0 && !permitidos.includes(tipoDocumentoSelect.value)) {
+      tipoDocumentoSelect.value = permitidos[0];
+    }
   }
 
   ['nc-tipo-documento', 'nc-tipo-generacion', 'nc-numero-documento', 'nc-fecha-emision'].forEach((id) => {
@@ -1199,11 +1283,119 @@ function actualizarCamposNotaCredito() {
     if (input) input.required = requerido;
   });
 
+  ['retencion-codigo', 'retencion-monto-sujeto', 'retencion-porcentaje'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = esRetencion;
+  });
+
   if (submitButton) {
-    submitButton.textContent = requerido ? 'Generar Nota de Crédito' : 'Generar Factura';
+    submitButton.textContent = obtenerTextoBotonGenerar(tipoDte);
   }
 
   actualizarPlaceholderDocumentoRelacionado();
+  actualizarCamposExportacionFactura();
+  actualizarResumenFactura();
+}
+
+function sugerirTipoDteClienteSeleccionado() {
+  const clienteId = Number(document.getElementById('cliente-select')?.value || 0);
+  const cliente = state.clientes.find(c => c.id === clienteId);
+  const tipoDteSelect = document.getElementById('tipo-dte');
+  if (!cliente || !tipoDteSelect) return;
+
+  const tipoSugerido = cliente.tipo_dte_default || '01';
+  if (tipoDteSelect.querySelector(`option[value="${tipoSugerido}"]`)) {
+    tipoDteSelect.value = tipoSugerido;
+    actualizarCamposNotaCredito();
+  }
+}
+
+function obtenerNombreTipoDte(tipoDte) {
+  const nombres = {
+    '01': 'Factura',
+    '03': 'CCF',
+    '11': 'Exportación',
+    '14': 'Sujeto Excluido'
+  };
+  return nombres[tipoDte] || tipoDte;
+}
+
+function actualizarCamposExportacionFactura() {
+  const tipoDte = document.getElementById('tipo-dte')?.value;
+  const tipoItemExpor = Number(document.getElementById('exportacion-tipo-item')?.value || 2);
+  const requiereIncoterm = tipoDte === '11' && tipoItemExpor !== 2;
+  const requiereAduana = tipoDte === '11' && tipoItemExpor !== 2;
+
+  document.querySelectorAll('.exportacion-incoterm-field').forEach((field) => {
+    field.style.display = requiereIncoterm ? 'block' : 'none';
+  });
+
+  document.querySelectorAll('.exportacion-aduana-field').forEach((field) => {
+    field.style.display = requiereAduana ? 'block' : 'none';
+  });
+
+  ['exportacion-incoterm', 'exportacion-flete', 'exportacion-seguro'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = requiereIncoterm;
+  });
+
+  ['exportacion-recinto-fiscal', 'exportacion-regimen'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = requiereAduana;
+  });
+}
+
+function obtenerOpcionesExportacionFactura() {
+  const tipoItemExpor = Number(document.getElementById('exportacion-tipo-item')?.value || 2);
+  const incotermSelect = document.getElementById('exportacion-incoterm');
+  const selectedIncoterm = incotermSelect?.selectedOptions?.[0];
+
+  const opciones = {
+    tipoItemExpor,
+    codIncoterms: tipoItemExpor === 2 ? null : incotermSelect?.value,
+    descIncoterms: tipoItemExpor === 2 ? null : selectedIncoterm?.dataset?.desc,
+    flete: tipoItemExpor === 2 ? 0 : roundMoney(document.getElementById('exportacion-flete')?.value || 0),
+    seguro: tipoItemExpor === 2 ? 0 : roundMoney(document.getElementById('exportacion-seguro')?.value || 0),
+    recintoFiscal: tipoItemExpor === 2 ? null : normalizarRecintoFiscal(document.getElementById('exportacion-recinto-fiscal')?.value),
+    regimen: tipoItemExpor === 2 ? null : String(document.getElementById('exportacion-regimen')?.value || '').trim().toUpperCase()
+  };
+
+  if (tipoItemExpor !== 2 && (!opciones.recintoFiscal || !opciones.regimen)) {
+    throw new Error('Complete recinto fiscal y régimen para la factura de exportación.');
+  }
+
+  return opciones;
+}
+
+function normalizarRecintoFiscal(valor) {
+  const limpio = String(valor || '').replace(/[^0-9]/g, '');
+  return limpio ? limpio.padStart(2, '0') : '';
+}
+
+function obtenerTextoBotonGenerar(tipoDte) {
+  const textos = {
+    '05': 'Generar Nota de Crédito',
+    '06': 'Generar Nota de Débito',
+    '07': 'Generar Comprobante de Retención',
+    '11': 'Generar Factura de Exportación',
+    '14': 'Generar Factura Sujeto Excluido'
+  };
+  return textos[tipoDte] || 'Generar Factura';
+}
+
+function obtenerAyudaDocumentoRelacionado(tipoDte) {
+  const ayudas = {
+    '05': 'Para Nota de Crédito tipo 05, Hacienda requiere relacionar un CCF o comprobante de retención previo.',
+    '06': 'Para Nota de Débito tipo 06, Hacienda requiere relacionar un CCF o comprobante de retención previo.',
+    '07': 'Para Comprobante de Retención tipo 07, relacione el Comprobante de Crédito Fiscal sujeto a retención.'
+  };
+  return ayudas[tipoDte] || 'Hacienda requiere relacionar el documento tributario afectado.';
+}
+
+function obtenerTiposDocumentoRelacionadoPermitidos(tipoDte) {
+  if (tipoDte === '05' || tipoDte === '06') return ['03', '07'];
+  if (tipoDte === '07') return ['03'];
+  return [];
 }
 
 function actualizarPlaceholderDocumentoRelacionado() {
@@ -1217,13 +1409,15 @@ function actualizarPlaceholderDocumentoRelacionado() {
 }
 
 function obtenerDocumentoRelacionadoNotaCredito() {
+  const tipoDte = document.getElementById('tipo-dte')?.value;
   const tipoDocumento = document.getElementById('nc-tipo-documento')?.value;
   const tipoGeneracion = Number(document.getElementById('nc-tipo-generacion')?.value);
   const numeroDocumento = String(document.getElementById('nc-numero-documento')?.value || '').trim().toUpperCase();
   const fechaEmision = document.getElementById('nc-fecha-emision')?.value;
+  const permitidos = obtenerTiposDocumentoRelacionadoPermitidos(tipoDte);
 
-  if (!['03', '07'].includes(tipoDocumento)) {
-    showNotification('El documento relacionado de una Nota de Crédito debe ser tipo 03 o 07.', 'error');
+  if (permitidos.length > 0 && !permitidos.includes(tipoDocumento)) {
+    showNotification(`El documento relacionado permitido para tipo ${tipoDte} debe ser: ${permitidos.join(', ')}.`, 'error');
     return null;
   }
 
@@ -1253,13 +1447,25 @@ function obtenerDocumentoRelacionadoNotaCredito() {
 // Actualizar resumen de factura
 function actualizarResumenFactura() {
   const resumen = calcularResumenFactura();
+  const tipoDte = document.getElementById('tipo-dte')?.value;
+  const esRetencion = tipoDte === '07';
+  const datosRetencion = esRetencion ? obtenerDatosRetencion() : null;
+  const mostrarSinIva = ['07', '11', '14'].includes(tipoDte);
+  const totalVisual = esRetencion ? datosRetencion.ivaRetenido : (mostrarSinIva ? resumen.subtotalTotal : resumen.total);
+  const ivaVisual = mostrarSinIva ? 0 : resumen.totalIva;
+  const subtotalGravadoVisual = esRetencion ? datosRetencion.montoSujeto : resumen.subtotalGravado;
+  const subtotalExentoVisual = esRetencion ? 0 : resumen.subtotalExento;
+  const subtotalTotalVisual = esRetencion ? datosRetencion.montoSujeto : resumen.subtotalTotal;
   
-  document.getElementById('resumen-subtotal-gravado').textContent = formatCurrency(resumen.subtotalGravado);
-  document.getElementById('resumen-subtotal-exento').textContent = formatCurrency(resumen.subtotalExento);
-  document.getElementById('resumen-subtotal').textContent = formatCurrency(resumen.subtotalTotal);
-  document.getElementById('resumen-iva').textContent = formatCurrency(resumen.totalIva);
-  document.getElementById('resumen-total').textContent = formatCurrency(resumen.total);
-  document.getElementById('resumen-letras').textContent = numeroALetras(resumen.total);
+  document.getElementById('resumen-subtotal-gravado').textContent = formatCurrency(subtotalGravadoVisual);
+  document.getElementById('resumen-subtotal-exento').textContent = formatCurrency(subtotalExentoVisual);
+  document.getElementById('resumen-subtotal').textContent = formatCurrency(subtotalTotalVisual);
+  document.getElementById('resumen-iva').textContent = formatCurrency(esRetencion ? datosRetencion.ivaRetenido : ivaVisual);
+  document.getElementById('resumen-total').textContent = formatCurrency(totalVisual);
+  document.getElementById('resumen-letras').textContent = numeroALetras(totalVisual);
+
+  actualizarEtiquetasResumenRetencion(esRetencion);
+  actualizarValorRetencionCalculado(datosRetencion);
 }
 
 // Calcular resumen de factura
@@ -1302,6 +1508,38 @@ function calcularResumenFactura() {
 
 function roundMoney(value) {
   return Number(Number(value || 0).toFixed(2));
+}
+
+function obtenerDatosRetencion() {
+  const montoSujeto = roundMoney(Number(document.getElementById('retencion-monto-sujeto')?.value || 0));
+  const porcentajeValue = document.getElementById('retencion-porcentaje')?.value;
+  const porcentaje = roundMoney(porcentajeValue === '' ? 0 : Number(porcentajeValue ?? 1));
+  const ivaRetenido = roundMoney(montoSujeto * (porcentaje / 100));
+
+  return { montoSujeto, porcentaje, ivaRetenido };
+}
+
+function actualizarValorRetencionCalculado(datosRetencion = null) {
+  const input = document.getElementById('retencion-valor-calculado');
+  if (!input) return;
+
+  const datos = datosRetencion || obtenerDatosRetencion();
+  input.value = formatCurrency(datos.ivaRetenido);
+}
+
+function actualizarEtiquetasResumenRetencion(esRetencion) {
+  const labels = {
+    'resumen-subtotal-gravado-label': esRetencion ? 'Monto Sujeto:' : 'Subtotal Gravado:',
+    'resumen-subtotal-exento-label': esRetencion ? 'Exento:' : 'Subtotal Exento:',
+    'resumen-subtotal-label': esRetencion ? 'Base de Cálculo:' : 'Subtotal Total:',
+    'resumen-iva-label': esRetencion ? 'IVA Retenido:' : 'IVA (13%):',
+    'resumen-total-label': esRetencion ? 'Total Retenido:' : 'Total a Pagar:'
+  };
+
+  Object.entries(labels).forEach(([id, text]) => {
+    const label = document.getElementById(id);
+    if (label) label.textContent = text;
+  });
 }
 
 // Generar número de control
@@ -1430,17 +1668,52 @@ function limpiarDocumentoFiscal(valor) {
 }
 
 function validarReceptorParaHacienda(tipoDte, cliente, config) {
-  if (!['03', '05', '06'].includes(String(tipoDte || ''))) return null;
+  if (!['03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || config?.hacienda_usuario);
   const nitReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
 
   if (!nitReceptor || nitReceptor.length !== 14) {
-    return 'Para CCF/Notas el receptor debe tener NIT válido de 14 dígitos.';
+    return 'Para CCF, notas y comprobantes de retención el receptor debe tener NIT válido de 14 dígitos.';
   }
 
   if (nitEmisor && nitReceptor === nitEmisor) {
-    return 'Para CCF/Notas el receptor no puede ser el mismo NIT del emisor. Seleccione un cliente/contribuyente distinto.';
+    return 'Para CCF, notas y comprobantes de retención el receptor no puede ser el mismo NIT del emisor.';
+  }
+
+  return null;
+}
+
+function validarClienteExportacion(tipoDte, cliente) {
+  if (String(tipoDte || '') !== '11') return null;
+
+  if (Number(cliente?.aplica_exportacion) !== 1) {
+    return 'Marque el cliente como cliente para factura de exportación y complete los datos de país/tipo de persona.';
+  }
+
+  if (!cliente.cod_pais || !cliente.nombre_pais || !cliente.tipo_persona_exportacion || !cliente.desc_actividad_exportacion) {
+    return 'Complete los campos de exportación del cliente: código país, nombre país, tipo persona y actividad del receptor.';
+  }
+
+  return null;
+}
+
+function validarClienteSujetoExcluido(tipoDte, cliente) {
+  if (String(tipoDte || '') !== '14') return null;
+
+  const tipoDocumento = String(cliente?.tipo_documento || '');
+  const numero = limpiarDocumentoFiscal(cliente?.numero_documento);
+
+  if (tipoDocumento === '13' && numero.length !== 9) {
+    return 'Para Sujeto Excluido con DUI, el documento debe tener 9 dígitos.';
+  }
+
+  if (tipoDocumento === '36' && numero.length !== 14) {
+    return 'Para Sujeto Excluido con NIT, el documento debe tener 14 dígitos.';
+  }
+
+  if (!['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
+    return 'Seleccione un tipo de documento válido para el sujeto excluido.';
   }
 
   return null;
@@ -1448,13 +1721,16 @@ function validarReceptorParaHacienda(tipoDte, cliente, config) {
 
 function validarReceptorDTEParaHacienda(dte, config) {
   const tipoDte = dte?.identificacion?.tipoDte;
-  if (!['03', '05', '06'].includes(String(tipoDte || ''))) return null;
+  if (!['03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || dte?.emisor?.nit);
-  const nitReceptor = limpiarDocumentoFiscal(dte?.receptor?.nit);
+  const nitReceptor = tipoDte === '07'
+    ? limpiarDocumentoFiscal(dte?.receptor?.numDocumento)
+    : limpiarDocumentoFiscal(dte?.receptor?.nit);
+  const campoReceptor = tipoDte === '07' ? 'receptor.numDocumento' : 'receptor.nit';
 
   if (!nitReceptor || nitReceptor.length !== 14) {
-    return 'El DTE firmado tiene receptor.nit inválido. Genere nuevamente el DTE con un receptor contribuyente válido.';
+    return `El DTE firmado tiene ${campoReceptor} inválido. Genere nuevamente el DTE con un receptor contribuyente válido.`;
   }
 
   if (nitEmisor && nitReceptor === nitEmisor) {
@@ -1666,12 +1942,18 @@ function abrirModalCliente(cliente = null) {
     document.getElementById('cliente-id').value = cliente.id;
     document.getElementById('cliente-tipo-documento').value = cliente.tipo_documento;
     document.getElementById('cliente-numero-documento').value = cliente.numero_documento;
+    document.getElementById('cliente-tipo-dte-default').value = cliente.tipo_dte_default || '01';
     document.getElementById('cliente-nrc').value = cliente.nrc || '';
     document.getElementById('cliente-nombre').value = cliente.nombre;
     document.getElementById('cliente-nombre-comercial').value = cliente.nombre_comercial || '';
     document.getElementById('cliente-tipo-persona').value = cliente.tipo_persona || '';
     document.getElementById('cliente-telefono').value = cliente.telefono || '';
     document.getElementById('cliente-email').value = cliente.email || '';
+    document.getElementById('cliente-aplica-exportacion').checked = Number(cliente.aplica_exportacion) === 1;
+    document.getElementById('cliente-cod-pais').value = cliente.cod_pais || '';
+    document.getElementById('cliente-nombre-pais').value = cliente.nombre_pais || '';
+    document.getElementById('cliente-tipo-persona-exportacion').value = String(cliente.tipo_persona_exportacion || inferirTipoPersonaExportacion(cliente.tipo_persona));
+    document.getElementById('cliente-desc-actividad-exportacion').value = cliente.desc_actividad_exportacion || '';
     document.getElementById('cliente-departamento').value = cliente.departamento || '';
     
     // Cargar municipios del departamento seleccionado
@@ -1709,7 +1991,11 @@ function abrirModalCliente(cliente = null) {
     // Modo nuevo
     titulo.textContent = 'Nuevo Cliente';
     document.getElementById('cliente-id').value = '';
+    document.getElementById('cliente-tipo-dte-default').value = '01';
+    document.getElementById('cliente-tipo-persona-exportacion').value = '2';
   }
+
+  actualizarCamposExportacionCliente();
   
   modal.classList.add('active');
 }
@@ -1719,6 +2005,68 @@ function cerrarModalCliente() {
   const modal = document.getElementById('modal-cliente');
   modal.classList.remove('active');
   document.getElementById('form-cliente').reset();
+  actualizarCamposExportacionCliente();
+}
+
+function actualizarCamposExportacionCliente() {
+  const aplica = document.getElementById('cliente-aplica-exportacion')?.checked;
+  const tipoDteDefault = document.getElementById('cliente-tipo-dte-default')?.value;
+  const esExportacionDefault = tipoDteDefault === '11';
+  const requiereDatosLocales = tipoDteDefault === '03';
+  const section = document.getElementById('cliente-exportacion-section');
+  const mostrarExportacion = aplica || esExportacionDefault;
+  if (section) section.style.display = mostrarExportacion ? 'grid' : 'none';
+
+  ['cliente-cod-pais', 'cliente-nombre-pais', 'cliente-tipo-persona-exportacion', 'cliente-desc-actividad-exportacion'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = Boolean(mostrarExportacion);
+  });
+
+  ['cliente-departamento', 'cliente-municipio', 'cliente-distrito', 'cliente-giro'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.required = requiereDatosLocales;
+  });
+
+  if (mostrarExportacion) {
+    const checkbox = document.getElementById('cliente-aplica-exportacion');
+    if (checkbox) checkbox.checked = true;
+    completarPaisExportacionCliente();
+    const tipoPersonaExportacion = document.getElementById('cliente-tipo-persona-exportacion');
+    if (tipoPersonaExportacion && !tipoPersonaExportacion.value) {
+      tipoPersonaExportacion.value = inferirTipoPersonaExportacion(document.getElementById('cliente-tipo-persona')?.value);
+    }
+  }
+}
+
+function completarPaisExportacionCliente() {
+  const codPaisInput = document.getElementById('cliente-cod-pais');
+  const nombrePaisInput = document.getElementById('cliente-nombre-pais');
+  if (!codPaisInput || !nombrePaisInput) return;
+
+  const paises = {
+    '9300': 'ESTADOS UNIDOS DE AMERICA',
+    '9301': 'GUATEMALA',
+    '9302': 'HONDURAS',
+    '9303': 'NICARAGUA',
+    '9304': 'COSTA RICA',
+    '9305': 'PANAMA',
+    '9320': 'MEXICO'
+  };
+
+  const codigo = String(codPaisInput.value || '').trim();
+  if (!codigo) {
+    codPaisInput.value = '9300';
+    nombrePaisInput.value = nombrePaisInput.value || paises['9300'];
+    return;
+  }
+
+  if (paises[codigo] && (!nombrePaisInput.value || Object.values(paises).includes(nombrePaisInput.value))) {
+    nombrePaisInput.value = paises[codigo];
+  }
+}
+
+function inferirTipoPersonaExportacion(tipoPersona) {
+  return String(tipoPersona || '').toLowerCase().startsWith('natural') ? 1 : 2;
 }
 
 // Guardar cliente (nuevo o editar)
@@ -1726,10 +2074,22 @@ async function guardarCliente() {
   try {
     const clienteId = document.getElementById('cliente-id').value;
     const emailCliente = document.getElementById('cliente-email').value.trim();
+    const tipoDteDefault = document.getElementById('cliente-tipo-dte-default').value;
+    const aplicaExportacion = document.getElementById('cliente-aplica-exportacion').checked || tipoDteDefault === '11';
+
+    if (!['01', '03', '11', '14'].includes(tipoDteDefault)) {
+      showNotification('Seleccione el documento a generar por defecto para el cliente.', 'error');
+      return;
+    }
     
     const giroValue = extraerCodigoActividad(document.getElementById('cliente-giro'));
-    if (!validarCodigoActividad(giroValue)) {
+    if (tipoDteDefault === '03' && !validarCodigoActividad(giroValue)) {
       showNotification('Seleccione una actividad económica válida de 5 dígitos para el cliente', 'error');
+      return;
+    }
+
+    if (aplicaExportacion && !document.getElementById('cliente-desc-actividad-exportacion').value.trim()) {
+      showNotification('Ingrese la actividad del receptor para factura de exportación.', 'error');
       return;
     }
 
@@ -1746,6 +2106,7 @@ async function guardarCliente() {
     const clienteData = {
       tipo_documento: document.getElementById('cliente-tipo-documento').value,
       numero_documento: document.getElementById('cliente-numero-documento').value,
+      tipo_dte_default: tipoDteDefault,
       nrc: document.getElementById('cliente-nrc').value,
       nombre: document.getElementById('cliente-nombre').value,
       nombre_comercial: document.getElementById('cliente-nombre-comercial').value,
@@ -1756,7 +2117,12 @@ async function guardarCliente() {
       municipio: document.getElementById('cliente-municipio').value,
       distrito: document.getElementById('cliente-distrito').value,
       direccion: document.getElementById('cliente-direccion').value,
-      giro: giroValue
+      giro: giroValue,
+      aplica_exportacion: aplicaExportacion ? 1 : 0,
+      cod_pais: document.getElementById('cliente-cod-pais').value,
+      nombre_pais: document.getElementById('cliente-nombre-pais').value,
+      tipo_persona_exportacion: Number(document.getElementById('cliente-tipo-persona-exportacion').value || inferirTipoPersonaExportacion(document.getElementById('cliente-tipo-persona').value)),
+      desc_actividad_exportacion: document.getElementById('cliente-desc-actividad-exportacion').value
     };
     
     if (clienteId) {

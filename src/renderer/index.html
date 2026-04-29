@@ -131,6 +131,10 @@
                     <option value="01">Factura</option>
                     <option value="03">Comprobante Crédito Fiscal</option>
                     <option value="05">Nota de Crédito</option>
+                    <option value="06">Nota de Débito</option>
+                    <option value="07">Comprobante de Retención</option>
+                    <option value="11">Factura de Exportación</option>
+                    <option value="14">Factura de Sujeto Excluido</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -147,8 +151,8 @@
             <div class="form-section" id="nota-credito-section" style="display: none;">
               <h3>Documento Relacionado</h3>
               <div class="alert alert-info" style="margin-bottom: 1rem;">
-                <small>
-                  Para Nota de Crédito tipo 05, Hacienda requiere relacionar un CCF o comprobante de retención previo.
+                <small id="documento-relacionado-ayuda">
+                  Hacienda requiere relacionar el documento tributario afectado.
                 </small>
               </div>
               <div class="form-grid">
@@ -157,6 +161,8 @@
                   <select id="nc-tipo-documento">
                     <option value="03">03 - Comprobante Crédito Fiscal</option>
                     <option value="07">07 - Comprobante de Retención</option>
+                    <option value="01">01 - Factura</option>
+                    <option value="14">14 - Factura de Sujeto Excluido</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -174,10 +180,109 @@
                   <label>Fecha de Emisión Relacionada</label>
                   <input type="date" id="nc-fecha-emision">
                 </div>
+                <div class="form-group" id="retencion-codigo-group" style="display: none;">
+                  <label>Código Retención IVA MH</label>
+                  <select id="retencion-codigo">
+                    <option value="22">22 - Retención IVA 1%</option>
+                    <option value="C4">C4 - Retención IVA</option>
+                    <option value="C9">C9 - Otra retención IVA</option>
+                  </select>
+                </div>
+                <div class="form-group" id="retencion-monto-group" style="display: none;">
+                  <label>Monto Sujeto a Retención</label>
+                  <input type="number" id="retencion-monto-sujeto" min="0" step="0.01" placeholder="0.00">
+                </div>
+                <div class="form-group" id="retencion-porcentaje-group" style="display: none;">
+                  <label>Porcentaje a Aplicar</label>
+                  <input type="number" id="retencion-porcentaje" min="0" step="0.01" value="1">
+                </div>
+                <div class="form-group" id="retencion-valor-group" style="display: none;">
+                  <label>IVA Retenido Calculado</label>
+                  <input type="text" id="retencion-valor-calculado" value="$0.00" readonly>
+                </div>
               </div>
             </div>
 
-            <div class="form-section">
+            <div class="form-section" id="exportacion-section" style="display: none;">
+              <h3>Datos de Exportación</h3>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Tipo de Exportación</label>
+                  <select id="exportacion-tipo-item">
+                    <option value="2">Servicios</option>
+                    <option value="1">Bienes</option>
+                    <option value="3">Bienes y servicios</option>
+                  </select>
+                </div>
+                <div class="form-group exportacion-aduana-field">
+                  <label>Recinto Fiscal</label>
+                  <input type="text" id="exportacion-recinto-fiscal" list="recintos-fiscales" maxlength="2" placeholder="03">
+                  <small class="form-hint">Ej.: 03 Aérea Monseñor Óscar Arnulfo Romero, 02 Marítima de Acajutla, 05 La Hachadura.</small>
+                  <datalist id="recintos-fiscales">
+                    <option value="01">Terrestre San Bartolo</option>
+                    <option value="02">Marítima de Acajutla</option>
+                    <option value="03">Aérea Monseñor Óscar Arnulfo Romero</option>
+                    <option value="04">Terrestre Las Chinamas</option>
+                    <option value="05">Terrestre La Hachadura</option>
+                    <option value="09">Terrestre El Amatillo</option>
+                    <option value="10">Marítima La Unión</option>
+                    <option value="11">Terrestre El Poy</option>
+                    <option value="15">Fardos Postales</option>
+                    <option value="16">Z.F. San Marcos</option>
+                    <option value="18">Z.F. San Bartolo</option>
+                    <option value="21">Z.F. American Park</option>
+                    <option value="31">Aérea Ilopango</option>
+                    <option value="76">DHL</option>
+                    <option value="99">San Bartolo Envío HN/GT</option>
+                  </datalist>
+                </div>
+                <div class="form-group exportacion-aduana-field">
+                  <label>Régimen</label>
+                  <input type="text" id="exportacion-regimen" list="regimenes-exportacion" maxlength="13" placeholder="EX-1.1000.000">
+                  <small class="form-hint">Ej.: EX-1.1000.000 exportación definitiva común; para temporal usa EX-2.2100.000 o EX-2.2200.000.</small>
+                  <datalist id="regimenes-exportacion">
+                    <option value="EX-1.1000.000">Exportación Definitiva, Régimen Común</option>
+                    <option value="EX-1.1040.000">Exportación Definitiva Sustitución de Mercancías</option>
+                    <option value="EX-1.1054.000">Exportación Definitiva de Zona Franca con origen en compras locales</option>
+                    <option value="EX-1.1100.000">Exportación Definitiva de Envíos de Socorro</option>
+                    <option value="EX-1.1200.000">Exportación Definitiva de Envíos Postales</option>
+                    <option value="EX-1.1300.000">Exportación Definitiva Envíos con despacho urgente</option>
+                    <option value="EX-1.1400.000">Exportación Definitiva Courier</option>
+                    <option value="EX-1.1500.000">Exportación Definitiva Menaje de casa</option>
+                    <option value="EX-2.2100.000">Exportación Temporal para Perfeccionamiento Pasivo</option>
+                    <option value="EX-2.2200.000">Exportación Temporal con Reimportación en el mismo estado</option>
+                    <option value="EX-3.3050.000">Reexportación proveniente de Importación Temporal</option>
+                    <option value="EX-3.3054.000">Reexportación proveniente de Régimen de Zona Franca</option>
+                  </datalist>
+                </div>
+                <div class="form-group exportacion-incoterm-field">
+                  <label>Incoterm</label>
+                  <select id="exportacion-incoterm">
+                    <option value="01" data-desc="EXW">EXW - En fábrica</option>
+                    <option value="02" data-desc="FCA">FCA - Franco transportista</option>
+                    <option value="03" data-desc="FAS">FAS - Franco al costado del buque</option>
+                    <option value="04" data-desc="FOB">FOB - Franco a bordo</option>
+                    <option value="05" data-desc="CFR">CFR - Costo y flete</option>
+                    <option value="06" data-desc="CIF">CIF - Costo, seguro y flete</option>
+                    <option value="07" data-desc="CPT">CPT - Transporte pagado hasta</option>
+                    <option value="08" data-desc="CIP">CIP - Transporte y seguro pagados hasta</option>
+                    <option value="09" data-desc="DAP">DAP - Entregado en lugar</option>
+                    <option value="10" data-desc="DPU">DPU - Entregado en lugar descargado</option>
+                    <option value="11" data-desc="DDP">DDP - Entregado derechos pagados</option>
+                  </select>
+                </div>
+                <div class="form-group exportacion-incoterm-field">
+                  <label>Flete</label>
+                  <input type="number" id="exportacion-flete" min="0" step="0.01" value="0">
+                </div>
+                <div class="form-group exportacion-incoterm-field">
+                  <label>Seguro</label>
+                  <input type="number" id="exportacion-seguro" min="0" step="0.01" value="0">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section" id="items-section">
               <h3>Items de la Factura</h3>
               <div class="items-header">
                 <button type="button" class="btn btn-secondary" id="btn-agregar-item">
@@ -207,23 +312,23 @@
               <h3>Resumen</h3>
               <div class="resumen-grid">
                 <div class="resumen-row">
-                  <span>Subtotal Gravado:</span>
+                  <span id="resumen-subtotal-gravado-label">Subtotal Gravado:</span>
                   <span id="resumen-subtotal-gravado">$0.00</span>
                 </div>
                 <div class="resumen-row">
-                  <span>Subtotal Exento:</span>
+                  <span id="resumen-subtotal-exento-label">Subtotal Exento:</span>
                   <span id="resumen-subtotal-exento">$0.00</span>
                 </div>
                 <div class="resumen-row">
-                  <span>Subtotal Total:</span>
+                  <span id="resumen-subtotal-label">Subtotal Total:</span>
                   <span id="resumen-subtotal">$0.00</span>
                 </div>
                 <div class="resumen-row">
-                  <span>IVA (13%):</span>
+                  <span id="resumen-iva-label">IVA (13%):</span>
                   <span id="resumen-iva">$0.00</span>
                 </div>
                 <div class="resumen-row total">
-                  <span>Total a Pagar:</span>
+                  <span id="resumen-total-label">Total a Pagar:</span>
                   <span id="resumen-total">$0.00</span>
                 </div>
                 <div class="resumen-row">
@@ -915,6 +1020,17 @@
         </div>
 
         <div class="form-group">
+          <label>Documento a Generar por Defecto *</label>
+          <select id="cliente-tipo-dte-default" required>
+            <option value="">Seleccionar...</option>
+            <option value="01">Factura</option>
+            <option value="03">Comprobante de Crédito Fiscal</option>
+            <option value="11">Factura de Exportación</option>
+            <option value="14">Factura Sujeto Excluido</option>
+          </select>
+        </div>
+
+        <div class="form-group">
           <label>NRC (Número de Registro de Contribuyente)</label>
           <input type="text" id="cliente-nrc" placeholder="000000-0">
         </div>
@@ -1067,6 +1183,44 @@
             <option value="98">98 - Actividades indiferenciadas de producción de bienes y servicios de los hogares para uso propio</option>
             <option value="99">99 - Actividades de organizaciones y órganos extraterritoriales</option>
           </datalist>
+        </div>
+
+        <div class="form-group full-width">
+          <label>
+            <input type="checkbox" id="cliente-aplica-exportacion">
+            Cliente para factura de exportación
+          </label>
+        </div>
+
+        <div id="cliente-exportacion-section" class="form-grid full-width" style="display: none;">
+          <div class="form-group">
+            <label>Código País MH</label>
+            <input type="text" id="cliente-cod-pais" list="paises-exportacion" maxlength="4" placeholder="9300">
+            <datalist id="paises-exportacion">
+              <option value="9300">ESTADOS UNIDOS DE AMERICA</option>
+              <option value="9301">GUATEMALA</option>
+              <option value="9302">HONDURAS</option>
+              <option value="9303">NICARAGUA</option>
+              <option value="9304">COSTA RICA</option>
+              <option value="9305">PANAMA</option>
+              <option value="9320">MEXICO</option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label>Nombre País</label>
+            <input type="text" id="cliente-nombre-pais" placeholder="ESTADOS UNIDOS DE AMERICA">
+          </div>
+          <div class="form-group">
+            <label>Tipo Persona Exportación</label>
+            <select id="cliente-tipo-persona-exportacion">
+              <option value="1">1 - Natural</option>
+              <option value="2">2 - Jurídica</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Actividad del Receptor</label>
+            <input type="text" id="cliente-desc-actividad-exportacion" placeholder="Exportación / Importador / Cliente extranjero">
+          </div>
         </div>
 
         <div class="form-actions">
