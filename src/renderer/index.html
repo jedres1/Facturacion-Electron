@@ -180,6 +180,10 @@
                   <label>Fecha de Emisión Relacionada</label>
                   <input type="date" id="nc-fecha-emision">
                 </div>
+                <div class="form-group" id="nc-agregar-relacionado-group" style="display: none;">
+                  <label>&nbsp;</label>
+                  <button type="button" class="btn btn-secondary" id="btn-agregar-documento-relacionado">Agregar CCF</button>
+                </div>
                 <div class="form-group" id="retencion-codigo-group" style="display: none;">
                   <label>Código Retención IVA MH</label>
                   <select id="retencion-codigo">
@@ -200,6 +204,22 @@
                   <label>IVA Retenido Calculado</label>
                   <input type="text" id="retencion-valor-calculado" value="$0.00" readonly>
                 </div>
+              </div>
+              <div id="nc-documentos-relacionados-lista" style="display: none; margin-top: 1rem;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>CCF Relacionado</th>
+                      <th>Fecha</th>
+                      <th style="width: 90px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="nc-documentos-relacionados-body">
+                    <tr>
+                      <td colspan="3" class="text-center">No hay CCF relacionados</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -324,6 +344,20 @@
                   <span id="resumen-subtotal">$0.00</span>
                 </div>
                 <div class="resumen-row">
+                  <span>Descuento General:</span>
+                  <span>
+                    <select id="descuento-general-tipo" class="summary-select">
+                      <option value="monto">Monto</option>
+                      <option value="porcentaje">%</option>
+                    </select>
+                    <input type="number" id="descuento-general" class="summary-input" min="0" step="0.01" value="0">
+                  </span>
+                </div>
+                <div class="resumen-row">
+                  <span>Descuento Aplicado:</span>
+                  <span id="resumen-descuento-general">$0.00</span>
+                </div>
+                <div class="resumen-row">
                   <span id="resumen-iva-label">IVA (13%):</span>
                   <span id="resumen-iva">$0.00</span>
                 </div>
@@ -338,9 +372,18 @@
               </div>
             </div>
 
+            <div class="form-section" id="factura-notas-group">
+              <h3>Notas</h3>
+              <div class="form-group full-width">
+                <label>Notas opcionales</label>
+                <textarea id="factura-notas" rows="2" maxlength="150" placeholder="Notas para factura o comprobante de crédito fiscal"></textarea>
+                <small>Opcional para Factura y CCF. Máximo 150 caracteres.</small>
+              </div>
+            </div>
+
             <div class="form-actions">
               <button type="button" class="btn btn-secondary" id="btn-cancelar">Cancelar</button>
-              <button type="submit" class="btn btn-primary">Generar Factura</button>
+              <button type="submit" class="btn btn-primary">Generar, Firmar y Enviar</button>
             </div>
           </form>
         </div>
@@ -349,15 +392,27 @@
         <div id="facturas-view" class="view">
           <div class="view-header">
             <div class="filters">
+              <input type="search" id="buscar-facturas" class="form-control search-input" placeholder="Buscar factura o cliente...">
               <input type="date" id="fecha-desde" class="form-control">
               <input type="date" id="fecha-hasta" class="form-control">
               <select id="filtro-estado" class="form-control">
                 <option value="">Todos los estados</option>
                 <option value="PENDIENTE">Pendiente</option>
                 <option value="FIRMADO">Firmado</option>
+                <option value="CONTINGENCIA">Contingencia</option>
                 <option value="ENVIADO">Enviado</option>
                 <option value="ACEPTADO">Aceptado</option>
                 <option value="RECHAZADO">Rechazado</option>
+              </select>
+              <select id="filtro-tipo-dte" class="form-control">
+                <option value="">Todos los documentos</option>
+                <option value="01">Factura</option>
+                <option value="03">Comprobante de Crédito Fiscal</option>
+                <option value="05">Nota de Crédito</option>
+                <option value="06">Nota de Débito</option>
+                <option value="07">Comprobante de Retención</option>
+                <option value="11">Factura de Exportación</option>
+                <option value="14">Factura Sujeto Excluido</option>
               </select>
               <button class="btn btn-primary" id="btn-filtrar">Filtrar</button>
             </div>
@@ -370,20 +425,27 @@
                 <th>Cliente</th>
                 <th>Total</th>
                 <th>Estado</th>
+                <th>Contiene Error</th>
+                <th>Aceptado</th>
+                <th>Enviado por Correo</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td colspan="6" class="text-center">No hay facturas</td>
+                <td colspan="9" class="text-center">No hay facturas</td>
               </tr>
             </tbody>
           </table>
+          <div id="paginacion-facturas" class="pagination-bar"></div>
         </div>
 
         <!-- Clientes View -->
         <div id="clientes-view" class="view">
           <div class="view-header">
+            <div class="filters">
+              <input type="search" id="buscar-clientes" class="form-control search-input" placeholder="Buscar cliente...">
+            </div>
             <button class="btn btn-primary" id="btn-nuevo-cliente">➕ Nuevo Cliente</button>
           </div>
           <table class="data-table" id="tabla-clientes">
@@ -405,11 +467,15 @@
               </tr>
             </tbody>
           </table>
+          <div id="paginacion-clientes" class="pagination-bar"></div>
         </div>
 
         <!-- Productos View -->
         <div id="productos-view" class="view">
           <div class="view-header">
+            <div class="filters">
+              <input type="search" id="buscar-productos" class="form-control search-input" placeholder="Buscar producto...">
+            </div>
             <button class="btn btn-primary" id="btn-nuevo-producto">➕ Nuevo Producto</button>
           </div>
           <table class="data-table" id="tabla-productos">
@@ -419,7 +485,7 @@
                 <th>Descripción</th>
                 <th>Tipo</th>
                 <th>Precio Base</th>
-                <th>IVA</th>
+                <th id="factura-items-col-iva">IVA</th>
                 <th>Precio Final</th>
                 <th>Acciones</th>
               </tr>
@@ -430,6 +496,7 @@
               </tr>
             </tbody>
           </table>
+          <div id="paginacion-productos" class="pagination-bar"></div>
         </div>
 
         <!-- Configuración View -->
@@ -453,6 +520,19 @@
                 <div class="form-group">
                   <label>Nombre Comercial</label>
                   <input type="text" id="config-nombre-comercial">
+                </div>
+                <div class="form-group full-width">
+                  <label>Imagen para PDF</label>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="config-logo-path" placeholder="/ruta/al/logo.png" readonly style="flex: 1;">
+                    <button type="button" class="btn btn-secondary" id="btn-select-logo">
+                      📁 Seleccionar
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-clear-logo">
+                      Quitar
+                    </button>
+                  </div>
+                  <small>Se mostrará en el encabezado del PDF. Formatos: PNG, JPG o JPEG.</small>
                 </div>
                 <div class="form-group">
                   <label>Tipo de Persona</label>
@@ -719,6 +799,24 @@
     </main>
   </div>
 
+  <div id="toast-container" class="toast-container"></div>
+
+  <div id="proceso-envio" class="process-overlay" style="display: none;">
+    <div class="process-card">
+      <div class="process-header">
+        <div>
+          <h3 id="proceso-envio-titulo">Procesando documento</h3>
+          <p id="proceso-envio-subtitulo">Preparando operación...</p>
+        </div>
+        <span id="proceso-envio-badge" class="process-badge">En proceso</span>
+      </div>
+      <div class="process-track">
+        <div id="proceso-envio-barra" class="process-track-fill"></div>
+      </div>
+      <ul id="proceso-envio-pasos" class="process-steps"></ul>
+    </div>
+  </div>
+
   <!-- Modal para ver detalle de factura -->
   <div id="modal-ver-factura" class="modal">
     <div class="modal-content" style="max-width: 800px;">
@@ -749,6 +847,20 @@
             <span class="info-label">Estado:</span>
             <span id="factura-estado-badge" class="info-value"></span>
           </div>
+          <div class="info-row" id="factura-observaciones-row" style="display: none;">
+            <span class="info-label">Observaciones MH:</span>
+            <span id="factura-observaciones" class="info-value"></span>
+          </div>
+        </div>
+
+        <div class="factura-section" id="factura-bitacora-rechazo" style="display: none;">
+          <h3>Bitácora de Rechazo Hacienda</h3>
+          <div id="factura-bitacora-rechazo-contenido" class="rejection-log"></div>
+        </div>
+
+        <div class="factura-section" id="factura-notas-detalle" style="display: none;">
+          <h3>Notas</h3>
+          <p id="factura-notas-texto"></p>
         </div>
 
         <!-- Información del cliente -->
@@ -813,6 +925,18 @@
           </button>
           <button type="button" class="btn btn-primary" id="btn-enviar-factura" style="display: none;">
             📤 Enviar a Hacienda
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-editar-cliente-factura" style="display: none;">
+            Editar Cliente
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-editar-items-factura" style="display: none;">
+            Editar Ítems
+          </button>
+          <button type="button" class="btn btn-success" id="btn-guardar-items-factura" style="display: none;">
+            Guardar Ítems
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-reenviar-factura" style="display: none;">
+            Reenviar Documento
           </button>
           <button type="button" class="btn btn-danger" id="btn-anular-factura" style="display: none;">
             Anular
@@ -932,6 +1056,9 @@
             Se enviará un evento de invalidación a Hacienda. Si es aceptado, la factura quedará marcada como ANULADO.
           </small>
         </div>
+        <div id="anulacion-regla-ayuda" class="alert alert-info" style="display: none; margin-bottom: 1rem;">
+          <small></small>
+        </div>
 
         <div class="form-group full-width">
           <label>Tipo de anulación CAT-024 *</label>
@@ -940,6 +1067,12 @@
             <option value="1">1 - Error en el documento</option>
             <option value="3">3 - Otro</option>
           </select>
+        </div>
+
+        <div class="form-group full-width" id="grupo-codigo-reemplazo" style="display: none;">
+          <label>Código de generación reemplazo *</label>
+          <input type="text" id="anulacion-codigo-reemplazo" placeholder="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX">
+          <small id="anulacion-codigo-reemplazo-ayuda" class="form-hint"></small>
         </div>
 
         <div class="form-group full-width">
@@ -976,13 +1109,24 @@
         </div>
 
         <div class="form-group full-width">
-          <label>Precio Unitario</label>
-          <input type="number" id="item-precio" step="0.01" readonly style="background: #f1f5f9;">
+          <label>Precio Unitario *</label>
+          <input type="number" id="item-precio" min="0" step="0.01" placeholder="Precio sugerido del producto" required>
+          <small>Se carga el precio sugerido del producto, pero puede editarse para esta factura.</small>
         </div>
 
         <div class="form-group full-width">
           <label>Descuento (Opcional)</label>
+          <select id="item-descuento-tipo">
+            <option value="monto">Monto ($)</option>
+            <option value="porcentaje">Porcentaje (%)</option>
+          </select>
           <input type="number" id="item-descuento" min="0" step="0.01" value="0" placeholder="0.00">
+          <small id="item-descuento-ayuda">Ingrese el monto de descuento para este ítem.</small>
+        </div>
+
+        <div class="form-group full-width" id="item-documento-relacionado-group" style="display: none;">
+          <label>CCF al que aplica *</label>
+          <select id="item-documento-relacionado"></select>
         </div>
 
         <div class="form-actions">
@@ -1042,6 +1186,28 @@
             <option value="Natural">Natural</option>
             <option value="Jurídica">Jurídica</option>
           </select>
+        </div>
+
+        <div class="form-group">
+          <label>Tratamiento IVA *</label>
+          <select id="cliente-condicion-iva" required>
+            <option value="GRAVADO">Gravado - aplicar IVA</option>
+            <option value="EXENTO">Exento - omitir IVA</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Plazo de Pago *</label>
+          <select id="cliente-plazo-pago" required>
+            <option value="01">01 - Días</option>
+            <option value="02">02 - Meses</option>
+            <option value="03">03 - Años</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Periodo de Pago *</label>
+          <input type="number" id="cliente-periodo-pago" min="1" step="1" value="1" required>
         </div>
 
         <div class="form-group">

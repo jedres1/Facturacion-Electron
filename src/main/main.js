@@ -125,6 +125,14 @@ ipcMain.handle('db:updateFacturaEstado', async (event, { id, estado, selloRecepc
   return db.updateFacturaEstado(id, estado, selloRecepcion, observaciones, jsonDte);
 });
 
+ipcMain.handle('db:updateFacturaCorreccion', async (event, { id, datos }) => {
+  return db.updateFacturaCorreccion(id, datos);
+});
+
+ipcMain.handle('db:marcarFacturaCorreoEnviado', async (event, id) => {
+  return db.marcarFacturaCorreoEnviado(id);
+});
+
 ipcMain.handle('db:registrarAnulacion', async (event, { id, anulacion }) => {
   return db.registrarAnulacion(id, anulacion);
 });
@@ -192,6 +200,26 @@ ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
 
     await api.autenticar();
     return await api.anularDTE(eventoFirmado);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('hacienda:enviarContingencia', async (event, { eventoFirmado, nit }) => {
+  try {
+    const config = db.getConfiguracion();
+    if (!config || !config.hacienda_usuario || !config.hacienda_password) {
+      return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    const api = new HaciendaAPI({
+      ambiente: config.hacienda_ambiente || 'pruebas',
+      usuario: config.hacienda_usuario,
+      password: config.hacienda_password
+    });
+
+    await api.autenticar();
+    return await api.enviarContingencia(eventoFirmado, nit || config.nit);
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -336,41 +364,26 @@ ipcMain.handle('dte:guardarJson', async (event, { nombreArchivo, contenido }) =>
 // IPC Handler para generar DTE
 ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resumen, opciones }) => {
   try {
-    // Obtener el siguiente correlativo de la base de datos
-    const correlativo = db.getSiguienteCorrelativo(tipo);
-    
-    // Agregar correlativo a las opciones
-    const opcionesConCorrelativo = {
-      ...opciones,
-      correlativo: correlativo
-    };
-    
     let dte;
-    
-    switch(tipo) {
-      case '01': // Factura
-        dte = dteGenerator.generarFactura(config, cliente, items, resumen, opcionesConCorrelativo);
+
+    let correlativo = db.getSiguienteCorrelativo(tipo);
+    for (let intento = 0; intento < 50; intento++) {
+      const opcionesConCorrelativo = {
+        ...opciones,
+        correlativo: correlativo + intento
+      };
+
+      dte = generarDTEPorTipo(tipo, config, cliente, items, resumen, opcionesConCorrelativo);
+
+      if (!db.existeNumeroControl(dte.identificacion.numeroControl)) {
         break;
-      case '03': // Crédito Fiscal
-        dte = dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opcionesConCorrelativo);
-        break;
-      case '05': // Nota de Crédito
-        dte = dteGenerator.generarNotaCredito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
-        break;
-      case '06': // Nota de Débito
-        dte = dteGenerator.generarNotaDebito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
-        break;
-      case '07': // Comprobante de Retención
-        dte = dteGenerator.generarComprobanteRetencion(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
-        break;
-      case '11': // Factura de Exportación
-        dte = dteGenerator.generarFacturaExportacion(config, cliente, items, resumen, opcionesConCorrelativo);
-        break;
-      case '14': // Factura Sujeto Excluido
-        dte = dteGenerator.generarFacturaSujetoExcluido(config, cliente, items, resumen, opcionesConCorrelativo);
-        break;
-      default:
-        throw new Error('Tipo de DTE no soportado: ' + tipo);
+      }
+
+      dte = null;
+    }
+
+    if (!dte) {
+      throw new Error(`No se pudo asignar un número de control único para DTE tipo ${tipo}.`);
     }
 
     const validacion = dteValidator.validar(dte);
@@ -382,11 +395,33 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
       };
     }
 
+    db.registrarCorrelativoUsado(tipo, dte.identificacion.numeroControl);
     return { success: true, dte };
   } catch (error) {
     return { success: false, error: error.message };
   }
 });
+
+function generarDTEPorTipo(tipo, config, cliente, items, resumen, opcionesConCorrelativo) {
+  switch(tipo) {
+    case '01': // Factura
+      return dteGenerator.generarFactura(config, cliente, items, resumen, opcionesConCorrelativo);
+    case '03': // Crédito Fiscal
+      return dteGenerator.generarCreditoFiscal(config, cliente, items, resumen, opcionesConCorrelativo);
+    case '05': // Nota de Crédito
+      return dteGenerator.generarNotaCredito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
+    case '06': // Nota de Débito
+      return dteGenerator.generarNotaDebito(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
+    case '07': // Comprobante de Retención
+      return dteGenerator.generarComprobanteRetencion(config, cliente, items, resumen, opcionesConCorrelativo.documentoRelacionado, opcionesConCorrelativo);
+    case '11': // Factura de Exportación
+      return dteGenerator.generarFacturaExportacion(config, cliente, items, resumen, opcionesConCorrelativo);
+    case '14': // Factura Sujeto Excluido
+      return dteGenerator.generarFacturaSujetoExcluido(config, cliente, items, resumen, opcionesConCorrelativo);
+    default:
+      throw new Error('Tipo de DTE no soportado: ' + tipo);
+  }
+}
 
 // IPC Handler para generar PDF
 ipcMain.handle('pdf:generar', async (event, { factura, dte, config }) => {
@@ -436,7 +471,7 @@ ipcMain.handle('pdf:abrir', async (event, pdfPath) => {
   }
 });
 
-ipcMain.handle('correo:enviarDTE', async (event, { factura, dte, config, destinatario, asunto, mensaje }) => {
+ipcMain.handle('correo:enviarDTE', async (event, { factura, dte, config, destinatario, asunto, mensaje, jsonAdjunto, nombreJson }) => {
   try {
     const correoConfig = normalizarConfigCorreo(config || db.getConfiguracion());
     if (!correoConfig.auth.user || !correoConfig.auth.pass) {
@@ -459,7 +494,11 @@ ipcMain.handle('correo:enviarDTE', async (event, { factura, dte, config, destina
     const codigo = dteParaNombre.identificacion?.codigoGeneracion || factura?.codigo_generacion || factura?.numero_control || 'DTE';
     const nombreArchivo = String(codigo).replace(/[^A-Za-z0-9_-]/g, '_');
     const pdfBuffer = await pdfGenerator.generarPDFFactura(factura, dteObj, config);
-    const jsonBuffer = Buffer.from(JSON.stringify(dteObj, null, 2), 'utf8');
+    let jsonParaAdjuntar = jsonAdjunto || dteObj;
+    if (typeof jsonParaAdjuntar === 'string') {
+      jsonParaAdjuntar = JSON.parse(jsonParaAdjuntar);
+    }
+    const jsonBuffer = Buffer.from(JSON.stringify(jsonParaAdjuntar, null, 2), 'utf8');
     const transporter = nodemailer.createTransport(correoConfig);
     const remitenteCorreo = config?.correo_remitente || correoConfig.auth.user;
     const remitenteNombre = config?.correo_nombre || config?.nombre_empresa || remitenteCorreo;
@@ -476,7 +515,7 @@ ipcMain.handle('correo:enviarDTE', async (event, { factura, dte, config, destina
           contentType: 'application/pdf'
         },
         {
-          filename: `DTE_${nombreArchivo}.json`,
+          filename: nombreJson || `DTE_${nombreArchivo}.json`,
           content: jsonBuffer,
           contentType: 'application/json'
         }
@@ -517,6 +556,10 @@ ipcMain.handle('contingencia:reintentar', async (event, contingenciaId) => {
 
 ipcMain.handle('contingencia:resolver', async (event, { contingenciaId, sello }) => {
   return await contingenciaManager.resolverContingencia(contingenciaId, sello);
+});
+
+ipcMain.handle('contingencia:resolverConDatos', async (event, { contingenciaId, sello, datos }) => {
+  return await contingenciaManager.resolverContingencia(contingenciaId, sello, datos);
 });
 
 ipcMain.handle('contingencia:debeActivar', async () => {

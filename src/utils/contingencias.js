@@ -20,23 +20,37 @@ class ContingenciaManager {
   async registrarContingencia(facturaId, tipoContingencia, motivo) {
     try {
       const now = new Date();
+      const existente = this.db.prepare(`
+        SELECT id FROM contingencias
+        WHERE factura_id = ? AND estado = 'PENDIENTE'
+        ORDER BY id DESC
+        LIMIT 1
+      `).get(facturaId);
+
+      if (existente) {
+        this.db.prepare(`
+          UPDATE contingencias
+          SET tipo_contingencia = ?,
+              motivo = ?,
+              fecha_contingencia = ?
+          WHERE id = ?
+        `).run(tipoContingencia, motivo, now.toISOString(), existente.id);
+
+        return {
+          success: true,
+          contingenciaId: existente.id
+        };
+      }
       
+      const campos = ['factura_id', 'tipo_contingencia', 'motivo', 'fecha_contingencia', 'estado'];
+      const valores = [facturaId, tipoContingencia, motivo, now.toISOString(), 'PENDIENTE'];
+
       const stmt = this.db.prepare(`
-        INSERT INTO contingencias (
-          factura_id, 
-          tipo_contingencia, 
-          motivo, 
-          fecha_contingencia,
-          estado
-        ) VALUES (?, ?, ?, ?, 'PENDIENTE')
+        INSERT INTO contingencias (${campos.join(', ')})
+        VALUES (${campos.map(() => '?').join(', ')})
       `);
       
-      const result = stmt.run(
-        facturaId,
-        tipoContingencia,
-        motivo,
-        now.toISOString()
-      );
+      const result = stmt.run(...valores);
       
       return {
         success: true,
@@ -111,19 +125,25 @@ class ContingenciaManager {
   /**
    * Marcar contingencia como resuelta
    */
-  async resolverContingencia(contingenciaId, selloRecepcion = null) {
+  async resolverContingencia(contingenciaId, selloRecepcion = null, datos = {}) {
     try {
       const stmt = this.db.prepare(`
         UPDATE contingencias 
         SET estado = 'RESUELTO',
             fecha_resolucion = ?,
-            sello_resolucion = ?
+            sello_resolucion = ?,
+            numero_validacion = ?,
+            json_evento = ?
         WHERE id = ?
       `);
       
       stmt.run(
         new Date().toISOString(),
         selloRecepcion,
+        datos.numeroValidacion || null,
+        datos.jsonEvento
+          ? (typeof datos.jsonEvento === 'string' ? datos.jsonEvento : JSON.stringify(datos.jsonEvento))
+          : null,
         contingenciaId
       );
       
@@ -143,8 +163,10 @@ class ContingenciaManager {
       ...dte,
       identificacion: {
         ...dte.identificacion,
-        tipoContingencia: tipoContingencia,
-        motivoContin: motivo
+        tipoModelo: 1,
+        tipoOperacion: 1,
+        tipoContingencia: null,
+        motivoContin: null
       }
     };
   }

@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addFactura: (factura) => ipcRenderer.invoke('db:addFactura', factura),
   updateFacturaEstado: (id, estado, selloRecepcion, observaciones, jsonDte) =>
     ipcRenderer.invoke('db:updateFacturaEstado', { id, estado, selloRecepcion, observaciones, jsonDte }),
+  updateFacturaCorreccion: (id, datos) =>
+    ipcRenderer.invoke('db:updateFacturaCorreccion', { id, datos }),
+  marcarFacturaCorreoEnviado: (id) => ipcRenderer.invoke('db:marcarFacturaCorreoEnviado', id),
   registrarAnulacion: (id, anulacion) =>
     ipcRenderer.invoke('db:registrarAnulacion', { id, anulacion }),
   getSiguienteCorrelativo: (tipoDte) => ipcRenderer.invoke('db:getSiguienteCorrelativo', tipoDte),
@@ -27,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   autenticar: (credenciales) => ipcRenderer.invoke('hacienda:autenticar', credenciales),
   enviarDTE: (data) => ipcRenderer.invoke('hacienda:enviarDTE', data),
   anularDTE: (data) => ipcRenderer.invoke('hacienda:anularDTE', data),
+  enviarContingencia: (data) => ipcRenderer.invoke('hacienda:enviarContingencia', data),
   consultarDTE: (data) => ipcRenderer.invoke('hacienda:consultarDTE', data),
   
   // Firmador
@@ -48,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   obtenerContingenciasPendientes: () => ipcRenderer.invoke('contingencia:obtenerPendientes'),
   reintentarContingencia: (contingenciaId) => ipcRenderer.invoke('contingencia:reintentar', contingenciaId),
   resolverContingencia: (data) => ipcRenderer.invoke('contingencia:resolver', data),
+  resolverContingenciaConDatos: (data) => ipcRenderer.invoke('contingencia:resolverConDatos', data),
   debeActivarContingencia: () => ipcRenderer.invoke('contingencia:debeActivar'),
   
   // Diálogos del sistema

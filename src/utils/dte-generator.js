@@ -29,6 +29,7 @@ class DTEGenerator {
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
     const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento, config.punto_venta, correlativo);
+    const cuerpoDocumento = this.construirCuerpoDocumentoFactura(items);
 
     return {
       identificacion: {
@@ -50,8 +51,8 @@ class DTEGenerator {
       receptor: this.construirReceptorFactura(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumentoFactura(items),
-      resumen: this.construirResumenFactura(resumen),
+      cuerpoDocumento,
+      resumen: this.construirResumenFactura(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '01')),
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
     };
@@ -65,6 +66,7 @@ class DTEGenerator {
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
     const numeroControl = this.generarNumeroControl('03', config.codigo_establecimiento, config.punto_venta, correlativo);
+    const cuerpoDocumento = this.construirCuerpoDocumento(items);
 
     return {
       identificacion: {
@@ -86,8 +88,8 @@ class DTEGenerator {
       receptor: this.construirReceptorCCF(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumento(items),
-      resumen: this.construirResumenCCF(resumen),
+      cuerpoDocumento,
+      resumen: this.construirResumenCCF(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '03')),
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
     };
@@ -97,7 +99,11 @@ class DTEGenerator {
    * Generar Nota de Crédito (Tipo 05)
    */
   generarNotaCredito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
-    if (!documentoRelacionado) {
+    const documentosRelacionados = Array.isArray(documentoRelacionado)
+      ? documentoRelacionado
+      : (documentoRelacionado ? [documentoRelacionado] : []);
+
+    if (documentosRelacionados.length === 0) {
       throw new Error('La Nota de Crédito requiere un documento relacionado según schema MH.');
     }
 
@@ -105,6 +111,7 @@ class DTEGenerator {
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
     const numeroControl = this.generarNumeroControl('05', config.codigo_establecimiento, config.punto_venta, correlativo);
+    const cuerpoDocumento = this.construirCuerpoDocumentoNC(items);
 
     return {
       identificacion: {
@@ -121,12 +128,12 @@ class DTEGenerator {
         horEmi: this.formatearHora(now),
         tipoMoneda: 'USD'
       },
-      documentoRelacionado: [documentoRelacionado],
+      documentoRelacionado: documentosRelacionados,
       emisor: this.construirEmisorNC(config),
       receptor: this.construirReceptorCCF(cliente),
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumentoNC(items),
-      resumen: this.construirResumenNC(resumen),
+      cuerpoDocumento,
+      resumen: this.construirResumenNC(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '05')),
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
     };
@@ -136,7 +143,11 @@ class DTEGenerator {
    * Generar Nota de Débito (Tipo 06)
    */
   generarNotaDebito(config, cliente, items, resumen, documentoRelacionado, opciones = {}) {
-    if (!documentoRelacionado) {
+    const documentosRelacionados = Array.isArray(documentoRelacionado)
+      ? documentoRelacionado
+      : (documentoRelacionado ? [documentoRelacionado] : []);
+
+    if (documentosRelacionados.length === 0) {
       throw new Error('La Nota de Débito requiere un documento relacionado según schema MH.');
     }
 
@@ -144,6 +155,7 @@ class DTEGenerator {
     const codigoGeneracion = this.generarCodigoGeneracion();
     const correlativo = opciones.correlativo || 1;
     const numeroControl = this.generarNumeroControl('06', config.codigo_establecimiento, config.punto_venta, correlativo);
+    const cuerpoDocumento = this.construirCuerpoDocumentoNC(items);
 
     return {
       identificacion: {
@@ -160,12 +172,12 @@ class DTEGenerator {
         horEmi: this.formatearHora(now),
         tipoMoneda: 'USD'
       },
-      documentoRelacionado: [documentoRelacionado],
+      documentoRelacionado: documentosRelacionados,
       emisor: this.construirEmisorNC(config),
       receptor: this.construirReceptorCCF(cliente),
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumentoNC(items),
-      resumen: this.construirResumenNC(resumen),
+      cuerpoDocumento,
+      resumen: this.construirResumenND(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '06')),
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
     };
@@ -220,6 +232,8 @@ class DTEGenerator {
       ...opciones,
       tipoItemExpor: Number(opciones.tipoItemExpor || config.tipo_item_expor || 2)
     };
+    const cuerpoDocumento = this.construirCuerpoDocumentoExportacion(items);
+    const resumenExportacion = this.ajustarResumenExportacionDesdeCuerpo(resumen, cuerpoDocumento, opcionesExportacion);
 
     return {
       identificacion: {
@@ -240,8 +254,8 @@ class DTEGenerator {
       receptor: this.construirReceptorExportacion(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
       ventaTercero: opciones.ventaTercero || null,
-      cuerpoDocumento: this.construirCuerpoDocumentoExportacion(items),
-      resumen: this.construirResumenExportacion(resumen, opcionesExportacion),
+      cuerpoDocumento,
+      resumen: this.construirResumenExportacion(resumenExportacion, opcionesExportacion),
       apendice: opciones.apendice || null
     };
   }
@@ -437,8 +451,8 @@ class DTEGenerator {
   construirCuerpoDocumento(items) {
     return items.map((item, index) => {
       const cantidad = parseFloat(item.cantidad);
-      const precioUni = parseFloat(item.precio_unitario);
-      const montoDescu = parseFloat(item.descuento || 0);
+      const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
+      const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
       
       let ventaGravada = 0;
       let ventaExenta = 0;
@@ -459,7 +473,7 @@ class DTEGenerator {
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
         codTributo: null,
-        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || item.unidadMedida || 'UND'),
         descripcion: item.descripcion,
         precioUni: this.redondear(precioUni, 8),
         montoDescu: this.redondear(montoDescu, 8),
@@ -476,8 +490,8 @@ class DTEGenerator {
   construirCuerpoDocumentoFactura(items) {
     return items.map((item, index) => {
       const cantidad = parseFloat(item.cantidad);
-      const precioUni = parseFloat(item.precio_unitario);
-      const montoDescu = parseFloat(item.descuento || 0);
+      const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
+      const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
       const subtotal = this.redondear((cantidad * precioUni) - montoDescu, 8);
       const precioUniFactura = item.exento ? precioUni : this.redondear(precioUni * 1.13, 8);
       const montoDescuFactura = item.exento ? montoDescu : this.redondear(montoDescu * 1.13, 8);
@@ -491,7 +505,7 @@ class DTEGenerator {
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
         codTributo: null,
-        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || item.unidadMedida || 'UND'),
         descripcion: item.descripcion,
         precioUni: this.redondear(precioUniFactura, 8),
         montoDescu: this.redondear(montoDescuFactura, 8),
@@ -501,7 +515,7 @@ class DTEGenerator {
         tributos: null,
         psv: 0,
         noGravado: 0,
-        ivaItem: this.redondear(subtotal * 0.13)
+        ivaItem: item.exento ? 0 : this.redondear(subtotal * 0.13)
       };
     });
   }
@@ -512,8 +526,8 @@ class DTEGenerator {
   construirCuerpoDocumentoNC(items) {
     return items.map((item, index) => {
       const cantidad = parseFloat(item.cantidad);
-      const precioUni = parseFloat(item.precio_unitario);
-      const montoDescu = parseFloat(item.descuento || 0);
+      const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
+      const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
       
       let ventaGravada = 0;
       let ventaExenta = 0;
@@ -534,7 +548,7 @@ class DTEGenerator {
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
         codTributo: null,
-        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || item.unidadMedida || 'UND'),
         descripcion: item.descripcion,
         precioUni: this.redondear(precioUni, 8),
         montoDescu: this.redondear(montoDescu, 8),
@@ -546,26 +560,99 @@ class DTEGenerator {
     });
   }
 
+  ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, tipoDte) {
+    const cuerpo = Array.isArray(cuerpoDocumento) ? cuerpoDocumento : [];
+    const totalNoSuj = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.ventaNoSuj || 0), 0));
+    const totalExenta = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.ventaExenta || 0), 0));
+    const totalGravada = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.ventaGravada || 0), 0));
+    const totalNoGravado = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.noGravado || 0), 0));
+    const subTotalVentas = this.redondear(totalNoSuj + totalExenta + totalGravada);
+    // Hacienda espera totalDescu como suma de descuentos de línea y globales.
+    const descuentoLineas = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.montoDescu || 0), 0));
+    const descuNoSuj = this.redondear(resumen.descuNoSuj || 0);
+    const descuExenta = this.redondear(resumen.descuExenta || 0);
+    const descuGravada = this.redondear(resumen.descuGravada || 0);
+    const totalNoSujNeto = this.redondear(Math.max(0, totalNoSuj - descuNoSuj));
+    const totalExentaNeto = this.redondear(Math.max(0, totalExenta - descuExenta));
+    const totalGravadaNeto = this.redondear(Math.max(0, totalGravada - descuGravada));
+    const subTotalNeto = this.redondear(totalNoSujNeto + totalExentaNeto + totalGravadaNeto);
+    const totalDescu = this.redondear(descuentoLineas + descuNoSuj + descuExenta + descuGravada);
+    const esFacturaConsumidorFinal = tipoDte === '01';
+    const totalIva = esFacturaConsumidorFinal
+      ? this.calcularIvaFacturaConsumidor(cuerpo, totalGravadaNeto, descuGravada)
+      : this.redondear(totalGravadaNeto * 0.13);
+    const total = esFacturaConsumidorFinal
+      ? this.redondear(subTotalNeto + totalNoGravado)
+      : this.redondear(subTotalNeto + totalIva + totalNoGravado);
+
+    return {
+      ...resumen,
+      totalNoSuj,
+      noSuj: totalNoSuj,
+      totalExenta,
+      exenta: totalExenta,
+      totalGravada,
+      gravada: totalGravada,
+      subTotalVentas,
+      subtotal: subTotalNeto,
+      subTotal: subTotalNeto,
+      descuNoSuj,
+      descuExenta,
+      descuGravada,
+      totalDescu,
+      descuento: totalDescu,
+      iva: totalIva,
+      totalIva,
+      total,
+      montoTotalOperacion: total,
+      totalNoGravado,
+      totalPagar: total,
+      pagos: this.ajustarPagosAlTotal(resumen.pagos, total)
+    };
+  }
+
+  calcularIvaFacturaConsumidor(cuerpo, totalGravadaNeto, descuGravada = 0) {
+    if (this.redondear(descuGravada) > 0) {
+      return this.redondear(totalGravadaNeto - (totalGravadaNeto / 1.13));
+    }
+
+    return this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.ivaItem || 0), 0));
+  }
+
+  ajustarPagosAlTotal(pagos, total) {
+    if (!Array.isArray(pagos) || pagos.length === 0) return this.normalizarPagos(pagos, total);
+    if (pagos.length > 1) return this.normalizarPagos(pagos, total);
+
+    return this.normalizarPagos([{
+      ...pagos[0],
+      montoPago: total
+    }], total);
+  }
+
   /**
    * Construir resumen para Factura
    */
   construirResumenFactura(resumen) {
     const totalIva = this.redondear(resumen.iva || 0);
     const subtotal = this.redondear(resumen.subtotal || 0);
+    const subTotalVentas = this.redondear(resumen.subTotalVentas ?? resumen.subtotal ?? 0);
     const total = this.redondear(resumen.total || 0);
     const montoTotalOperacion = this.redondear(resumen.montoTotalOperacion ?? subtotal);
-    const descuento = this.redondear(resumen.descuento || 0);
+    const totalDescu = this.redondear(resumen.totalDescu ?? resumen.descuento ?? 0);
+    const descuNoSuj = this.redondear(resumen.descuNoSuj || 0);
+    const descuExenta = this.redondear(resumen.descuExenta || 0);
+    const descuGravada = this.redondear(resumen.descuGravada || 0);
 
     return {
       totalNoSuj: 0,
       totalExenta: this.redondear(resumen.exenta || 0),
       totalGravada: this.redondear(resumen.gravada || 0),
-      subTotalVentas: subtotal,
-      descuNoSuj: 0,
-      descuExenta: 0,
-      descuGravada: descuento,
+      subTotalVentas,
+      descuNoSuj,
+      descuExenta,
+      descuGravada,
       porcentajeDescuento: 0,
-      totalDescu: descuento,
+      totalDescu,
       tributos: null,
       subTotal: subtotal,
       ivaRete1: 0,
@@ -602,19 +689,27 @@ class DTEGenerator {
    * Construir resumen para Nota de Crédito
    */
   construirResumenNC(resumen) {
-    const totalIva = parseFloat(resumen.iva || 0);
-    const subtotal = parseFloat(resumen.subtotal || 0);
-    const total = parseFloat(resumen.total || 0);
+    const totalIva = this.redondear(resumen.iva || 0);
+    const subtotal = this.redondear(resumen.subtotal || 0);
+    const subTotalVentas = this.redondear(resumen.subTotalVentas ?? resumen.subtotal ?? 0);
+    const total = this.redondear(resumen.total || 0);
+    const totalNoSuj = this.redondear(resumen.totalNoSuj || resumen.noSuj || 0);
+    const totalExenta = this.redondear(resumen.totalExenta || resumen.exenta || 0);
+    const totalGravada = this.redondear(resumen.totalGravada || resumen.gravada || 0);
+    const totalDescu = this.redondear(resumen.totalDescu ?? resumen.descuento ?? 0);
+    const descuNoSuj = this.redondear(resumen.descuNoSuj || 0);
+    const descuExenta = this.redondear(resumen.descuExenta || 0);
+    const descuGravada = this.redondear(resumen.descuGravada || 0);
 
     return {
-      totalNoSuj: 0,
-      totalExenta: parseFloat(resumen.exenta || 0),
-      totalGravada: parseFloat(resumen.gravada || 0),
-      subTotalVentas: subtotal,
-      descuNoSuj: 0,
-      descuExenta: 0,
-      descuGravada: parseFloat(resumen.descuento || 0),
-      totalDescu: parseFloat(resumen.descuento || 0),
+      totalNoSuj,
+      totalExenta,
+      totalGravada,
+      subTotalVentas,
+      descuNoSuj,
+      descuExenta,
+      descuGravada,
+      totalDescu,
       tributos: totalIva > 0 ? [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: totalIva }] : null,
       subTotal: subtotal,
       ivaPerci1: 0,
@@ -622,7 +717,17 @@ class DTEGenerator {
       reteRenta: 0,
       montoTotalOperacion: total,
       totalLetras: this.numeroALetras(total),
-      condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1,
+      condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1
+    };
+  }
+
+  /**
+   * Construir resumen para Nota de Débito.
+   * El schema MH de ND exige numPagoElectronico, a diferencia de NC.
+   */
+  construirResumenND(resumen) {
+    return {
+      ...this.construirResumenNC(resumen),
       numPagoElectronico: null
     };
   }
@@ -748,17 +853,26 @@ class DTEGenerator {
           codigo: '01',
           montoPago: total,
           referencia: null,
-          plazo: null,
-          periodo: null
+          plazo: '01',
+          periodo: 1
         }];
 
-    return pagosBase.map(pago => ({
-      ...pago,
-      montoPago: this.redondear(pago.montoPago),
-      referencia: pago.referencia || null,
-      plazo: pago.plazo || null,
-      periodo: pago.periodo || null
-    }));
+    return pagosBase.map(pago => {
+      const normalizado = {
+        codigo: pago.codigo || '01',
+        montoPago: this.redondear(pago.montoPago ?? total),
+        referencia: pago.referencia || null
+      };
+
+      normalizado.plazo = pago.plazo !== null && pago.plazo !== undefined && String(pago.plazo).trim() !== ''
+        ? String(pago.plazo).trim()
+        : '01';
+      normalizado.periodo = pago.periodo !== null && pago.periodo !== undefined && String(pago.periodo).trim() !== ''
+        ? Number(pago.periodo)
+        : 1;
+
+      return normalizado;
+    });
   }
 
   redondear(valor, decimales = 2) {
@@ -882,14 +996,14 @@ class DTEGenerator {
   construirCuerpoDocumentoExportacion(items) {
     return items.map((item, index) => {
       const cantidad = parseFloat(item.cantidad);
-      const precioUni = parseFloat(item.precio_unitario);
-      const montoDescu = parseFloat(item.descuento || 0);
+      const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
+      const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
 
       return {
         numItem: index + 1,
-        cantidad: cantidad,
+        cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
-        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || item.unidadMedida || 'UND'),
         descripcion: item.descripcion,
         precioUni: this.redondear(precioUni, 8),
         montoDescu: this.redondear(montoDescu, 8),
@@ -900,21 +1014,49 @@ class DTEGenerator {
     });
   }
 
+  ajustarResumenExportacionDesdeCuerpo(resumen, cuerpoDocumento, opciones = {}) {
+    const cuerpo = Array.isArray(cuerpoDocumento) ? cuerpoDocumento : [];
+    const totalGravada = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.ventaGravada || 0), 0));
+    const descuentoLineas = this.redondear(cuerpo.reduce((sum, item) => sum + Number(item.montoDescu || 0), 0));
+    const descuentoGlobal = this.redondear(resumen.descuGravada || resumen.descuentoGlobal || 0);
+    const totalDescu = this.redondear(descuentoLineas + descuentoGlobal);
+    const totalGravadaNeta = this.redondear(Math.max(0, totalGravada - descuentoGlobal));
+    const tipoItemExpor = Number(opciones.tipoItemExpor || 2);
+    const flete = tipoItemExpor === 2 ? 0 : this.redondear(opciones.flete ?? resumen.flete ?? 0);
+    const seguro = tipoItemExpor === 2 ? 0 : this.redondear(opciones.seguro ?? resumen.seguro ?? 0);
+    const total = this.redondear(totalGravadaNeta + flete + seguro);
+
+    return {
+      ...resumen,
+      subtotal: totalGravada,
+      totalGravada,
+      descuento: descuentoGlobal,
+      totalDescu,
+      descuentoGlobal,
+      flete,
+      seguro,
+      total,
+      montoTotalOperacion: total,
+      totalPagar: total,
+      pagos: this.ajustarPagosAlTotal(resumen.pagos, total)
+    };
+  }
+
   /**
    * Construir cuerpo documento FSE
    */
   construirCuerpoDocumentoFSE(items) {
     return items.map((item, index) => {
       const cantidad = parseFloat(item.cantidad);
-      const precioUni = parseFloat(item.precio_unitario);
-      const montoDescu = parseFloat(item.descuento || 0);
+      const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
+      const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
 
       return {
         numItem: index + 1,
         tipoItem: item.tipo_item || 2,
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
-        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || 'UND'),
+        uniMedida: this.obtenerCodigoUnidadMedida(item.unidad_medida || item.unidadMedida || 'UND'),
         descripcion: item.descripcion,
         precioUni: this.redondear(precioUni, 8),
         montoDescu: this.redondear(montoDescu, 8),
@@ -972,18 +1114,19 @@ class DTEGenerator {
    * Construir resumen exportación
    */
   construirResumenExportacion(resumen, opciones = {}) {
-    const subtotal = parseFloat(resumen.subtotal || 0);
-    const descuento = parseFloat(resumen.descuento || 0);
+    const subtotal = this.redondear(resumen.totalGravada ?? resumen.subtotal ?? 0);
+    const descuento = this.redondear(resumen.descuento ?? resumen.descuentoGlobal ?? 0);
+    const totalDescu = this.redondear(resumen.totalDescu ?? descuento);
     const tipoItemExpor = Number(opciones.tipoItemExpor || 2);
     const flete = tipoItemExpor === 2 ? 0 : this.redondear(opciones.flete ?? resumen.flete ?? 0);
     const seguro = tipoItemExpor === 2 ? 0 : this.redondear(opciones.seguro ?? resumen.seguro ?? 0);
-    const total = this.redondear(subtotal + flete + seguro);
+    const total = this.redondear(Math.max(0, subtotal - descuento) + flete + seguro);
 
     const resumenExportacion = {
       totalGravada: subtotal,
-      descuento: descuento,
+      descuento,
       porcentajeDescuento: 0,
-      totalDescu: descuento,
+      totalDescu,
       montoTotalOperacion: total,
       totalNoGravado: 0,
       totalPagar: total,

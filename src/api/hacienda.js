@@ -172,6 +172,58 @@ class HaciendaAPI {
     }
   }
 
+  async enviarContingencia(eventoFirmado, nit = null) {
+    if (!this.token) {
+      throw new Error('No hay token de autenticación. Autentique primero.');
+    }
+
+    try {
+      const identificacion = this.obtenerIdentificacion(eventoFirmado);
+      const documento = this.obtenerDocumentoFirmado(eventoFirmado);
+
+      if (!identificacion) {
+        throw new Error('No se encontró la sección identificacion del evento de contingencia.');
+      }
+
+      if (!documento) {
+        throw new Error('El evento de contingencia no contiene firmaMh/documento firmado.');
+      }
+
+      const payload = {
+        ambiente: this.obtenerCodigoAmbiente(identificacion.ambiente || this.ambiente),
+        idEnvio: Date.now(),
+        version: identificacion.version || 3,
+        documento
+      };
+
+      if (nit) payload.nit = String(nit).replace(/[^0-9]/g, '');
+
+      const response = await this.axiosInstance.post('/fesv/contingencia', payload, {
+        headers: {
+          'Authorization': this.token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return {
+        success: true,
+        estado: response.data.estado,
+        fechaHora: response.data.fechaHora,
+        mensaje: response.data.mensaje,
+        numeroValidacion: response.data.numeroValidacion,
+        observaciones: response.data.observaciones,
+        raw: response.data
+      };
+    } catch (error) {
+      const errorResponse = this.procesarErrorHacienda(error);
+      return {
+        success: false,
+        error: errorResponse.error,
+        errorDetalle: errorResponse
+      };
+    }
+  }
+
   obtenerIdentificacion(dte) {
     if (typeof dte === 'string') return null;
     return dte?.identificacion || dte?.dteJson?.identificacion || null;

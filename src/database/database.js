@@ -45,6 +45,7 @@ class DatabaseManager {
         correo_password TEXT,
         correo_remitente TEXT,
         correo_nombre TEXT,
+        logo_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -68,6 +69,9 @@ class DatabaseManager {
         distrito TEXT,
         giro TEXT,
         tipo_dte_default TEXT NOT NULL DEFAULT '01',
+        condicion_iva TEXT NOT NULL DEFAULT 'GRAVADO',
+        plazo_pago TEXT NOT NULL DEFAULT '01',
+        periodo_pago INTEGER NOT NULL DEFAULT 1,
         aplica_exportacion INTEGER DEFAULT 0,
         cod_pais TEXT,
         nombre_pais TEXT,
@@ -102,6 +106,9 @@ class DatabaseManager {
     [
       [`aplica_exportacion`, `INTEGER DEFAULT 0`],
       [`tipo_dte_default`, `TEXT NOT NULL DEFAULT '01'`],
+      [`condicion_iva`, `TEXT NOT NULL DEFAULT 'GRAVADO'`],
+      [`plazo_pago`, `TEXT NOT NULL DEFAULT '01'`],
+      [`periodo_pago`, `INTEGER NOT NULL DEFAULT 1`],
       [`cod_pais`, `TEXT`],
       [`nombre_pais`, `TEXT`],
       [`tipo_persona_exportacion`, `INTEGER`],
@@ -189,7 +196,8 @@ class DatabaseManager {
       [`correo_usuario`, `TEXT`],
       [`correo_password`, `TEXT`],
       [`correo_remitente`, `TEXT`],
-      [`correo_nombre`, `TEXT`]
+      [`correo_nombre`, `TEXT`],
+      [`logo_path`, `TEXT`]
     ].forEach(([columna, tipo]) => {
       try {
         this.db.exec(`ALTER TABLE configuracion ADD COLUMN ${columna} ${tipo}`);
@@ -225,17 +233,15 @@ class DatabaseManager {
         cliente_id INTEGER NOT NULL,
         cliente_datos TEXT NOT NULL, -- JSON con datos del cliente
         items TEXT NOT NULL, -- JSON con items de la factura
-        subtotal REAL NOT NULL,
-        iva REAL NOT NULL,
         total REAL NOT NULL,
-        descuento REAL DEFAULT 0,
-        retencion REAL DEFAULT 0,
-        condicion_operacion TEXT DEFAULT 'CONTADO',
         estado TEXT DEFAULT 'PENDIENTE', -- PENDIENTE, FIRMADO, ENVIADO, ACEPTADO, RECHAZADO
         json_dte TEXT, -- JSON completo del DTE
         sello_recepcion TEXT,
         fecha_procesamiento DATETIME,
         observaciones TEXT,
+        correo_enviado INTEGER DEFAULT 0,
+        fecha_correo DATETIME,
+        notas TEXT,
         sello_anulacion TEXT,
         fecha_anulacion DATETIME,
         motivo_anulacion TEXT,
@@ -245,6 +251,32 @@ class DatabaseManager {
         FOREIGN KEY (cliente_id) REFERENCES clientes(id)
       )
     `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS correlativos_dte (
+        tipo_dte TEXT PRIMARY KEY,
+        siguiente INTEGER NOT NULL DEFAULT 1,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN notas TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN correo_enviado INTEGER DEFAULT 0`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE facturas ADD COLUMN fecha_correo DATETIME`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
 
     try {
       this.db.exec(`ALTER TABLE facturas ADD COLUMN sello_anulacion TEXT`);
@@ -283,6 +315,8 @@ class DatabaseManager {
         ultimo_intento DATETIME,
         fecha_resolucion DATETIME,
         sello_resolucion TEXT,
+        numero_validacion TEXT,
+        json_evento TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (factura_id) REFERENCES facturas(id)
       )
@@ -330,6 +364,18 @@ class DatabaseManager {
       // La columna ya existe, ignorar error
     }
 
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN numero_validacion TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
+    try {
+      this.db.exec(`ALTER TABLE contingencias ADD COLUMN json_evento TEXT`);
+    } catch (error) {
+      // La columna ya existe, ignorar error
+    }
+
     const contingenciaColumns = this.db.prepare(`PRAGMA table_info(contingencias)`).all();
     const contingencyColumnNames = contingenciaColumns.map((column) => column.name);
 
@@ -361,13 +407,47 @@ class DatabaseManager {
       `);
     }
 
+    this.eliminarColumnasObsoletas();
+
     // Índices
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_facturas_fecha ON facturas(fecha_emision);
       CREATE INDEX IF NOT EXISTS idx_facturas_estado ON facturas(estado);
       CREATE INDEX IF NOT EXISTS idx_facturas_cliente ON facturas(cliente_id);
+      CREATE INDEX IF NOT EXISTS idx_facturas_tipo_estado ON facturas(tipo_dte, estado);
       CREATE INDEX IF NOT EXISTS idx_clientes_documento ON clientes(numero_documento);
+      CREATE INDEX IF NOT EXISTS idx_contingencias_estado ON contingencias(estado);
+      CREATE INDEX IF NOT EXISTS idx_contingencias_factura ON contingencias(factura_id);
     `);
+  }
+
+  obtenerColumnas(tabla) {
+    return new Set(this.db.prepare(`PRAGMA table_info(${tabla})`).all().map(columna => columna.name));
+  }
+
+  eliminarColumnaSiExiste(tabla, columna) {
+    const columnas = this.obtenerColumnas(tabla);
+    if (!columnas.has(columna)) return;
+
+    try {
+      this.db.exec(`ALTER TABLE ${tabla} DROP COLUMN ${columna}`);
+    } catch (error) {
+      console.warn(`No se pudo eliminar columna obsoleta ${tabla}.${columna}:`, error.message);
+    }
+  }
+
+  eliminarColumnasObsoletas() {
+    [
+      ['configuracion', 'pin_certificado'],
+      ['configuracion', 'direccion_complementaria'],
+      ['contingencias', 'tipo_evento'],
+      ['contingencias', 'fecha_evento'],
+      ['facturas', 'subtotal'],
+      ['facturas', 'iva'],
+      ['facturas', 'descuento'],
+      ['facturas', 'retencion'],
+      ['facturas', 'condicion_operacion']
+    ].forEach(([tabla, columna]) => this.eliminarColumnaSiExiste(tabla, columna));
   }
 
   // Métodos para Configuración
@@ -391,6 +471,7 @@ class DatabaseManager {
             certificado_path = ?, certificado_password = ?,
             correo_smtp_host = ?, correo_smtp_port = ?, correo_smtp_secure = ?,
             correo_usuario = ?, correo_password = ?, correo_remitente = ?, correo_nombre = ?,
+            logo_path = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `);
@@ -409,6 +490,7 @@ class DatabaseManager {
         config.correo_password,
         config.correo_remitente,
         config.correo_nombre,
+        config.logo_path,
         existing.id
       );
     } else {
@@ -420,8 +502,8 @@ class DatabaseManager {
          hacienda_password, hacienda_ambiente, tipo_firma, firmador_usuario, 
          firmador_password, firmador_pin, certificado_path, certificado_password,
          correo_smtp_host, correo_smtp_port, correo_smtp_secure, correo_usuario,
-         correo_password, correo_remitente, correo_nombre)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         correo_password, correo_remitente, correo_nombre, logo_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
@@ -437,7 +519,8 @@ class DatabaseManager {
         config.correo_usuario,
         config.correo_password,
         config.correo_remitente,
-        config.correo_nombre
+        config.correo_nombre,
+        config.logo_path
       );
     }
   }
@@ -454,14 +537,17 @@ class DatabaseManager {
       INSERT INTO clientes 
       (tipo_documento, numero_documento, nrc, nombre, nombre_comercial, tipo_persona,
        telefono, email, direccion, departamento, municipio, distrito, giro,
-       tipo_dte_default, aplica_exportacion, cod_pais, nombre_pais, tipo_persona_exportacion, desc_actividad_exportacion)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       tipo_dte_default, condicion_iva, plazo_pago, periodo_pago, aplica_exportacion, cod_pais, nombre_pais, tipo_persona_exportacion, desc_actividad_exportacion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
       cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
       cliente.distrito, cliente.giro, cliente.tipo_dte_default || '01',
+      cliente.condicion_iva || 'GRAVADO',
+      cliente.plazo_pago || '01',
+      Number(cliente.periodo_pago || 1),
       cliente.aplica_exportacion ? 1 : 0,
       cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
       cliente.desc_actividad_exportacion
@@ -474,7 +560,7 @@ class DatabaseManager {
       UPDATE clientes 
       SET tipo_documento = ?, numero_documento = ?, nrc = ?, nombre = ?, nombre_comercial = ?,
           tipo_persona = ?, telefono = ?, email = ?, direccion = ?, departamento = ?, 
-          municipio = ?, distrito = ?, giro = ?, tipo_dte_default = ?, aplica_exportacion = ?, cod_pais = ?,
+          municipio = ?, distrito = ?, giro = ?, tipo_dte_default = ?, condicion_iva = ?, plazo_pago = ?, periodo_pago = ?, aplica_exportacion = ?, cod_pais = ?,
           nombre_pais = ?, tipo_persona_exportacion = ?, desc_actividad_exportacion = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -484,6 +570,9 @@ class DatabaseManager {
       cliente.nombre_comercial, cliente.tipo_persona, cliente.telefono, cliente.email,
       cliente.direccion, cliente.departamento, cliente.municipio, 
       cliente.distrito, cliente.giro, cliente.tipo_dte_default || '01',
+      cliente.condicion_iva || 'GRAVADO',
+      cliente.plazo_pago || '01',
+      Number(cliente.periodo_pago || 1),
       cliente.aplica_exportacion ? 1 : 0,
       cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
       cliente.desc_actividad_exportacion, id
@@ -582,18 +671,44 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT INTO facturas 
       (numero_control, codigo_generacion, tipo_dte, fecha_emision, cliente_id,
-       cliente_datos, items, subtotal, iva, total, descuento, retencion,
-       condicion_operacion, estado, json_dte)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       cliente_datos, items, total, estado, json_dte, notas)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    return stmt.run(
+    const result = stmt.run(
       factura.numero_control, factura.codigo_generacion, factura.tipo_dte,
       factura.fecha_emision, factura.cliente_id, JSON.stringify(factura.cliente_datos),
-      JSON.stringify(factura.items), factura.subtotal, factura.iva, factura.total,
-      factura.descuento || 0, factura.retencion || 0, factura.condicion_operacion,
+      JSON.stringify(factura.items), factura.total,
       factura.estado || 'PENDIENTE',
-      typeof factura.json_dte === 'string' ? factura.json_dte : JSON.stringify(factura.json_dte)
+      typeof factura.json_dte === 'string' ? factura.json_dte : JSON.stringify(factura.json_dte),
+      factura.notas || null
     );
+    this.registrarCorrelativoUsado(factura.tipo_dte, factura.numero_control);
+    return result;
+  }
+
+  existeNumeroControl(numeroControl) {
+    const stmt = this.db.prepare('SELECT 1 FROM facturas WHERE numero_control = ? LIMIT 1');
+    return Boolean(stmt.get(numeroControl));
+  }
+
+  obtenerCorrelativoDesdeNumeroControl(numeroControl) {
+    const match = String(numeroControl || '').match(/-(\d{15})$/);
+    return match ? Number(match[1]) : null;
+  }
+
+  registrarCorrelativoUsado(tipoDte, numeroControl) {
+    const tipo = String(tipoDte || '').padStart(2, '0');
+    const correlativoUsado = this.obtenerCorrelativoDesdeNumeroControl(numeroControl);
+    if (!tipo || !Number.isFinite(correlativoUsado) || correlativoUsado < 1) return;
+
+    const stmt = this.db.prepare(`
+      INSERT INTO correlativos_dte (tipo_dte, siguiente, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tipo_dte) DO UPDATE SET
+        siguiente = MAX(correlativos_dte.siguiente, excluded.siguiente),
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(tipo, correlativoUsado + 1);
   }
 
   updateFacturaEstado(id, estado, selloRecepcion = null, observaciones = null, jsonDte = null) {
@@ -619,6 +734,59 @@ class DatabaseManager {
       WHERE id = ?
     `);
     return stmt.run(...params);
+  }
+
+  updateFacturaCorreccion(id, datos = {}) {
+    const campos = [
+      'estado = ?',
+      'sello_recepcion = NULL',
+      'observaciones = ?',
+      'fecha_procesamiento = NULL',
+      'updated_at = CURRENT_TIMESTAMP'
+    ];
+    const params = [datos.estado || 'PENDIENTE', datos.observaciones || null];
+
+    if (datos.cliente_datos !== undefined) {
+      campos.push('cliente_datos = ?');
+      params.push(typeof datos.cliente_datos === 'string' ? datos.cliente_datos : JSON.stringify(datos.cliente_datos));
+    }
+
+    if (datos.items !== undefined) {
+      campos.push('items = ?');
+      params.push(typeof datos.items === 'string' ? datos.items : JSON.stringify(datos.items));
+    }
+
+    ['numero_control', 'codigo_generacion', 'fecha_emision', 'total'].forEach((campo) => {
+      if (datos[campo] !== undefined) {
+        campos.push(`${campo} = ?`);
+        params.push(datos[campo]);
+      }
+    });
+
+    if (datos.json_dte !== undefined) {
+      campos.push('json_dte = ?');
+      params.push(typeof datos.json_dte === 'string' ? datos.json_dte : JSON.stringify(datos.json_dte));
+    }
+
+    params.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE facturas
+      SET ${campos.join(', ')}
+      WHERE id = ?
+    `);
+    return stmt.run(...params);
+  }
+
+  marcarFacturaCorreoEnviado(id) {
+    const stmt = this.db.prepare(`
+      UPDATE facturas
+      SET correo_enviado = 1,
+          fecha_correo = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `);
+    return stmt.run(id);
   }
 
   registrarAnulacion(id, anulacion = {}) {
@@ -649,11 +817,28 @@ class DatabaseManager {
 
   // Obtener siguiente correlativo para número de control
   getSiguienteCorrelativo(tipoDte) {
-    const stmt = this.db.prepare(`
-      SELECT COUNT(*) as total FROM facturas WHERE tipo_dte = ?
+    const tipo = String(tipoDte || '').padStart(2, '0');
+    const localStmt = this.db.prepare(`
+      SELECT MAX(CAST(SUBSTR(numero_control, -15) AS INTEGER)) as ultimo
+      FROM facturas
+      WHERE tipo_dte = ?
+        AND numero_control LIKE ?
     `);
-    const result = stmt.get(tipoDte);
-    return (result.total || 0) + 1;
+    const local = localStmt.get(tipo, `DTE-${tipo}-%`);
+    const guardado = this.db
+      .prepare('SELECT siguiente FROM correlativos_dte WHERE tipo_dte = ?')
+      .get(tipo);
+    const siguiente = Math.max(Number(local?.ultimo || 0) + 1, Number(guardado?.siguiente || 1));
+
+    this.db.prepare(`
+      INSERT INTO correlativos_dte (tipo_dte, siguiente, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tipo_dte) DO UPDATE SET
+        siguiente = MAX(correlativos_dte.siguiente, excluded.siguiente),
+        updated_at = CURRENT_TIMESTAMP
+    `).run(tipo, siguiente);
+
+    return siguiente;
   }
 
   close() {

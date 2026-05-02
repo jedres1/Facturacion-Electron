@@ -42,6 +42,8 @@ class PDFGenerator {
 
       this.currentY = this.pageHeight - this.margin;
 
+      const logoInfo = await this.drawLogoPDF(pdfDoc, page, config);
+
       // 1. Título del documento
       await this.drawTitle(page, fontBold, this.getTipoDocumentoNombre(dteData.identificacion.tipoDte));
 
@@ -57,6 +59,9 @@ class PDFGenerator {
 
       // 3. Información del emisor (izquierda) y datos DTE (derecha)
       this.currentY -= 30;
+      if (logoInfo?.bottomY) {
+        this.currentY = Math.min(this.currentY, logoInfo.bottomY - 20);
+      }
       await this.drawEmisorYDTE(page, fontBold, fontRegular, config, dteData);
 
       // 4. Información del receptor
@@ -112,6 +117,47 @@ class PDFGenerator {
       font: font,
       color: rgb(0, 0, 0)
     });
+  }
+
+  async drawLogoPDF(pdfDoc, page, config = {}) {
+    const logoPath = String(config.logo_path || '').trim();
+    if (!logoPath) return;
+
+    try {
+      const imageBytes = await fs.readFile(logoPath);
+      const extension = path.extname(logoPath).toLowerCase();
+      let image;
+
+      if (extension === '.png') {
+        image = await pdfDoc.embedPng(imageBytes);
+      } else if (['.jpg', '.jpeg'].includes(extension)) {
+        image = await pdfDoc.embedJpg(imageBytes);
+      } else {
+        console.warn(`Imagen para PDF no soportada: ${logoPath}`);
+        return;
+      }
+
+      const maxWidth = 150;
+      const maxHeight = 85;
+      const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      const x = this.pageWidth - this.margin - width;
+      const y = this.pageHeight - this.margin - height + 4;
+
+      page.drawImage(image, {
+        x,
+        y,
+        width,
+        height
+      });
+
+      return { width, height, x, y, bottomY: y };
+    } catch (error) {
+      console.warn(`No se pudo cargar la imagen del PDF (${logoPath}): ${error.message}`);
+    }
+
+    return null;
   }
 
   normalizarDTE(dte) {
@@ -598,6 +644,31 @@ class PDFGenerator {
       size: 7,
       font: font
     });
+
+    const nota = this.obtenerNotaApendice(dte);
+    if (nota) {
+      y -= 18;
+      page.drawText('Notas:', {
+        x: qrInfoX,
+        y,
+        size: 7,
+        font
+      });
+      y -= 10;
+      page.drawText(this.wrapText(nota, 48), {
+        x: qrInfoX,
+        y,
+        size: 7,
+        font
+      });
+    }
+  }
+
+  obtenerNotaApendice(dte = {}) {
+    const nota = Array.isArray(dte.apendice)
+      ? dte.apendice.find(item => item.campo === 'notas' || item.etiqueta === 'Notas del documento')
+      : null;
+    return nota?.valor || '';
   }
 
   /**
