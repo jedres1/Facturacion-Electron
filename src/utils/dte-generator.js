@@ -21,6 +21,43 @@ class DTEGenerator {
     };
   }
 
+  construirIdentificacion(config, tipoDte, version, numeroControl, codigoGeneracion, now, opciones = {}, motivoField = 'motivoContin') {
+    const tipoOperacion = Number(opciones.tipoTransmision || opciones.tipoOperacion || 1);
+    const esContingencia = tipoOperacion === 2;
+    const tipoContingencia = esContingencia ? this.normalizarTipoContingencia(opciones.tipoContingencia) : null;
+    const motivoContingencia = esContingencia
+      ? this.normalizarMotivoContingencia(opciones.motivoContin || opciones.motivoContingencia || opciones.motivoContigencia, tipoContingencia)
+      : null;
+
+    return {
+      version,
+      ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
+      tipoDte,
+      numeroControl,
+      codigoGeneracion,
+      tipoModelo: esContingencia ? 2 : 1,
+      tipoOperacion: esContingencia ? 2 : 1,
+      tipoContingencia,
+      [motivoField]: motivoContingencia,
+      fecEmi: this.formatearFecha(now),
+      horEmi: this.formatearHora(now),
+      tipoMoneda: 'USD'
+    };
+  }
+
+  normalizarTipoContingencia(valor) {
+    const tipo = Number(valor || 5);
+    return [1, 2, 3, 4, 5].includes(tipo) ? tipo : 5;
+  }
+
+  normalizarMotivoContingencia(valor, tipoContingencia = 5) {
+    const motivo = String(valor || (tipoContingencia === 5 ? 'Otro motivo de contingencia' : 'Falla tecnica de transmision'))
+      .trim()
+      .slice(0, 150);
+
+    return motivo.length >= 5 ? motivo : 'Falla tecnica de transmision';
+  }
+
   /**
    * Generar Factura Electrónica (Tipo 01)
    */
@@ -32,20 +69,7 @@ class DTEGenerator {
     const cuerpoDocumento = this.construirCuerpoDocumentoFactura(items);
 
     return {
-      identificacion: {
-        version: 1,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '01',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '01', 1, numeroControl, codigoGeneracion, now, opciones),
       documentoRelacionado: opciones.documentoRelacionado || null,
       emisor: this.construirEmisor(config),
       receptor: this.construirReceptorFactura(cliente),
@@ -69,20 +93,7 @@ class DTEGenerator {
     const cuerpoDocumento = this.construirCuerpoDocumento(items);
 
     return {
-      identificacion: {
-        version: 3,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '03',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '03', 3, numeroControl, codigoGeneracion, now, opciones),
       documentoRelacionado: opciones.documentoRelacionado || null,
       emisor: this.construirEmisor(config),
       receptor: this.construirReceptorCCF(cliente),
@@ -114,20 +125,7 @@ class DTEGenerator {
     const cuerpoDocumento = this.construirCuerpoDocumentoNC(items);
 
     return {
-      identificacion: {
-        version: 3,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '05',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '05', 3, numeroControl, codigoGeneracion, now, opciones),
       documentoRelacionado: documentosRelacionados,
       emisor: this.construirEmisorNC(config),
       receptor: this.construirReceptorCCF(cliente),
@@ -158,20 +156,7 @@ class DTEGenerator {
     const cuerpoDocumento = this.construirCuerpoDocumentoNC(items);
 
     return {
-      identificacion: {
-        version: 3,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '06',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '06', 3, numeroControl, codigoGeneracion, now, opciones),
       documentoRelacionado: documentosRelacionados,
       emisor: this.construirEmisorNC(config),
       receptor: this.construirReceptorCCF(cliente),
@@ -197,20 +182,7 @@ class DTEGenerator {
     const numeroControl = this.generarNumeroControl('07', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
-      identificacion: {
-        version: 1,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '07',
-        numeroControl,
-        codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '07', 1, numeroControl, codigoGeneracion, now, opciones),
       emisor: this.construirEmisorRetencion(config),
       receptor: this.construirReceptorRetencion(cliente),
       cuerpoDocumento: this.construirCuerpoDocumentoRetencion(items, documentoRelacionado, opciones),
@@ -236,20 +208,7 @@ class DTEGenerator {
     const resumenExportacion = this.ajustarResumenExportacionDesdeCuerpo(resumen, cuerpoDocumento, opcionesExportacion);
 
     return {
-      identificacion: {
-        version: 1,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '11',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContigencia: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '11', 1, numeroControl, codigoGeneracion, now, opciones, 'motivoContigencia'),
       emisor: this.construirEmisorExportacion(config, opcionesExportacion),
       receptor: this.construirReceptorExportacion(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
@@ -270,20 +229,7 @@ class DTEGenerator {
     const numeroControl = this.generarNumeroControl('14', config.codigo_establecimiento, config.punto_venta, correlativo);
 
     return {
-      identificacion: {
-        version: 1,
-        ambiente: this.obtenerCodigoAmbiente(config.hacienda_ambiente),
-        tipoDte: '14',
-        numeroControl: numeroControl,
-        codigoGeneracion: codigoGeneracion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null,
-        fecEmi: this.formatearFecha(now),
-        horEmi: this.formatearHora(now),
-        tipoMoneda: 'USD'
-      },
+      identificacion: this.construirIdentificacion(config, '14', 1, numeroControl, codigoGeneracion, now, opciones),
       emisor: this.construirEmisorFSE(config),
       sujetoExcluido: this.construirSujetoExcluido(cliente),
       cuerpoDocumento: this.construirCuerpoDocumentoFSE(items),
@@ -528,6 +474,11 @@ class DTEGenerator {
       const cantidad = parseFloat(item.cantidad);
       const precioUni = parseFloat(item.precio_unitario ?? item.precioUnitario);
       const montoDescu = parseFloat(item.descuento ?? item.montoDescu ?? 0);
+      const numeroDocumento = item.numero_documento || item.numeroDocumento;
+
+      if (!numeroDocumento) {
+        throw new Error(`El ítem ${index + 1} de la Nota de Crédito debe tener numeroDocumento del CCF relacionado.`);
+      }
       
       let ventaGravada = 0;
       let ventaExenta = 0;
@@ -544,7 +495,7 @@ class DTEGenerator {
       return {
         numItem: index + 1,
         tipoItem: item.tipo_item || 2,
-        numeroDocumento: item.numero_documento || item.numeroDocumento || null,
+        numeroDocumento: String(numeroDocumento),
         cantidad: this.redondear(cantidad, 8),
         codigo: item.codigo || null,
         codTributo: null,

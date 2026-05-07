@@ -20,6 +20,8 @@ class ContingenciaManager {
   async registrarContingencia(facturaId, tipoContingencia, motivo) {
     try {
       const now = new Date();
+      const tipo = this.normalizarTipoContingencia(tipoContingencia);
+      const motivoNormalizado = this.normalizarMotivoContingencia(motivo, tipo);
       const existente = this.db.prepare(`
         SELECT id FROM contingencias
         WHERE factura_id = ? AND estado = 'PENDIENTE'
@@ -34,7 +36,7 @@ class ContingenciaManager {
               motivo = ?,
               fecha_contingencia = ?
           WHERE id = ?
-        `).run(tipoContingencia, motivo, now.toISOString(), existente.id);
+        `).run(String(tipo), motivoNormalizado, now.toISOString(), existente.id);
 
         return {
           success: true,
@@ -43,7 +45,7 @@ class ContingenciaManager {
       }
       
       const campos = ['factura_id', 'tipo_contingencia', 'motivo', 'fecha_contingencia', 'estado'];
-      const valores = [facturaId, tipoContingencia, motivo, now.toISOString(), 'PENDIENTE'];
+      const valores = [facturaId, String(tipo), motivoNormalizado, now.toISOString(), 'PENDIENTE'];
 
       const stmt = this.db.prepare(`
         INSERT INTO contingencias (${campos.join(', ')})
@@ -159,16 +161,43 @@ class ContingenciaManager {
    * Modifica el DTE para indicar que fue generado en contingencia
    */
   modificarDTEParaContingencia(dte, tipoContingencia, motivo) {
+    const tipo = this.normalizarTipoContingencia(tipoContingencia);
+    const motivoNormalizado = this.normalizarMotivoContingencia(motivo, tipo);
+    const motivoKey = Object.prototype.hasOwnProperty.call(dte?.identificacion || {}, 'motivoContigencia')
+      ? 'motivoContigencia'
+      : 'motivoContin';
+
+    const identificacion = {
+      ...dte.identificacion,
+      tipoModelo: 2,
+      tipoOperacion: 2,
+      tipoContingencia: tipo,
+      [motivoKey]: motivoNormalizado
+    };
+
+    if (motivoKey === 'motivoContin') {
+      delete identificacion.motivoContigencia;
+    } else {
+      delete identificacion.motivoContin;
+    }
+
     return {
       ...dte,
-      identificacion: {
-        ...dte.identificacion,
-        tipoModelo: 1,
-        tipoOperacion: 1,
-        tipoContingencia: null,
-        motivoContin: null
-      }
+      identificacion
     };
+  }
+
+  normalizarTipoContingencia(valor) {
+    const tipo = Number(valor || 5);
+    return [1, 2, 3, 4, 5].includes(tipo) ? tipo : 5;
+  }
+
+  normalizarMotivoContingencia(valor, tipoContingencia = 5) {
+    const motivo = String(valor || (tipoContingencia === 5 ? 'Otro motivo de contingencia' : 'Falla tecnica de transmision'))
+      .trim()
+      .slice(0, 150);
+
+    return motivo.length >= 5 ? motivo : 'Falla tecnica de transmision';
   }
 
   /**

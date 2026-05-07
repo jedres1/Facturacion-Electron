@@ -45,6 +45,7 @@ class DatabaseManager {
         correo_password TEXT,
         correo_remitente TEXT,
         correo_nombre TEXT,
+        tipos_dte_habilitados TEXT DEFAULT '["01","03","05","06","07","11","14"]',
         logo_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -197,6 +198,7 @@ class DatabaseManager {
       [`correo_password`, `TEXT`],
       [`correo_remitente`, `TEXT`],
       [`correo_nombre`, `TEXT`],
+      [`tipos_dte_habilitados`, `TEXT DEFAULT '["01","03","05","06","07","11","14"]'`],
       [`logo_path`, `TEXT`]
     ].forEach(([columna, tipo]) => {
       try {
@@ -226,7 +228,7 @@ class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS facturas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        numero_control TEXT UNIQUE,
+        numero_control TEXT,
         codigo_generacion TEXT UNIQUE,
         tipo_dte TEXT NOT NULL, -- '01' Factura, '03' CCF, '14' Nota de Crédito, etc.
         fecha_emision DATETIME NOT NULL,
@@ -254,11 +256,16 @@ class DatabaseManager {
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS correlativos_dte (
-        tipo_dte TEXT PRIMARY KEY,
+        tipo_dte TEXT NOT NULL,
+        anio INTEGER NOT NULL,
+        establecimiento TEXT NOT NULL DEFAULT '',
+        punto_venta TEXT NOT NULL DEFAULT '',
         siguiente INTEGER NOT NULL DEFAULT 1,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (tipo_dte, anio, establecimiento, punto_venta)
       )
     `);
+    this.migrarCorrelativosDteAnuales();
 
     try {
       this.db.exec(`ALTER TABLE facturas ADD COLUMN notas TEXT`);
@@ -407,6 +414,7 @@ class DatabaseManager {
       `);
     }
 
+    this.migrarFacturasNumeroControlAnual();
     this.eliminarColumnasObsoletas();
 
     // Índices
@@ -415,6 +423,9 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_facturas_estado ON facturas(estado);
       CREATE INDEX IF NOT EXISTS idx_facturas_cliente ON facturas(cliente_id);
       CREATE INDEX IF NOT EXISTS idx_facturas_tipo_estado ON facturas(tipo_dte, estado);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_facturas_numero_control_anio
+        ON facturas(numero_control, substr(fecha_emision, 1, 4))
+        WHERE numero_control IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_clientes_documento ON clientes(numero_documento);
       CREATE INDEX IF NOT EXISTS idx_contingencias_estado ON contingencias(estado);
       CREATE INDEX IF NOT EXISTS idx_contingencias_factura ON contingencias(factura_id);
@@ -471,6 +482,7 @@ class DatabaseManager {
             certificado_path = ?, certificado_password = ?,
             correo_smtp_host = ?, correo_smtp_port = ?, correo_smtp_secure = ?,
             correo_usuario = ?, correo_password = ?, correo_remitente = ?, correo_nombre = ?,
+            tipos_dte_habilitados = ?,
             logo_path = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -490,6 +502,7 @@ class DatabaseManager {
         config.correo_password,
         config.correo_remitente,
         config.correo_nombre,
+        this.normalizarTiposDteHabilitados(config.tipos_dte_habilitados),
         config.logo_path,
         existing.id
       );
@@ -502,8 +515,8 @@ class DatabaseManager {
          hacienda_password, hacienda_ambiente, tipo_firma, firmador_usuario, 
          firmador_password, firmador_pin, certificado_path, certificado_password,
          correo_smtp_host, correo_smtp_port, correo_smtp_secure, correo_usuario,
-         correo_password, correo_remitente, correo_nombre, logo_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         correo_password, correo_remitente, correo_nombre, tipos_dte_habilitados, logo_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
@@ -520,8 +533,179 @@ class DatabaseManager {
         config.correo_password,
         config.correo_remitente,
         config.correo_nombre,
+        this.normalizarTiposDteHabilitados(config.tipos_dte_habilitados),
         config.logo_path
       );
+    }
+  }
+
+  normalizarTiposDteHabilitados(tipos) {
+    const permitidos = ['01', '03', '05', '06', '07', '11', '14'];
+    let lista = tipos;
+
+    if (typeof lista === 'string') {
+      try {
+        lista = JSON.parse(lista);
+      } catch {
+        lista = lista.split(',');
+      }
+    }
+
+    if (!Array.isArray(lista)) lista = permitidos;
+
+    const normalizados = [...new Set(lista
+      .map(tipo => String(tipo || '').padStart(2, '0'))
+      .filter(tipo => permitidos.includes(tipo)))];
+
+    return JSON.stringify(normalizados.length ? normalizados : ['01']);
+  }
+
+  migrarCorrelativosDteAnuales() {
+    const columnas = this.db.prepare(`PRAGMA table_info(correlativos_dte)`).all();
+    const nombres = columnas.map(columna => columna.name);
+    const pkColumnas = columnas.filter(columna => columna.pk > 0).length;
+
+    if (nombres.includes('anio') && nombres.includes('establecimiento') && nombres.includes('punto_venta') && pkColumnas >= 4) {
+      return;
+    }
+
+    const anioActual = new Date().getFullYear();
+    const existentes = this.db.prepare(`
+      SELECT tipo_dte, siguiente
+      FROM correlativos_dte
+    `).all();
+
+    this.db.exec(`DROP TABLE IF EXISTS correlativos_dte_legacy`);
+    this.db.exec(`ALTER TABLE correlativos_dte RENAME TO correlativos_dte_legacy`);
+    this.db.exec(`
+      CREATE TABLE correlativos_dte (
+        tipo_dte TEXT NOT NULL,
+        anio INTEGER NOT NULL,
+        establecimiento TEXT NOT NULL DEFAULT '',
+        punto_venta TEXT NOT NULL DEFAULT '',
+        siguiente INTEGER NOT NULL DEFAULT 1,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (tipo_dte, anio, establecimiento, punto_venta)
+      )
+    `);
+
+    const insert = this.db.prepare(`
+      INSERT INTO correlativos_dte (tipo_dte, anio, establecimiento, punto_venta, siguiente, updated_at)
+      VALUES (?, ?, '', '', ?, CURRENT_TIMESTAMP)
+    `);
+
+    existentes.forEach(row => {
+      const tipo = String(row.tipo_dte || '').padStart(2, '0');
+      if (tipo) insert.run(tipo, anioActual, Number(row.siguiente || 1));
+    });
+
+    this.db.exec(`DROP TABLE correlativos_dte_legacy`);
+  }
+
+  facturasTieneNumeroControlUnicoGlobal() {
+    const indices = this.db.prepare(`PRAGMA index_list(facturas)`).all();
+
+    return indices.some(indice => {
+      if (!indice.unique) return false;
+      const columnas = this.db.prepare(`PRAGMA index_info(${JSON.stringify(indice.name)})`).all();
+      return columnas.length === 1 && columnas[0].name === 'numero_control';
+    });
+  }
+
+  migrarFacturasNumeroControlAnual() {
+    if (!this.facturasTieneNumeroControlUnicoGlobal()) return;
+
+    try {
+      this.db.exec(`
+        PRAGMA foreign_keys = OFF;
+        BEGIN IMMEDIATE;
+        DROP TABLE IF EXISTS contingencias_legacy;
+        DROP TABLE IF EXISTS facturas_legacy;
+        ALTER TABLE contingencias RENAME TO contingencias_legacy;
+        ALTER TABLE facturas RENAME TO facturas_legacy;
+
+        CREATE TABLE facturas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          numero_control TEXT,
+          codigo_generacion TEXT UNIQUE,
+          tipo_dte TEXT NOT NULL,
+          fecha_emision DATETIME NOT NULL,
+          cliente_id INTEGER NOT NULL,
+          cliente_datos TEXT NOT NULL,
+          items TEXT NOT NULL,
+          total REAL NOT NULL,
+          estado TEXT DEFAULT 'PENDIENTE',
+          json_dte TEXT,
+          sello_recepcion TEXT,
+          fecha_procesamiento DATETIME,
+          observaciones TEXT,
+          correo_enviado INTEGER DEFAULT 0,
+          fecha_correo DATETIME,
+          notas TEXT,
+          sello_anulacion TEXT,
+          fecha_anulacion DATETIME,
+          motivo_anulacion TEXT,
+          json_anulacion TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+        );
+
+        INSERT INTO facturas (
+          id, numero_control, codigo_generacion, tipo_dte, fecha_emision, cliente_id,
+          cliente_datos, items, total, estado, json_dte, sello_recepcion,
+          fecha_procesamiento, observaciones, correo_enviado, fecha_correo, notas,
+          sello_anulacion, fecha_anulacion, motivo_anulacion, json_anulacion,
+          created_at, updated_at
+        )
+        SELECT
+          id, numero_control, codigo_generacion, tipo_dte, fecha_emision, cliente_id,
+          cliente_datos, items, total, estado, json_dte, sello_recepcion,
+          fecha_procesamiento, observaciones, correo_enviado, fecha_correo, notas,
+          sello_anulacion, fecha_anulacion, motivo_anulacion, json_anulacion,
+          created_at, updated_at
+        FROM facturas_legacy;
+
+        CREATE TABLE contingencias (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          factura_id INTEGER NOT NULL,
+          tipo_contingencia TEXT NOT NULL,
+          fecha_contingencia DATETIME NOT NULL,
+          motivo TEXT,
+          estado TEXT DEFAULT 'PENDIENTE',
+          intentos_reenvio INTEGER DEFAULT 0,
+          ultimo_intento DATETIME,
+          fecha_resolucion DATETIME,
+          sello_resolucion TEXT,
+          numero_validacion TEXT,
+          json_evento TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (factura_id) REFERENCES facturas(id)
+        );
+
+        INSERT INTO contingencias (
+          id, factura_id, tipo_contingencia, fecha_contingencia, motivo, estado,
+          intentos_reenvio, ultimo_intento, fecha_resolucion, sello_resolucion,
+          numero_validacion, json_evento, created_at
+        )
+        SELECT
+          id, factura_id, tipo_contingencia, fecha_contingencia, motivo, estado,
+          intentos_reenvio, ultimo_intento, fecha_resolucion, sello_resolucion,
+          numero_validacion, json_evento, created_at
+        FROM contingencias_legacy;
+
+        DROP TABLE facturas_legacy;
+        DROP TABLE contingencias_legacy;
+        COMMIT;
+        PRAGMA foreign_keys = ON;
+      `);
+    } catch (error) {
+      try {
+        this.db.exec(`ROLLBACK; PRAGMA foreign_keys = ON;`);
+      } catch {
+        this.db.exec(`PRAGMA foreign_keys = ON;`);
+      }
+      throw error;
     }
   }
 
@@ -682,13 +866,19 @@ class DatabaseManager {
       typeof factura.json_dte === 'string' ? factura.json_dte : JSON.stringify(factura.json_dte),
       factura.notas || null
     );
-    this.registrarCorrelativoUsado(factura.tipo_dte, factura.numero_control);
+    this.registrarCorrelativoUsado(factura.tipo_dte, factura.numero_control, factura.fecha_emision);
     return result;
   }
 
-  existeNumeroControl(numeroControl) {
-    const stmt = this.db.prepare('SELECT 1 FROM facturas WHERE numero_control = ? LIMIT 1');
-    return Boolean(stmt.get(numeroControl));
+  existeNumeroControl(numeroControl, fecha = null) {
+    const anio = this.obtenerAnioCorrelativo(fecha);
+    const stmt = this.db.prepare(`
+      SELECT 1 FROM facturas
+      WHERE numero_control = ?
+        AND substr(fecha_emision, 1, 4) = ?
+      LIMIT 1
+    `);
+    return Boolean(stmt.get(numeroControl, String(anio)));
   }
 
   obtenerCorrelativoDesdeNumeroControl(numeroControl) {
@@ -696,19 +886,120 @@ class DatabaseManager {
     return match ? Number(match[1]) : null;
   }
 
-  registrarCorrelativoUsado(tipoDte, numeroControl) {
+  obtenerSerieDesdeNumeroControl(numeroControl) {
+    const match = String(numeroControl || '').match(/^DTE-[0-9]{2}-([A-Z0-9]{8})-[0-9]{15}$/);
+    if (!match) return { establecimiento: '', puntoVenta: '' };
+
+    return {
+      establecimiento: match[1].slice(0, 4),
+      puntoVenta: match[1].slice(4, 8)
+    };
+  }
+
+  normalizarCodigoControl(valor, fallback = '') {
+    return String(valor || fallback)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .padStart(4, '0')
+      .slice(0, 4);
+  }
+
+  obtenerAnioCorrelativo(fecha = null) {
+    const valor = String(fecha || '').slice(0, 4);
+    const anio = Number(valor);
+    return Number.isInteger(anio) && anio >= 2000 ? anio : new Date().getFullYear();
+  }
+
+  registrarCorrelativoUsado(tipoDte, numeroControl, fecha = null) {
     const tipo = String(tipoDte || '').padStart(2, '0');
     const correlativoUsado = this.obtenerCorrelativoDesdeNumeroControl(numeroControl);
     if (!tipo || !Number.isFinite(correlativoUsado) || correlativoUsado < 1) return;
+    const anio = this.obtenerAnioCorrelativo(fecha);
+    const serie = this.obtenerSerieDesdeNumeroControl(numeroControl);
 
     const stmt = this.db.prepare(`
-      INSERT INTO correlativos_dte (tipo_dte, siguiente, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(tipo_dte) DO UPDATE SET
+      INSERT INTO correlativos_dte (tipo_dte, anio, establecimiento, punto_venta, siguiente, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tipo_dte, anio, establecimiento, punto_venta) DO UPDATE SET
         siguiente = MAX(correlativos_dte.siguiente, excluded.siguiente),
         updated_at = CURRENT_TIMESTAMP
     `);
-    stmt.run(tipo, correlativoUsado + 1);
+    stmt.run(tipo, anio, serie.establecimiento, serie.puntoVenta, correlativoUsado + 1);
+  }
+
+  getCorrelativosDte() {
+    return this.db.prepare(`
+      WITH usados AS (
+        SELECT
+          tipo_dte,
+          CAST(substr(fecha_emision, 1, 4) AS INTEGER) AS anio,
+          substr(numero_control, 8, 4) AS establecimiento,
+          substr(numero_control, 12, 4) AS punto_venta,
+          MAX(CAST(substr(numero_control, -15) AS INTEGER)) AS ultimo_usado,
+          COUNT(*) AS documentos
+        FROM facturas
+        WHERE numero_control IS NOT NULL
+        GROUP BY tipo_dte, anio, establecimiento, punto_venta
+      )
+      SELECT
+        c.tipo_dte,
+        c.anio,
+        c.establecimiento,
+        c.punto_venta,
+        c.siguiente,
+        COALESCE(u.ultimo_usado, 0) AS ultimo_usado,
+        COALESCE(u.documentos, 0) AS documentos,
+        c.updated_at
+      FROM correlativos_dte c
+      LEFT JOIN usados u
+        ON u.tipo_dte = c.tipo_dte
+       AND u.anio = c.anio
+       AND u.establecimiento = c.establecimiento
+       AND u.punto_venta = c.punto_venta
+      WHERE c.establecimiento <> ''
+         OR c.punto_venta <> ''
+         OR NOT EXISTS (
+           SELECT 1 FROM correlativos_dte c2
+           WHERE c2.tipo_dte = c.tipo_dte
+             AND c2.anio = c.anio
+             AND (c2.establecimiento <> '' OR c2.punto_venta <> '')
+         )
+      ORDER BY c.anio DESC, c.tipo_dte, c.establecimiento, c.punto_venta
+    `).all();
+  }
+
+  updateCorrelativoDte(datos = {}) {
+    const tipo = String(datos.tipo_dte || '').padStart(2, '0');
+    const anio = this.obtenerAnioCorrelativo(datos.anio);
+    const establecimiento = this.normalizarCodigoControl(datos.establecimiento, '');
+    const puntoVenta = this.normalizarCodigoControl(datos.punto_venta || datos.puntoVenta, '');
+    const siguiente = Number(datos.siguiente);
+
+    if (!tipo || !Number.isInteger(siguiente) || siguiente < 1) {
+      throw new Error('Ingrese un correlativo válido.');
+    }
+
+    const serieControl = `${establecimiento}${puntoVenta}`;
+    const usado = this.db.prepare(`
+      SELECT MAX(CAST(substr(numero_control, -15) AS INTEGER)) AS ultimo
+      FROM facturas
+      WHERE tipo_dte = ?
+        AND substr(fecha_emision, 1, 4) = ?
+        AND numero_control LIKE ?
+    `).get(tipo, String(anio), `DTE-${tipo}-${serieControl}-%`);
+    const minimo = Number(usado?.ultimo || 0) + 1;
+
+    if (siguiente < minimo) {
+      throw new Error(`El siguiente correlativo no puede ser menor que ${minimo}; ya existen documentos locales en esa serie.`);
+    }
+
+    return this.db.prepare(`
+      INSERT INTO correlativos_dte (tipo_dte, anio, establecimiento, punto_venta, siguiente, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tipo_dte, anio, establecimiento, punto_venta) DO UPDATE SET
+        siguiente = excluded.siguiente,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(tipo, anio, establecimiento, puntoVenta, siguiente);
   }
 
   updateFacturaEstado(id, estado, selloRecepcion = null, observaciones = null, jsonDte = null) {
@@ -816,27 +1107,51 @@ class DatabaseManager {
   }
 
   // Obtener siguiente correlativo para número de control
-  getSiguienteCorrelativo(tipoDte) {
+  getSiguienteCorrelativo(tipoDte, opciones = {}) {
     const tipo = String(tipoDte || '').padStart(2, '0');
+    const anio = this.obtenerAnioCorrelativo(opciones.fecha || opciones.fechaEmision);
+    const establecimiento = this.normalizarCodigoControl(opciones.establecimiento || opciones.codigo_establecimiento, '');
+    const puntoVenta = this.normalizarCodigoControl(opciones.puntoVenta || opciones.punto_venta, '');
+    const serieControl = `${establecimiento}${puntoVenta}`;
     const localStmt = this.db.prepare(`
       SELECT MAX(CAST(SUBSTR(numero_control, -15) AS INTEGER)) as ultimo
       FROM facturas
       WHERE tipo_dte = ?
         AND numero_control LIKE ?
+        AND substr(fecha_emision, 1, 4) = ?
     `);
-    const local = localStmt.get(tipo, `DTE-${tipo}-%`);
+    const local = localStmt.get(tipo, `DTE-${tipo}-${serieControl}-%`, String(anio));
+    const legacy = this.db
+      .prepare(`
+        SELECT MAX(siguiente) as siguiente FROM correlativos_dte
+        WHERE tipo_dte = ?
+          AND anio = ?
+          AND establecimiento = ''
+          AND punto_venta = ''
+      `)
+      .get(tipo, anio);
     const guardado = this.db
-      .prepare('SELECT siguiente FROM correlativos_dte WHERE tipo_dte = ?')
-      .get(tipo);
-    const siguiente = Math.max(Number(local?.ultimo || 0) + 1, Number(guardado?.siguiente || 1));
+      .prepare(`
+        SELECT siguiente FROM correlativos_dte
+        WHERE tipo_dte = ?
+          AND anio = ?
+          AND establecimiento = ?
+          AND punto_venta = ?
+      `)
+      .get(tipo, anio, establecimiento, puntoVenta);
+    const siguiente = Math.max(
+      Number(local?.ultimo || 0) + 1,
+      Number(legacy?.siguiente || 1),
+      Number(guardado?.siguiente || 1)
+    );
 
     this.db.prepare(`
-      INSERT INTO correlativos_dte (tipo_dte, siguiente, updated_at)
-      VALUES (?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(tipo_dte) DO UPDATE SET
+      INSERT INTO correlativos_dte (tipo_dte, anio, establecimiento, punto_venta, siguiente, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(tipo_dte, anio, establecimiento, punto_venta) DO UPDATE SET
         siguiente = MAX(correlativos_dte.siguiente, excluded.siguiente),
         updated_at = CURRENT_TIMESTAMP
-    `).run(tipo, siguiente);
+    `).run(tipo, anio, establecimiento, puntoVenta, siguiente);
 
     return siguiente;
   }

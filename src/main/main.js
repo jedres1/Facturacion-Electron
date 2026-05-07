@@ -19,6 +19,22 @@ let dteValidator;
 let pdfGenerator;
 let contingenciaManager;
 
+function crearRespuestaErrorHacienda(api, error) {
+  const errorDetalle = api.procesarErrorHacienda(error);
+  return {
+    success: false,
+    error: errorDetalle.mensaje || error.message,
+    errorDetalle
+  };
+}
+
+function obtenerFechaLocalISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -137,8 +153,16 @@ ipcMain.handle('db:registrarAnulacion', async (event, { id, anulacion }) => {
   return db.registrarAnulacion(id, anulacion);
 });
 
-ipcMain.handle('db:getSiguienteCorrelativo', async (event, tipoDte) => {
-  return db.getSiguienteCorrelativo(tipoDte);
+ipcMain.handle('db:getSiguienteCorrelativo', async (event, tipoDte, opciones = {}) => {
+  return db.getSiguienteCorrelativo(tipoDte, opciones);
+});
+
+ipcMain.handle('db:getCorrelativosDte', async () => {
+  return db.getCorrelativosDte();
+});
+
+ipcMain.handle('db:updateCorrelativoDte', async (event, datos) => {
+  return db.updateCorrelativoDte(datos);
 });
 
 ipcMain.handle('db:getConfiguracion', async () => {
@@ -151,23 +175,24 @@ ipcMain.handle('db:updateConfiguracion', async (event, config) => {
 
 // IPC Handlers para Hacienda
 ipcMain.handle('hacienda:autenticar', async (event, credenciales) => {
+  const api = new HaciendaAPI(credenciales);
   try {
-    const api = new HaciendaAPI(credenciales);
     const resultado = await api.autenticar();
     return resultado; // Retorna { success, token, user, rol, roles, tokenType }
   } catch (error) {
-    return { success: false, error: error.message };
+    return crearRespuestaErrorHacienda(api, error);
   }
 });
 
 ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPri }) => {
+  let api = null;
   try {
     const config = db.getConfiguracion();
     if (!config || !config.hacienda_usuario || !config.hacienda_password) {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
     }
 
-    const api = new HaciendaAPI({
+    api = new HaciendaAPI({
       ambiente: config.hacienda_ambiente || 'pruebas',
       usuario: config.hacienda_usuario,
       password: config.hacienda_password
@@ -181,18 +206,19 @@ ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPr
     
     return resultado;
   } catch (error) {
-    return { success: false, error: error.message };
+    return api ? crearRespuestaErrorHacienda(api, error) : { success: false, error: error.message };
   }
 });
 
 ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
+  let api = null;
   try {
     const config = db.getConfiguracion();
     if (!config || !config.hacienda_usuario || !config.hacienda_password) {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
     }
 
-    const api = new HaciendaAPI({
+    api = new HaciendaAPI({
       ambiente: config.hacienda_ambiente || 'pruebas',
       usuario: config.hacienda_usuario,
       password: config.hacienda_password
@@ -201,18 +227,19 @@ ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
     await api.autenticar();
     return await api.anularDTE(eventoFirmado);
   } catch (error) {
-    return { success: false, error: error.message };
+    return api ? crearRespuestaErrorHacienda(api, error) : { success: false, error: error.message };
   }
 });
 
 ipcMain.handle('hacienda:enviarContingencia', async (event, { eventoFirmado, nit }) => {
+  let api = null;
   try {
     const config = db.getConfiguracion();
     if (!config || !config.hacienda_usuario || !config.hacienda_password) {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
     }
 
-    const api = new HaciendaAPI({
+    api = new HaciendaAPI({
       ambiente: config.hacienda_ambiente || 'pruebas',
       usuario: config.hacienda_usuario,
       password: config.hacienda_password
@@ -221,7 +248,7 @@ ipcMain.handle('hacienda:enviarContingencia', async (event, { eventoFirmado, nit
     await api.autenticar();
     return await api.enviarContingencia(eventoFirmado, nit || config.nit);
   } catch (error) {
-    return { success: false, error: error.message };
+    return api ? crearRespuestaErrorHacienda(api, error) : { success: false, error: error.message };
   }
 });
 
@@ -340,25 +367,10 @@ ipcMain.handle('dialog:selectFile', async (event, options) => {
 });
 
 ipcMain.handle('dte:guardarJson', async (event, { nombreArchivo, contenido }) => {
-  try {
-    const result = await dialog.showSaveDialog(mainWindow, {
-      defaultPath: nombreArchivo || 'dte.json',
-      filters: [
-        { name: 'JSON', extensions: ['json'] },
-        { name: 'Todos los archivos', extensions: ['*'] }
-      ]
-    });
-
-    if (result.canceled || !result.filePath) {
-      return { success: false, canceled: true };
-    }
-
-    const fs = require('fs').promises;
-    await fs.writeFile(result.filePath, contenido, 'utf8');
-    return { success: true, filePath: result.filePath };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
+  return {
+    success: false,
+    error: 'El JSON fiscal se genera solo como adjunto de correo; no se guarda en disco.'
+  };
 });
 
 // IPC Handler para generar DTE
@@ -366,7 +378,12 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
   try {
     let dte;
 
-    let correlativo = db.getSiguienteCorrelativo(tipo);
+    const opcionesCorrelativo = {
+      fecha: opciones?.fechaEmision || opciones?.fecEmi || obtenerFechaLocalISO(),
+      establecimiento: config?.codigo_establecimiento,
+      puntoVenta: config?.punto_venta
+    };
+    let correlativo = db.getSiguienteCorrelativo(tipo, opcionesCorrelativo);
     for (let intento = 0; intento < 50; intento++) {
       const opcionesConCorrelativo = {
         ...opciones,
@@ -375,7 +392,7 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
 
       dte = generarDTEPorTipo(tipo, config, cliente, items, resumen, opcionesConCorrelativo);
 
-      if (!db.existeNumeroControl(dte.identificacion.numeroControl)) {
+      if (!db.existeNumeroControl(dte.identificacion.numeroControl, dte.identificacion.fecEmi)) {
         break;
       }
 
@@ -395,7 +412,7 @@ ipcMain.handle('dte:generar', async (event, { tipo, config, cliente, items, resu
       };
     }
 
-    db.registrarCorrelativoUsado(tipo, dte.identificacion.numeroControl);
+    db.registrarCorrelativoUsado(tipo, dte.identificacion.numeroControl, dte.identificacion.fecEmi);
     return { success: true, dte };
   } catch (error) {
     return { success: false, error: error.message };
@@ -423,7 +440,7 @@ function generarDTEPorTipo(tipo, config, cliente, items, resumen, opcionesConCor
   }
 }
 
-// IPC Handler para generar PDF
+// IPC Handler para generar PDF en memoria
 ipcMain.handle('pdf:generar', async (event, { factura, dte, config }) => {
   try {
     // Parsear el DTE si viene como string
@@ -438,22 +455,10 @@ ipcMain.handle('pdf:generar', async (event, { factura, dte, config }) => {
     }
     
     const pdfBuffer = await pdfGenerator.generarPDFFactura(factura, dteObj, config);
-    
-    // Guardar PDF en carpeta temporal
-    const userDataPath = app.getPath('userData');
-    const pdfDir = path.join(userDataPath, 'pdfs');
-    const fs = require('fs').promises;
-    
-    // Crear directorio si no existe
-    await fs.mkdir(pdfDir, { recursive: true });
-    
-    const pdfPath = path.join(pdfDir, `DTE_${dteObj.identificacion.codigoGeneracion}.pdf`);
-    await fs.writeFile(pdfPath, pdfBuffer);
-    
+
     return { 
       success: true, 
-      pdfBuffer: pdfBuffer.toString('base64'), // Enviar como base64
-      pdfPath: pdfPath 
+      pdfBuffer: pdfBuffer.toString('base64')
     };
   } catch (error) {
     return { success: false, error: error.message };

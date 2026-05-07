@@ -56,7 +56,11 @@ class HaciendaAPI {
       throw new Error('No se recibió token de autenticación');
     } catch (error) {
       const errorMsg = error.response?.data?.mensaje || error.response?.data?.body?.mensaje || error.message;
-      throw new Error(`Error en autenticación: ${errorMsg}`);
+      const authError = new Error(`Error en autenticación: ${errorMsg}`);
+      authError.code = error.code;
+      authError.response = error.response;
+      authError.originalError = error;
+      throw authError;
     }
   }
 
@@ -304,7 +308,7 @@ class HaciendaAPI {
     }
     
     // Error de red
-    else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+    else if (['ENOTFOUND', 'ECONNREFUSED', 'ENETUNREACH', 'EAI_AGAIN', 'ECONNRESET', 'EHOSTUNREACH'].includes(error.code)) {
       errorDetallado.tipo = 'RED';
       errorDetallado.reintentable = true;
       errorDetallado.mensaje = 'No se pudo conectar con el servidor del MH. Verifique su conexión a internet.';
@@ -397,8 +401,8 @@ class HaciendaAPI {
         tipoDte: tipo,
         numeroControl: datos.numeroControl,
         codigoGeneracion: datos.codigoGeneracion || this.generarCodigoGeneracion(),
-        tipoModelo: '1',
-        tipoOperacion: '1',
+        tipoModelo: 1,
+        tipoOperacion: 1,
         tipoContingencia: null,
         motivoContin: null,
         fecEmi: fechaEmision,

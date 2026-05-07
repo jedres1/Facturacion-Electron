@@ -502,6 +502,20 @@
         <!-- Configuración View -->
         <div id="configuracion-view" class="view">
           <form id="form-configuracion" class="config-form">
+            <div class="form-section config-edit-section">
+              <div class="config-lock-panel">
+                <div>
+                  <h3 id="config-lock-title">Configuración bloqueada</h3>
+                  <p class="form-hint" id="config-lock-help">Los campos permanecen bloqueados para evitar cambios accidentales.</p>
+                </div>
+                <label class="config-switch" for="switch-config-edicion">
+                  <span id="config-switch-label">Bloqueada</span>
+                  <input type="checkbox" id="switch-config-edicion">
+                  <span class="config-switch-track" aria-hidden="true"></span>
+                </label>
+              </div>
+            </div>
+
             <div class="form-section">
               <h3>Información de la Empresa</h3>
               <div class="form-grid">
@@ -699,6 +713,41 @@
             </div>
 
             <div class="form-section">
+              <h3>Documentos a Generar</h3>
+              <div class="document-type-grid" id="config-tipos-dte">
+                <label class="document-type-option">
+                  <input type="checkbox" value="01">
+                  <span>01 - Factura</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="03">
+                  <span>03 - Comprobante de Crédito Fiscal</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="05">
+                  <span>05 - Nota de Crédito</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="06">
+                  <span>06 - Nota de Débito</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="07">
+                  <span>07 - Comprobante de Retención</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="11">
+                  <span>11 - Factura de Exportación</span>
+                </label>
+                <label class="document-type-option">
+                  <input type="checkbox" value="14">
+                  <span>14 - Factura de Sujeto Excluido</span>
+                </label>
+              </div>
+              <p class="form-hint">Los tipos seleccionados aparecerán en la creación de documentos, el filtro de facturas y el documento por defecto del cliente.</p>
+            </div>
+
+            <div class="form-section">
               <h3>Método de Firma Digital</h3>
               <div class="form-grid">
                 <div class="form-group full-width">
@@ -785,6 +834,31 @@
                   <input type="text" id="config-correo-nombre" placeholder="Nombre de la empresa">
                 </div>
               </div>
+            </div>
+
+            <div class="form-section">
+              <h3>Correlativos</h3>
+              <div class="correlativos-toolbar">
+                <button type="button" class="btn btn-secondary" id="btn-recargar-correlativos">Actualizar</button>
+              </div>
+              <div class="table-container">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Año</th>
+                      <th>Serie</th>
+                      <th>Último local</th>
+                      <th>Siguiente</th>
+                      <th>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody id="correlativos-body">
+                    <tr><td colspan="6" class="text-center">Cargando correlativos...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="form-hint">Suba el siguiente correlativo cuando Hacienda indique que el número ya existe. No se permite bajarlo por debajo del último usado localmente.</p>
             </div>
 
             <div class="form-actions">
@@ -942,7 +1016,7 @@
             Anular
           </button>
           <button type="button" class="btn btn-info" id="btn-descargar-pdf" style="display: none;">
-            📄 Descargar PDF
+            📄 Generar PDF
           </button>
           <button type="button" class="btn btn-info" id="btn-ver-json" style="display: none;">
             Ver JSON

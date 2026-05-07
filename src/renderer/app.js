@@ -17,6 +17,18 @@ let state = {
   }
 };
 
+const TIPOS_DTE_DISPONIBLES = [
+  { codigo: '01', nombre: 'Factura', nombreCorto: 'Factura', permiteDefaultCliente: true },
+  { codigo: '03', nombre: 'Comprobante de Crédito Fiscal', nombreCorto: 'CCF', permiteDefaultCliente: true },
+  { codigo: '05', nombre: 'Nota de Crédito', nombreCorto: 'Nota de Crédito', permiteDefaultCliente: false },
+  { codigo: '06', nombre: 'Nota de Débito', nombreCorto: 'Nota de Débito', permiteDefaultCliente: false },
+  { codigo: '07', nombre: 'Comprobante de Retención', nombreCorto: 'Comprobante de Retención', permiteDefaultCliente: false },
+  { codigo: '11', nombre: 'Factura de Exportación', nombreCorto: 'Exportación', permiteDefaultCliente: true },
+  { codigo: '14', nombre: 'Factura de Sujeto Excluido', nombreCorto: 'Sujeto Excluido', permiteDefaultCliente: true }
+];
+
+const TIPOS_DTE_DEFAULT = TIPOS_DTE_DISPONIBLES.map(tipo => tipo.codigo);
+
 // Actividades Económicas - Clasificación BCR Rev. 4.0
 let actividadesEconomicas = [
   { codigo: '01', descripcion: 'Producción agrícola, pecuaria, caza y actividades de servicios conexas' },
@@ -267,6 +279,7 @@ async function loadInitialData() {
     state.productos = await window.electronAPI.getProductos();
     state.facturas = await window.electronAPI.getFacturas({});
     state.configuracion = await window.electronAPI.getConfiguracion();
+    renderSelectsTiposDte();
     
     console.log('Datos iniciales cargados', state);
     
@@ -443,8 +456,123 @@ function facturaTieneError(factura) {
   return normalizarEstadoFactura(factura?.estado) === 'RECHAZADO';
 }
 
+function facturaRechazadaPorConexion(factura) {
+  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  const bitacora = obtenerBitacoraRechazoFactura(factura);
+  return bitacora?.tipo === 'RED' ||
+    bitacora?.tipo === 'TIMEOUT' ||
+    bitacora?.tipo === 'SERVICIO_NO_DISPONIBLE' ||
+    esErrorConexionHaciendaTexto(bitacora?.mensaje) ||
+    esErrorConexionHaciendaTexto(JSON.stringify(bitacora?.raw || ''));
+}
+
+function facturaRechazadaPorTipoOperacion(factura) {
+  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  const bitacora = obtenerBitacoraRechazoFactura(factura);
+  const detalle = `${bitacora?.mensaje || ''} ${JSON.stringify(bitacora?.raw || '')}`;
+  return /identificacion\.tipoOperacion|tipoOperacion/i.test(detalle);
+}
+
 function facturaFueEnviadaPorCorreo(factura) {
   return Number(factura?.correo_enviado || 0) === 1 || Boolean(factura?.fecha_correo);
+}
+
+function parseTiposDteHabilitados(valor) {
+  let tipos = valor;
+
+  if (typeof tipos === 'string') {
+    try {
+      tipos = JSON.parse(tipos);
+    } catch {
+      tipos = tipos.split(',');
+    }
+  }
+
+  if (!Array.isArray(tipos)) tipos = TIPOS_DTE_DEFAULT;
+
+  const permitidos = new Set(TIPOS_DTE_DEFAULT);
+  const normalizados = [...new Set(tipos
+    .map(tipo => String(tipo || '').padStart(2, '0'))
+    .filter(tipo => permitidos.has(tipo)))];
+
+  return normalizados.length ? normalizados : ['01'];
+}
+
+function obtenerTiposDteHabilitados() {
+  return parseTiposDteHabilitados(state.configuracion?.tipos_dte_habilitados);
+}
+
+function obtenerTiposDteParaClienteDefault(valorActual = null) {
+  const habilitados = new Set(obtenerTiposDteHabilitados());
+  const tipos = TIPOS_DTE_DISPONIBLES
+    .filter(tipo => tipo.permiteDefaultCliente && habilitados.has(tipo.codigo));
+
+  if (valorActual && !tipos.some(tipo => tipo.codigo === valorActual)) {
+    const actual = TIPOS_DTE_DISPONIBLES.find(tipo => tipo.codigo === valorActual && tipo.permiteDefaultCliente);
+    if (actual) tipos.push(actual);
+  }
+
+  return tipos.length ? tipos : TIPOS_DTE_DISPONIBLES.filter(tipo => tipo.codigo === '01');
+}
+
+function poblarSelectTipoDte(select, opciones = {}) {
+  if (!select) return;
+
+  const valorActual = opciones.valorActual || select.value;
+  const incluirTodos = opciones.incluirTodos || false;
+  const tipos = opciones.tipos || TIPOS_DTE_DISPONIBLES
+    .filter(tipo => obtenerTiposDteHabilitados().includes(tipo.codigo));
+
+  select.innerHTML = '';
+
+  if (incluirTodos) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Todos los documentos';
+    select.appendChild(option);
+  } else if (opciones.placeholder) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = opciones.placeholder;
+    select.appendChild(option);
+  }
+
+  tipos.forEach(tipo => {
+    const option = document.createElement('option');
+    option.value = tipo.codigo;
+    option.textContent = opciones.nombreCorto ? tipo.nombreCorto : tipo.nombre;
+    select.appendChild(option);
+  });
+
+  if (valorActual && select.querySelector(`option[value="${valorActual}"]`)) {
+    select.value = valorActual;
+  } else if (!incluirTodos && select.options.length) {
+    select.value = select.options[0].value;
+  }
+}
+
+function renderSelectsTiposDte() {
+  poblarSelectTipoDte(document.getElementById('tipo-dte'));
+  poblarSelectTipoDte(document.getElementById('filtro-tipo-dte'), { incluirTodos: true });
+  poblarSelectTipoDte(document.getElementById('cliente-tipo-dte-default'), {
+    placeholder: 'Seleccionar...',
+    tipos: obtenerTiposDteParaClienteDefault(document.getElementById('cliente-tipo-dte-default')?.value)
+  });
+
+  actualizarCamposNotaCredito();
+}
+
+function aplicarTiposDteConfiguracion(valor) {
+  const habilitados = new Set(parseTiposDteHabilitados(valor));
+  document.querySelectorAll('#config-tipos-dte input[type="checkbox"]').forEach(input => {
+    input.checked = habilitados.has(input.value);
+  });
+}
+
+function obtenerTiposDteConfiguradosFormulario() {
+  const seleccionados = [...document.querySelectorAll('#config-tipos-dte input[type="checkbox"]:checked')]
+    .map(input => input.value);
+  return seleccionados.length ? seleccionados : ['01'];
 }
 
 // Cargar facturas
@@ -540,7 +668,8 @@ function renderFacturas() {
           ${estado === 'PENDIENTE' ? `<button class="btn btn-small btn-success" onclick="firmarFactura(${f.id})">Firmar</button>` : ''}
           ${estado === 'FIRMADO' ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
           ${estado === 'CONTINGENCIA' ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
+          ${estado === 'RECHAZADO' && (facturaRechazadaPorConexion(f) || facturaRechazadaPorTipoOperacion(f)) ? `<button class="btn btn-small btn-warning" onclick="convertirRechazoConexionAContingencia(${f.id})">Contingencia</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaRechazadaPorConexion(f) && !facturaRechazadaPorTipoOperacion(f) ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
           ${estado === 'ENVIADO' ? `<button class="btn btn-small btn-danger" onclick="anularFactura(${f.id})">Anular</button>` : ''}
         </td>
       </tr>
@@ -707,6 +836,7 @@ function renderProductos() {
 async function loadConfiguracion() {
   try {
     const config = await window.electronAPI.getConfiguracion();
+    state.configuracion = config || state.configuracion;
     if (config) {
       document.getElementById('config-nit').value = config.nit || '';
       document.getElementById('config-nrc').value = config.nrc || '';
@@ -752,6 +882,7 @@ async function loadConfiguracion() {
       document.getElementById('config-hacienda-ambiente').value = config.hacienda_ambiente || 'pruebas';
       document.getElementById('config-establecimiento').value = config.codigo_establecimiento || '';
       document.getElementById('config-punto-venta').value = config.punto_venta || '';
+      aplicarTiposDteConfiguracion(config.tipos_dte_habilitados);
       
       // Tipo de firma y credenciales
       const tipoFirma = config.tipo_firma || 'svfe';
@@ -775,11 +906,116 @@ async function loadConfiguracion() {
       document.getElementById('config-correo-password').value = config.correo_password || '';
       document.getElementById('config-correo-remitente').value = config.correo_remitente || config.correo_usuario || '';
       document.getElementById('config-correo-nombre').value = config.correo_nombre || config.nombre_empresa || '';
+    } else {
+      aplicarTiposDteConfiguracion(TIPOS_DTE_DEFAULT);
     }
+    renderSelectsTiposDte();
+    await loadCorrelativosConfig();
+    setConfiguracionEditable(false);
   } catch (error) {
     console.error('Error cargando configuración:', error);
   }
 }
+
+function setConfiguracionEditable(editable) {
+  const form = document.getElementById('form-configuracion');
+  if (!form) return;
+  form.classList.toggle('config-locked', !editable);
+
+  form.querySelectorAll('input, select, textarea, button').forEach(control => {
+    if (control.id === 'switch-config-edicion') return;
+    control.disabled = !editable;
+  });
+
+  const switchEdicion = document.getElementById('switch-config-edicion');
+  const switchLabel = document.getElementById('config-switch-label');
+  const title = document.getElementById('config-lock-title');
+  const help = document.getElementById('config-lock-help');
+
+  if (switchEdicion) switchEdicion.checked = editable;
+  if (switchLabel) switchLabel.textContent = editable ? 'Editable' : 'Bloqueada';
+
+  if (title) title.textContent = editable ? 'Configuración editable' : 'Configuración bloqueada';
+  if (help) {
+    help.textContent = editable
+      ? 'Los cambios pueden afectar emisión, firma, correlativos y envío a Hacienda.'
+      : 'Los campos permanecen bloqueados para evitar cambios accidentales.';
+  }
+}
+
+async function loadCorrelativosConfig() {
+  const tbody = document.getElementById('correlativos-body');
+  if (!tbody) return;
+
+  try {
+    const correlativos = await window.electronAPI.getCorrelativosDte();
+    if (!correlativos.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay correlativos registrados todavía</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = correlativos.map(row => {
+      const tipo = String(row.tipo_dte || '').padStart(2, '0');
+      const establecimiento = row.establecimiento || '';
+      const puntoVenta = row.punto_venta || '';
+      const serie = establecimiento || puntoVenta ? `${establecimiento}/${puntoVenta}` : 'General';
+      const minimo = Number(row.ultimo_usado || 0) + 1;
+      const siguiente = Math.max(Number(row.siguiente || 1), minimo);
+      const rowId = `${tipo}-${row.anio}-${establecimiento || 'GEN'}-${puntoVenta || 'GEN'}`;
+
+      return `
+        <tr>
+          <td><strong>${tipo}</strong><br><small>${escaparHtml(obtenerNombreTipoDte(tipo))}</small></td>
+          <td>${row.anio}</td>
+          <td>${escaparHtml(serie)}</td>
+          <td>${Number(row.ultimo_usado || 0)}</td>
+          <td>
+            <input
+              type="number"
+              class="table-input correlativo-input"
+              id="correlativo-${rowId}"
+              min="${minimo}"
+              value="${siguiente}"
+            >
+          </td>
+          <td>
+            <button type="button" class="btn btn-small btn-primary" onclick="guardarCorrelativoDte('${tipo}', ${Number(row.anio)}, '${escaparHtml(establecimiento)}', '${escaparHtml(puntoVenta)}', '${rowId}')">Guardar</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (error) {
+    console.error('Error cargando correlativos:', error);
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">No se pudieron cargar los correlativos</td></tr>';
+  }
+}
+
+window.guardarCorrelativoDte = async function(tipoDte, anio, establecimiento, puntoVenta, rowId) {
+  try {
+    const input = document.getElementById(`correlativo-${rowId}`);
+    const siguiente = Number(input?.value || 0);
+    const minimo = Number(input?.min || 1);
+
+    if (!Number.isInteger(siguiente) || siguiente < minimo) {
+      showNotification(`El siguiente correlativo debe ser mayor o igual a ${minimo}.`, 'error');
+      return;
+    }
+
+    await window.electronAPI.updateCorrelativoDte({
+      tipo_dte: tipoDte,
+      anio,
+      establecimiento,
+      punto_venta: puntoVenta,
+      siguiente
+    });
+
+    showNotification('Correlativo actualizado correctamente', 'success');
+    await loadCorrelativosConfig();
+  } catch (error) {
+    console.error('Error guardando correlativo:', error);
+    showNotification(error.message || 'No se pudo actualizar el correlativo', 'error');
+  }
+};
 
 // Toggle entre opciones de firma web y local
 function toggleFirmaOptions(tipo) {
@@ -852,6 +1088,26 @@ function setupEventListeners() {
     e.preventDefault();
     await guardarConfiguracion();
   });
+  document.getElementById('switch-config-edicion')?.addEventListener('change', (e) => {
+    if (!e.target.checked) {
+      setConfiguracionEditable(false);
+      return;
+    }
+
+    const confirmar = confirm('Está por modificar datos sensibles de facturación. Los cambios pueden afectar emisión, firma, correlativos y envío a Hacienda. ¿Desea habilitar la edición?');
+    if (confirmar) {
+      setConfiguracionEditable(true);
+    } else {
+      setConfiguracionEditable(false);
+    }
+  });
+  document.querySelectorAll('#config-tipos-dte input[type="checkbox"]').forEach(input => {
+    input.addEventListener('change', () => {
+      const algunoMarcado = Boolean(document.querySelector('#config-tipos-dte input[type="checkbox"]:checked'));
+      if (!algunoMarcado) input.checked = true;
+    });
+  });
+  document.getElementById('btn-recargar-correlativos')?.addEventListener('click', loadCorrelativosConfig);
   
   // Nueva factura
   document.getElementById('form-factura')?.addEventListener('submit', async (e) => {
@@ -1207,11 +1463,13 @@ async function guardarConfiguracion() {
       correo_usuario: document.getElementById('config-correo-usuario').value,
       correo_password: document.getElementById('config-correo-password').value,
       correo_remitente: document.getElementById('config-correo-remitente').value,
-      correo_nombre: document.getElementById('config-correo-nombre').value
+      correo_nombre: document.getElementById('config-correo-nombre').value,
+      tipos_dte_habilitados: obtenerTiposDteConfiguradosFormulario()
     };
     
     await window.electronAPI.updateConfiguracion(config);
     state.configuracion = config;
+    renderSelectsTiposDte();
     showNotification('Configuración guardada exitosamente', 'success');
     
     // Actualizar estado de conexión
@@ -1246,12 +1504,13 @@ async function generarFactura() {
   try {
     iniciarProcesoEnvio('Envío de documento a Hacienda', [
       'Validando datos del cliente y documento',
-      'Generando JSON DTE',
-      'Guardando factura',
+      'Creando factura local',
       'Firmando documento',
       'Enviando a Hacienda',
       'Esperando respuesta de Hacienda',
-      'Aprobado por Hacienda'
+      'Creando JSON con respuesta MH',
+      'Generando PDF para correo',
+      'Enviando correo'
     ]);
     await avanzarProcesoEnvio('Validando datos del cliente y documento...');
 
@@ -1306,6 +1565,20 @@ async function generarFactura() {
       return;
     }
 
+    if (['05', '06'].includes(tipoDte)) {
+      const relacionados = Array.isArray(documentoRelacionado) ? documentoRelacionado : [documentoRelacionado].filter(Boolean);
+      const numerosRelacionados = new Set(relacionados.map(doc => doc.numeroDocumento).filter(Boolean));
+      const itemSinDocumentoRelacionado = relacionados.length > 1
+        ? itemsFactura.find(item => !item.numeroDocumentoRelacionado || !numerosRelacionados.has(item.numeroDocumentoRelacionado))
+        : null;
+
+      if (itemSinDocumentoRelacionado) {
+        await finalizarProcesoEnvio(`Cada ítem de la ${obtenerNombreTipoDte(tipoDte)} debe seleccionar el CCF relacionado al que aplica.`, 'error');
+        showNotification(`Cada ítem de la ${obtenerNombreTipoDte(tipoDte)} debe seleccionar el CCF relacionado al que aplica.`, 'error');
+        return;
+      }
+    }
+
     const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion);
     if (errorReceptor) {
       await finalizarProcesoEnvio('El receptor no cumple las validaciones requeridas.', 'error');
@@ -1353,19 +1626,21 @@ async function generarFactura() {
     const items = esRetencion ? [] : itemsFactura.map((item, index) => {
       const exento = itemEsExentoPorCliente(item, cliente, tipoDte);
       const subtotalItem = (item.cantidad * item.precioUnitario) - (item.descuento || 0);
+      const numeroDocumentoRelacionado = requiereDocumentoRelacionado
+        ? obtenerNumeroDocumentoRelacionadoItem(item, documentoRelacionado)
+        : null;
 
       return {
         numItem: index + 1,
         tipoItem: 1, // 1=Bien, 2=Servicio
-        numeroDocumento: null,
         cantidad: item.cantidad,
         codigo: item.codigo,
         codTributo: exento ? null : '20', // '20' = IVA 13%
         unidad_medida: item.unidad_medida || 'UND',
         descripcion: item.descripcion,
         precio_unitario: item.precioUnitario,
-        numero_documento: requiereDocumentoRelacionado ? obtenerNumeroDocumentoRelacionadoItem(item, documentoRelacionado) : null,
-        numeroDocumento: requiereDocumentoRelacionado ? obtenerNumeroDocumentoRelacionadoItem(item, documentoRelacionado) : null,
+        numero_documento: numeroDocumentoRelacionado,
+        numeroDocumento: numeroDocumentoRelacionado,
         montoDescu: item.descuento || 0,
         descuento: item.descuento || 0,
         exento,
@@ -1429,7 +1704,7 @@ async function generarFactura() {
       totalIVAretenido: esRetencion ? montoRetencion : undefined
     };
     
-    await avanzarProcesoEnvio('Generando JSON DTE con estructura oficial...');
+    await avanzarProcesoEnvio('Creando factura local y DTE base...');
 
     // Generar DTE usando el generador oficial
     const resultadoDte = await window.electronAPI.generarDTE({
@@ -1439,7 +1714,7 @@ async function generarFactura() {
         desc_actividad: obtenerDescripcionActividad(state.configuracion.actividad_economica)
       },
       cliente: clienteDatos,
-      items: itemsFactura,
+      items,
       resumen: resumenDte,
       opciones: {
         tipoTransmision: 1, // 1=Normal
@@ -1499,7 +1774,7 @@ async function generarFactura() {
       notas: notasFactura
     };
 
-    await avanzarProcesoEnvio('Guardando factura y preparando envío...');
+    await avanzarProcesoEnvio('Guardando factura local antes de enviar a Hacienda...');
 
     // Guardar en base de datos
     const result = await window.electronAPI.addFactura(factura);
@@ -1701,16 +1976,8 @@ function aplicarCondicionIvaClienteAItems() {
 }
 
 function obtenerNombreTipoDte(tipoDte) {
-  const nombres = {
-    '01': 'Factura',
-    '03': 'CCF',
-    '05': 'Nota de Crédito',
-    '06': 'Nota de Débito',
-    '07': 'Comprobante de Retención',
-    '11': 'Exportación',
-    '14': 'Sujeto Excluido'
-  };
-  return nombres[tipoDte] || tipoDte;
+  const tipo = TIPOS_DTE_DISPONIBLES.find(item => item.codigo === String(tipoDte || '').padStart(2, '0'));
+  return tipo?.nombreCorto || tipoDte;
 }
 
 function actualizarCamposExportacionFactura() {
@@ -1804,8 +2071,13 @@ function actualizarPlaceholderDocumentoRelacionado() {
 function obtenerDocumentoRelacionadoNotaCredito() {
   const tipoDte = document.getElementById('tipo-dte')?.value;
   if (['05', '06'].includes(tipoDte)) {
-    const relacionados = obtenerDocumentosRelacionadosNotaCredito();
-    if (!relacionados) return null;
+    let relacionados = obtenerDocumentosRelacionadosNotaCredito({ silencioso: true });
+
+    if (!relacionados) {
+      const relacionadoFormulario = obtenerDocumentoRelacionadoDesdeFormulario();
+      if (!relacionadoFormulario) return null;
+      relacionados = [relacionadoFormulario];
+    }
 
     const errorItems = validarItemsNotaCreditoContraRelacionados(relacionados);
     if (errorItems) {
@@ -1885,11 +2157,13 @@ function agregarDocumentoRelacionadoNotaCredito() {
   showNotification('CCF relacionado agregado', 'success');
 }
 
-function obtenerDocumentosRelacionadosNotaCredito() {
+function obtenerDocumentosRelacionadosNotaCredito(opciones = {}) {
   const tipoDte = document.getElementById('tipo-dte')?.value;
   const relacionados = state.currentFactura.documentosRelacionados || [];
   if (relacionados.length === 0) {
-    showNotification(`Agregue al menos un CCF relacionado para la ${obtenerNombreTipoDte(tipoDte)}.`, 'error');
+    if (!opciones.silencioso) {
+      showNotification(`Agregue al menos un CCF relacionado para la ${obtenerNombreTipoDte(tipoDte)}.`, 'error');
+    }
     return null;
   }
 
@@ -1903,7 +2177,9 @@ function validarItemsNotaCreditoContraRelacionados(relacionados) {
   }
 
   const numerosPermitidos = new Set(relacionados.map(doc => doc.numeroDocumento));
-  const itemSinDocumento = state.currentFactura.items.find(item => !item.numeroDocumentoRelacionado || !numerosPermitidos.has(item.numeroDocumentoRelacionado));
+  const itemSinDocumento = relacionados.length > 1
+    ? state.currentFactura.items.find(item => !item.numeroDocumentoRelacionado || !numerosPermitidos.has(item.numeroDocumentoRelacionado))
+    : null;
 
   if (itemSinDocumento) {
     return `Cada ítem de la ${obtenerNombreTipoDte(tipoDte)} debe seleccionar el CCF relacionado al que aplica.`;
@@ -1943,7 +2219,7 @@ function actualizarSelectorDocumentoRelacionadoItem() {
 
 function obtenerNumeroDocumentoRelacionadoItem(item, documentoRelacionado) {
   if (Array.isArray(documentoRelacionado)) {
-    return item.numeroDocumentoRelacionado || null;
+    return item.numeroDocumentoRelacionado || documentoRelacionado[0]?.numeroDocumento || null;
   }
 
   return documentoRelacionado?.numeroDocumento || null;
@@ -2466,6 +2742,10 @@ function crearBitacoraRechazoHacienda(resultado = {}, mensajeMostrado = '') {
   };
 }
 
+function esErrorConexionHaciendaTexto(mensaje = '') {
+  return /(ENOTFOUND|ENETUNREACH|EAI_AGAIN|ECONNRESET|ECONNREFUSED|EHOSTUNREACH|getaddrinfo|network|internet|conexi[oó]n)/i.test(String(mensaje));
+}
+
 function obtenerBitacoraRechazoFactura(factura) {
   const parsed = parseObservacionesFactura(factura?.observaciones);
   if (!parsed) return null;
@@ -2556,16 +2836,43 @@ function generarCodigoGeneracionEventoLocal() {
   });
 }
 
+function normalizarTipoContingenciaDTE(valor) {
+  const tipo = Number(valor || 5);
+  return [1, 2, 3, 4, 5].includes(tipo) ? tipo : 5;
+}
+
+function normalizarMotivoContingenciaDTE(motivo, tipoContingencia = 5) {
+  const motivoNormalizado = String(motivo || (tipoContingencia === 5 ? 'Otro motivo de contingencia' : 'Falla tecnica de transmision'))
+    .trim()
+    .slice(0, 150);
+
+  return motivoNormalizado.length >= 5 ? motivoNormalizado : 'Falla tecnica de transmision';
+}
+
 function prepararDTEParaContingencia(dteOriginal, tipoContingencia, motivo) {
   const dte = JSON.parse(JSON.stringify(obtenerDTEContenido(dteOriginal)));
   limpiarFirmasDTE(dte);
+
+  const tipo = normalizarTipoContingenciaDTE(tipoContingencia);
+  const motivoNormalizado = normalizarMotivoContingenciaDTE(motivo, tipo);
+  const motivoKey = Object.prototype.hasOwnProperty.call(dte.identificacion || {}, 'motivoContigencia')
+    ? 'motivoContigencia'
+    : 'motivoContin';
+
   dte.identificacion = {
     ...dte.identificacion,
-    tipoModelo: 1,
-    tipoOperacion: 1,
-    tipoContingencia: null,
-    motivoContin: null
+    tipoModelo: 2,
+    tipoOperacion: 2,
+    tipoContingencia: tipo,
+    [motivoKey]: motivoNormalizado
   };
+
+  if (motivoKey === 'motivoContin') {
+    delete dte.identificacion.motivoContigencia;
+  } else {
+    delete dte.identificacion.motivoContin;
+  }
+
   return dte;
 }
 
@@ -2573,22 +2880,41 @@ async function registrarDocumentoEnContingencia(facturaId, tipoContingencia, mot
   const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
   if (!factura?.json_dte) return false;
 
-  const dteContingencia = prepararDTEParaContingencia(parseDTEGuardado(factura.json_dte), tipoContingencia, motivo);
+  const tipo = normalizarTipoContingenciaDTE(tipoContingencia);
+  const motivoNormalizado = normalizarMotivoContingenciaDTE(motivo, tipo);
+  const dteContingencia = prepararDTEParaContingencia(parseDTEGuardado(factura.json_dte), tipo, motivoNormalizado);
   await window.electronAPI.updateFacturaEstado(
     facturaId,
     'CONTINGENCIA',
     null,
-    `Documento en contingencia: ${motivo || 'Falla tecnica de transmision'}`,
+    `Documento en contingencia: ${motivoNormalizado}`,
     dteContingencia
   );
 
   await window.electronAPI.registrarContingencia({
     facturaId,
-    tipo: String(tipoContingencia || 5),
-    motivo: String(motivo || 'Falla tecnica de transmision').slice(0, 150)
+    tipo: String(tipo),
+    motivo: motivoNormalizado
   });
 
   await loadFacturas();
+  return true;
+}
+
+async function convertirRechazoConexionAContingencia(facturaId) {
+  const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
+  if (!facturaRechazadaPorConexion(factura) && !facturaRechazadaPorTipoOperacion(factura)) {
+    showNotification('Este rechazo no parece recuperable como contingencia. Revise la bitácora antes de pasarlo a contingencia.', 'warning');
+    return false;
+  }
+
+  const bitacora = obtenerBitacoraRechazoFactura(factura);
+  const motivo = facturaRechazadaPorConexion(factura)
+    ? (bitacora?.mensaje || 'No se pudo conectar con Hacienda')
+    : 'Reprocesar documento como transmision por contingencia';
+  await registrarDocumentoEnContingencia(facturaId, '1', motivo);
+  cerrarModalVerFactura();
+  showNotification('Documento movido a contingencia para reprocesar.', 'success');
   return true;
 }
 
@@ -2601,8 +2927,11 @@ function construirEventoContingencia(factura, contingencia, dte) {
   const horaInicio = String(contingencia?.fecha_contingencia || '').includes('T')
     ? String(contingencia.fecha_contingencia).slice(11, 19)
     : (identificacion.horEmi || '00:00:00');
-  const tipoContingencia = Number(contingencia?.tipo_contingencia || identificacion.tipoContingencia || 5);
-  const motivo = String(contingencia?.motivo || identificacion.motivoContin || 'Falla tecnica de transmision').slice(0, 150);
+  const tipoContingencia = normalizarTipoContingenciaDTE(contingencia?.tipo_contingencia || identificacion.tipoContingencia || 5);
+  const motivo = normalizarMotivoContingenciaDTE(
+    contingencia?.motivo || identificacion.motivoContin || identificacion.motivoContigencia,
+    tipoContingencia
+  );
 
   return {
     identificacion: {
@@ -2700,6 +3029,13 @@ async function procesarContingenciaFactura(facturaId) {
       throw new Error(obtenerMensajeErrorHacienda(resultadoEvento, 'registrar contingencia'));
     }
 
+    await avanzarProcesoEnvio('Transmitiendo DTE diferido a Hacienda...');
+    const enviado = await enviarFacturaHacienda(facturaId, { confirmar: false, progreso: false });
+    if (!enviado) {
+      await finalizarProcesoEnvio('Evento registrado, pero el DTE no fue aprobado.', 'error');
+      return false;
+    }
+
     await window.electronAPI.resolverContingenciaConDatos({
       contingenciaId: contingencia.contingencia_id,
       sello: resultadoEvento.numeroValidacion || resultadoEvento.selloRecibido || null,
@@ -2712,13 +3048,6 @@ async function procesarContingenciaFactura(facturaId) {
       }
     });
 
-    await avanzarProcesoEnvio('Transmitiendo DTE diferido a Hacienda...');
-    const enviado = await enviarFacturaHacienda(facturaId, { confirmar: false, progreso: false });
-    if (!enviado) {
-      await finalizarProcesoEnvio('Evento registrado, pero el DTE no fue aprobado.', 'error');
-      return false;
-    }
-
     await finalizarProcesoEnvio('Contingencia procesada y DTE aprobado por Hacienda.', 'success');
     return true;
   } catch (error) {
@@ -2730,6 +3059,7 @@ async function procesarContingenciaFactura(facturaId) {
 }
 
 window.procesarContingenciaFactura = procesarContingenciaFactura;
+window.convertirRechazoConexionAContingencia = convertirRechazoConexionAContingencia;
 
 function getEstadoBadgeClass(estado) {
   const classes = {
@@ -2856,20 +3186,7 @@ function verJsonDTE(factura) {
 }
 
 async function guardarJsonDTE(factura) {
-  try {
-    const result = await window.electronAPI.guardarJsonDTE({
-      nombreArchivo: obtenerNombreArchivoJson(factura),
-      contenido: obtenerJsonDTEFormateado(factura)
-    });
-
-    if (result.success) {
-      showNotification('JSON guardado en: ' + result.filePath, 'success');
-    } else if (!result.canceled) {
-      showNotification('No se pudo guardar JSON: ' + (result.error || 'Error desconocido'), 'error');
-    }
-  } catch (error) {
-    showNotification('Error al guardar JSON: ' + error.message, 'error');
-  }
+  showNotification('El JSON fiscal se genera solo como adjunto de correo; no se guarda en disco.', 'info');
 }
 
 function showNotification(message, type = 'info') {
@@ -3045,10 +3362,16 @@ function abrirModalCliente(cliente = null) {
   
   // Limpiar formulario
   form.reset();
+  renderSelectsTiposDte();
   
   if (cliente) {
     // Modo edición
     titulo.textContent = 'Editar Cliente';
+    poblarSelectTipoDte(document.getElementById('cliente-tipo-dte-default'), {
+      placeholder: 'Seleccionar...',
+      valorActual: cliente.tipo_dte_default || '01',
+      tipos: obtenerTiposDteParaClienteDefault(cliente.tipo_dte_default || '01')
+    });
     document.getElementById('cliente-id').value = cliente.id;
     document.getElementById('cliente-tipo-documento').value = cliente.tipo_documento;
     document.getElementById('cliente-numero-documento').value = cliente.numero_documento;
@@ -3104,7 +3427,8 @@ function abrirModalCliente(cliente = null) {
     // Modo nuevo
     titulo.textContent = 'Nuevo Cliente';
     document.getElementById('cliente-id').value = '';
-    document.getElementById('cliente-tipo-dte-default').value = '01';
+    const defaultSelect = document.getElementById('cliente-tipo-dte-default');
+    defaultSelect.value = defaultSelect.querySelector('option[value="01"]') ? '01' : defaultSelect.options[1]?.value || defaultSelect.options[0]?.value || '';
     document.getElementById('cliente-condicion-iva').value = 'GRAVADO';
     document.getElementById('cliente-plazo-pago').value = '01';
     document.getElementById('cliente-periodo-pago').value = '1';
@@ -3195,7 +3519,8 @@ async function guardarCliente() {
     const plazoPago = document.getElementById('cliente-plazo-pago').value;
     const periodoPago = Number(document.getElementById('cliente-periodo-pago').value || 0);
 
-    if (!['01', '03', '11', '14'].includes(tipoDteDefault)) {
+    const tiposDefaultPermitidos = obtenerTiposDteParaClienteDefault().map(tipo => tipo.codigo);
+    if (!tiposDefaultPermitidos.includes(tipoDteDefault)) {
       showNotification('Seleccione el documento a generar por defecto para el cliente.', 'error');
       return;
     }
@@ -4415,6 +4740,8 @@ function abrirModalVerFactura(factura) {
   if (btnAnular) btnAnular.style.display = 'none';
   if (btnVerJson) btnVerJson.style.display = 'none';
   if (btnGuardarJson) btnGuardarJson.style.display = 'none';
+  if (btnDescargarPDF) btnDescargarPDF.style.display = 'none';
+  if (btnImprimirPDF) btnImprimirPDF.style.display = 'none';
   if (btnEnviarCorreo) btnEnviarCorreo.style.display = 'none';
   if (btnEditarClienteFactura) btnEditarClienteFactura.style.display = 'none';
   if (btnEditarItemsFactura) btnEditarItemsFactura.style.display = 'none';
@@ -4445,6 +4772,12 @@ function abrirModalVerFactura(factura) {
   }
 
   if (estadoFactura === 'RECHAZADO') {
+    if (facturaRechazadaPorConexion(factura) || facturaRechazadaPorTipoOperacion(factura)) {
+      btnEnviar.style.display = 'inline-flex';
+      btnEnviar.textContent = 'Pasar a Contingencia';
+      btnEnviar.onclick = () => convertirRechazoConexionAContingencia(factura.id);
+    }
+
     if (btnEditarClienteFactura) {
       btnEditarClienteFactura.style.display = 'inline-flex';
       btnEditarClienteFactura.onclick = () => editarClienteFacturaRechazada(factura.id);
@@ -4461,31 +4794,22 @@ function abrirModalVerFactura(factura) {
     }
   }
   
-  // PDF y JSON solo se habilitan cuando Hacienda devuelve sello de recepción.
+  // El PDF y JSON fiscal se generan en memoria para correo; no se guardan como archivos.
   if (factura.json_dte && tieneSelloRecepcion) {
     if (btnVerJson) {
       btnVerJson.style.display = 'inline-flex';
       btnVerJson.onclick = () => verJsonDTE(factura);
     }
 
-    if (btnGuardarJson) {
-      btnGuardarJson.style.display = 'inline-flex';
-      btnGuardarJson.onclick = () => guardarJsonDTE(factura);
+    if (btnDescargarPDF) {
+      btnDescargarPDF.style.display = 'inline-flex';
+      btnDescargarPDF.textContent = '📄 Generar PDF';
+      btnDescargarPDF.onclick = () => descargarPDFFactura(factura);
     }
 
     if (btnEnviarCorreo && ['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estadoFactura)) {
       btnEnviarCorreo.style.display = 'inline-flex';
       btnEnviarCorreo.onclick = () => abrirModalCorreo(factura);
-    }
-
-    if (btnDescargarPDF) {
-      btnDescargarPDF.style.display = 'inline-flex';
-      btnDescargarPDF.onclick = () => descargarPDFFactura(factura);
-    }
-    
-    if (btnImprimirPDF) {
-      btnImprimirPDF.style.display = 'inline-flex';
-      btnImprimirPDF.onclick = () => abrirPDFFactura(factura);
     }
   }
   
@@ -5054,17 +5378,49 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
     });
     
     if (resultado.success) {
+      if (!resultado.selloRecibido) {
+        const mensajeSinSello = resultado.mensaje ||
+          resultado.descripcionMsg ||
+          'Hacienda no devolvió sello de recepción para el documento.';
+        const bitacoraSinSello = crearBitacoraRechazoHacienda(
+          {
+            ...resultado,
+            estado: resultado.estado || 'SIN_SELLO',
+            error: mensajeSinSello,
+            errorDetalle: {
+              tipo: 'SIN_SELLO_RECEPCION',
+              codigo: resultado.codigo || null,
+              mensaje: mensajeSinSello,
+              observaciones: resultado.observaciones || [],
+              raw: resultado
+            }
+          },
+          mensajeSinSello
+        );
+
+        await window.electronAPI.updateFacturaEstado(
+          facturaId,
+          'RECHAZADO',
+          null,
+          JSON.stringify(bitacoraSinSello)
+        );
+        await loadFacturas();
+        showNotification('Hacienda respondió sin sello de aprobación. Documento marcado con error.', 'error');
+        cerrarModalVerFactura();
+        if (usarProgreso) {
+          await finalizarProcesoEnvio(mensajeSinSello, 'error');
+        }
+        return false;
+      }
+
       showNotification('✓ Factura enviada exitosamente a Hacienda', 'success');
       if (usarProgreso) {
         await avanzarProcesoEnvio('Aprobado por Hacienda. Sello de recepción recibido.');
       }
-      
-      // Mostrar información de la respuesta
-      if (resultado.selloRecibido) {
-        console.log('Sello recibido:', resultado.selloRecibido);
-        console.log('Estado:', resultado.estado);
-      }
-      
+
+      console.log('Sello recibido:', resultado.selloRecibido);
+      console.log('Estado:', resultado.estado);
+
       if (resultado.observaciones) {
         console.log('Observaciones:', resultado.observaciones);
       }
@@ -5077,43 +5433,26 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
         resultado.observaciones ? JSON.stringify(resultado.observaciones) : null
       );
       await loadFacturas();
-      
-      // Regenerar PDF con sello de recepción si está disponible
-      if (resultado.selloRecibido) {
-        try {
-          const pdfResult = await window.electronAPI.generarPDF({
-            factura: factura,
-            dte: dteFirmado,
-            config: state.configuracion,
-            selloRecepcion: resultado.selloRecibido
-          });
-          
-          if (pdfResult.success) {
-            console.log('PDF actualizado con sello MH:', pdfResult.pdfPath);
-          }
-        } catch (pdfError) {
-          console.error('Error regenerando PDF con sello:', pdfError);
-        }
-      }
 
-      let correoEnviado = false;
-      if (resultado.selloRecibido) {
-        if (usarProgreso) await avanzarProcesoEnvio('Enviando PDF y JSON al correo del cliente...');
-        correoEnviado = await enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, resultado.selloRecibido);
-      }
+      if (usarProgreso) await avanzarProcesoEnvio('Creando JSON con respuesta MH y adjuntos de correo...');
+      const jsonConRespuesta = construirJsonDTEConRespuestaHacienda(dteFirmado, resultado, resultado.selloRecibido);
+      const correoEnviado = await enviarCorreoAutomaticoDocumentoAprobado(
+        facturaId,
+        dteFirmado,
+        resultado.selloRecibido,
+        jsonConRespuesta
+      );
       
       cerrarModalVerFactura();
       if (usarProgreso) {
         await finalizarProcesoEnvio(
-          resultado.selloRecibido
-            ? (correoEnviado
-              ? 'Documento aprobado por Hacienda y enviado por correo.'
-              : 'Documento aprobado por Hacienda. Revise el envío por correo.')
-            : 'Hacienda procesó el documento, pero no devolvió sello de recepción.',
-          resultado.selloRecibido ? 'success' : 'error'
+          correoEnviado
+            ? 'Documento aprobado por Hacienda y enviado por correo.'
+            : 'Documento aprobado por Hacienda. Revise el envío por correo.',
+          'success'
         );
       }
-      return Boolean(resultado.selloRecibido);
+      return true;
     } else {
       // Procesar error usando la nueva estructura de errores
       let errorMsg = 'Error al enviar a Hacienda';
@@ -5172,6 +5511,13 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
       } else {
         // Formato de error antiguo
         errorMsg = 'Error al enviar: ' + resultado.error;
+        if (esErrorConexionHaciendaTexto(resultado.error)) {
+          errorMsg = '⚠️ Error de conexión: ' + resultado.error;
+          errorMsg += '\n\nEl documento se ha guardado en contingencia para transmisión diferida.';
+          mostrarReintento = true;
+          tipoContingencia = '1';
+          motivoContingencia = resultado.error;
+        }
         if (resultado.observaciones && resultado.observaciones.length > 0) {
           errorMsg += '\nObservaciones: ' + formatearObservaciones(resultado.observaciones).join(', ');
         }
@@ -5784,6 +6130,21 @@ function construirMensajeCorreoDTE(codigo) {
   return `Estimado cliente,\n\nAdjunto encontrara el PDF y JSON enviados a Hacienda correspondientes al Documento Tributario Electronico ${codigo}.\n\nSaludos.`;
 }
 
+function construirJsonDTEConRespuestaHacienda(dteFirmado, respuestaHacienda = {}, selloRecepcion = null) {
+  const dte = obtenerDTEContenido(dteFirmado);
+  return {
+    dte,
+    respuestaHacienda: {
+      estado: respuestaHacienda.estado || null,
+      selloRecibido: selloRecepcion || respuestaHacienda.selloRecibido || null,
+      codigoGeneracion: respuestaHacienda.codigoGeneracion || dte?.identificacion?.codigoGeneracion || null,
+      observaciones: respuestaHacienda.observaciones || null,
+      fechaHora: respuestaHacienda.fechaHora || null,
+      raw: respuestaHacienda.raw || respuestaHacienda || null
+    }
+  };
+}
+
 function abrirModalCorreo(factura) {
   const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
   const clienteData = typeof facturaPDF.cliente_datos === 'string'
@@ -5805,7 +6166,7 @@ function cerrarModalCorreo() {
   document.getElementById('modal-correo')?.classList.remove('active');
 }
 
-async function enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, selloRecepcion = null) {
+async function enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, selloRecepcion = null, jsonConRespuesta = null) {
   try {
     let factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
@@ -5822,6 +6183,11 @@ async function enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, se
       ...factura,
       sello_recepcion: selloRecepcion || factura.sello_recepcion
     });
+    if (!facturaCorreo.sello_recepcion) {
+      showNotification('No se enviará correo porque Hacienda no devolvió sello de aprobación.', 'warning');
+      return false;
+    }
+
     const clienteData = obtenerClienteDataFactura(facturaCorreo);
     const destinatario = String(clienteData.email || '').trim();
 
@@ -5842,7 +6208,12 @@ async function enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, se
       config: state.configuracion,
       destinatario,
       asunto: `Documento Tributario Electronico ${codigo}`,
-      mensaje: construirMensajeCorreoDTE(codigo)
+      mensaje: construirMensajeCorreoDTE(codigo),
+      jsonAdjunto: jsonConRespuesta || construirJsonDTEConRespuestaHacienda(
+        dteFirmado || parseDTEGuardado(facturaCorreo.json_dte),
+        { estado: facturaCorreo.estado, selloRecibido: selloRecepcion || facturaCorreo.sello_recepcion },
+        selloRecepcion || facturaCorreo.sello_recepcion
+      )
     });
 
     if (!resultadoCorreo.success) {
@@ -5942,19 +6313,34 @@ async function procesarEnvioCorreoFactura() {
       return;
     }
 
+    if (estadoFactura !== 'ANULADO' && !facturaPDF.sello_recepcion) {
+      showNotification('Solo puede enviar por correo documentos con sello de aprobación de Hacienda.', 'warning');
+      return;
+    }
+
     if (btn) {
       btn.disabled = true;
       btn.textContent = 'Enviando...';
     }
 
     const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
+    const jsonConRespuesta = construirJsonDTEConRespuestaHacienda(
+      dteFirmado,
+      {
+        estado: facturaPDF.estado,
+        selloRecibido: facturaPDF.sello_recepcion,
+        observaciones: parseObservacionesFactura(facturaPDF.observaciones)
+      },
+      facturaPDF.sello_recepcion
+    );
     const resultado = await window.electronAPI.enviarCorreoDTE({
       factura: facturaPDF,
       dte: dteFirmado,
       config: state.configuracion,
       destinatario: document.getElementById('correo-destinatario').value.trim(),
       asunto: document.getElementById('correo-asunto').value.trim(),
-      mensaje: document.getElementById('correo-mensaje').value
+      mensaje: document.getElementById('correo-mensaje').value,
+      jsonAdjunto: jsonConRespuesta
     });
 
     if (resultado.success) {
@@ -5978,33 +6364,28 @@ async function procesarEnvioCorreoFactura() {
 
 async function descargarPDFFactura(factura) {
   try {
-    showNotification('Generando PDF...', 'info');
     const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
-    
+    if (!facturaPDF.sello_recepcion) {
+      showNotification('Solo puede generar PDF cuando Hacienda devolvió sello de aprobación.', 'warning');
+      return;
+    }
+
+    showNotification('Generando PDF aprobado...', 'info');
     const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
-    
-    // Debug: Verificar estructura del DTE
-    console.log('Estructura del DTE:', {
-      tieneIdentificacion: !!dteFirmado.identificacion,
-      tieneDteJson: !!dteFirmado.dteJson,
-      tieneDte: !!dteFirmado.dte,
-      propiedades: Object.keys(dteFirmado)
-    });
-    
     const pdfResult = await window.electronAPI.generarPDF({
       factura: facturaPDF,
       dte: dteFirmado,
       config: state.configuracion,
       selloRecepcion: facturaPDF.sello_recepcion
     });
-    
-    if (pdfResult.success) {
-      showNotification('✓ PDF generado: ' + pdfResult.pdfPath, 'success');
-      // Abrir ubicación del archivo en el explorador
-      await window.electronAPI.abrirPDF(pdfResult.pdfPath);
-    } else {
+
+    if (!pdfResult.success) {
       showNotification('Error al generar PDF: ' + pdfResult.error, 'error');
+      return;
     }
+
+    abrirPdfBase64EnVentana(pdfResult.pdfBuffer, facturaPDF);
+    showNotification('PDF generado en memoria', 'success');
   } catch (error) {
     console.error('Error generando PDF:', error);
     showNotification('Error al generar PDF: ' + error.message, 'error');
@@ -6012,38 +6393,45 @@ async function descargarPDFFactura(factura) {
 }
 
 async function abrirPDFFactura(factura) {
-  try {
-    showNotification('Generando PDF...', 'info');
-    const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
-    
-    const dteFirmado = parseDTEGuardado(facturaPDF.json_dte);
-    
-    // Debug: Verificar estructura del DTE
-    console.log('Estructura del DTE:', {
-      tieneIdentificacion: !!dteFirmado.identificacion,
-      tieneDteJson: !!dteFirmado.dteJson,
-      tieneDte: !!dteFirmado.dte,
-      propiedades: Object.keys(dteFirmado)
-    });
-    
-    const pdfResult = await window.electronAPI.generarPDF({
-      factura: facturaPDF,
-      dte: dteFirmado,
-      config: state.configuracion,
-      selloRecepcion: facturaPDF.sello_recepcion
-    });
-    
-    if (pdfResult.success) {
-      // Abrir con visor predeterminado
-      await window.electronAPI.abrirPDF(pdfResult.pdfPath);
-      showNotification('✓ PDF abierto', 'success');
-    } else {
-      showNotification('Error al generar PDF: ' + pdfResult.error, 'error');
-    }
-  } catch (error) {
-    console.error('Error abriendo PDF:', error);
-    showNotification('Error al abrir PDF: ' + error.message, 'error');
+  return descargarPDFFactura(factura);
+}
+
+function abrirPdfBase64EnVentana(pdfBase64, factura) {
+  const byteCharacters = atob(pdfBase64);
+  const byteNumbers = new Array(byteCharacters.length);
+  for (let i = 0; i < byteCharacters.length; i++) {
+    byteNumbers[i] = byteCharacters.charCodeAt(i);
   }
+
+  const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const codigo = factura?.codigo_generacion || factura?.numero_control || 'DTE';
+  const ventana = window.open('', '_blank');
+
+  if (!ventana) {
+    showNotification('El navegador bloqueó la ventana del PDF.', 'warning');
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  ventana.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <title>PDF ${escaparHtml(codigo)}</title>
+        <style>
+          html, body { margin: 0; width: 100%; height: 100%; }
+          iframe { border: 0; width: 100%; height: 100%; }
+        </style>
+      </head>
+      <body>
+        <iframe src="${url}" title="PDF ${escaparHtml(codigo)}"></iframe>
+      </body>
+    </html>
+  `);
+  ventana.document.close();
+  ventana.addEventListener('beforeunload', () => URL.revokeObjectURL(url), { once: true });
 }
 
 window.descargarPDFFactura = descargarPDFFactura;

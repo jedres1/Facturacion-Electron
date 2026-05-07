@@ -22,7 +22,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   marcarFacturaCorreoEnviado: (id) => ipcRenderer.invoke('db:marcarFacturaCorreoEnviado', id),
   registrarAnulacion: (id, anulacion) =>
     ipcRenderer.invoke('db:registrarAnulacion', { id, anulacion }),
-  getSiguienteCorrelativo: (tipoDte) => ipcRenderer.invoke('db:getSiguienteCorrelativo', tipoDte),
+  getSiguienteCorrelativo: (tipoDte, opciones = {}) => ipcRenderer.invoke('db:getSiguienteCorrelativo', tipoDte, opciones),
+  getCorrelativosDte: () => ipcRenderer.invoke('db:getCorrelativosDte'),
+  updateCorrelativoDte: (datos) => ipcRenderer.invoke('db:updateCorrelativoDte', datos),
   getConfiguracion: () => ipcRenderer.invoke('db:getConfiguracion'),
   updateConfiguracion: (config) => ipcRenderer.invoke('db:updateConfiguracion', config),
   
