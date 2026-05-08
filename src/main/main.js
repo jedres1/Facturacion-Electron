@@ -210,6 +210,27 @@ ipcMain.handle('hacienda:enviarDTE', async (event, { dteFirmado, nit, passwordPr
   }
 });
 
+ipcMain.handle('hacienda:enviarLoteDTE', async (event, { dtesFirmados, nit }) => {
+  let api = null;
+  try {
+    const config = db.getConfiguracion();
+    if (!config || !config.hacienda_usuario || !config.hacienda_password) {
+      return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    api = new HaciendaAPI({
+      ambiente: config.hacienda_ambiente || 'pruebas',
+      usuario: config.hacienda_usuario,
+      password: config.hacienda_password
+    });
+
+    await api.autenticar();
+    return await api.enviarLoteDTE(dtesFirmados, nit || config.nit || config.hacienda_usuario);
+  } catch (error) {
+    return api ? crearRespuestaErrorHacienda(api, error) : { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
   let api = null;
   try {
@@ -259,6 +280,27 @@ ipcMain.handle('hacienda:consultarDTE', async (event, { codigoGeneracion, token 
     return { success: true, estado };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('hacienda:consultarLoteDTE', async (event, { codigoLote }) => {
+  let api = null;
+  try {
+    const config = db.getConfiguracion();
+    if (!config || !config.hacienda_usuario || !config.hacienda_password) {
+      return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    api = new HaciendaAPI({
+      ambiente: config.hacienda_ambiente || 'pruebas',
+      usuario: config.hacienda_usuario,
+      password: config.hacienda_password
+    });
+
+    await api.autenticar();
+    return await api.consultarLoteDTE(codigoLote);
+  } catch (error) {
+    return api ? crearRespuestaErrorHacienda(api, error) : { success: false, error: error.message };
   }
 });
 

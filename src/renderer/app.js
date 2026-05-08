@@ -473,6 +473,31 @@ function facturaRechazadaPorTipoOperacion(factura) {
   return /identificacion\.tipoOperacion|tipoOperacion/i.test(detalle);
 }
 
+function facturaRechazadaPorTipoOperacionEnLote(factura) {
+  if (!facturaRechazadaPorTipoOperacion(factura)) return false;
+  const bitacora = obtenerBitacoraRechazoFactura(factura);
+  return /lote/i.test(String(bitacora?.origen || '')) ||
+    Boolean(bitacora?.raw?.consulta?.rechazados) ||
+    Boolean(bitacora?.raw?.detalleDte);
+}
+
+function facturaRechazadaPorEventoContingencia(factura) {
+  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  const bitacora = obtenerBitacoraRechazoFactura(factura);
+  const detalle = `${bitacora?.mensaje || ''} ${JSON.stringify(bitacora?.observaciones || [])} ${JSON.stringify(bitacora?.raw || {})}`;
+  return /contingencia/i.test(String(bitacora?.origen || '')) ||
+    /codEstable|codPuntoVenta|detalleDTE|numeroControl|DOCUMENTO NO CUMPLE ESQUEMA JSON/i.test(detalle);
+}
+
+function dteUsaTransmisionContingencia(dte) {
+  const identificacion = obtenerDTEContenido(dte)?.identificacion || {};
+  return Number(identificacion.tipoOperacion) === 2 ||
+    Number(identificacion.tipoModelo) === 2 ||
+    (identificacion.tipoContingencia !== null &&
+      identificacion.tipoContingencia !== undefined &&
+      identificacion.tipoContingencia !== '');
+}
+
 function facturaFueEnviadaPorCorreo(factura) {
   return Number(factura?.correo_enviado || 0) === 1 || Boolean(factura?.fecha_correo);
 }
@@ -659,17 +684,21 @@ function renderFacturas() {
         <td>${f.numero_control || 'N/A'}</td>
         <td>${clienteData.nombre || 'N/A'}</td>
         <td>${formatCurrency(f.total)}</td>
-        <td><span class="badge badge-${getEstadoBadgeClass(f.estado)}">${f.estado}</span></td>
+        <td>
+          <span class="badge badge-${getEstadoBadgeClass(f.estado)}">${f.estado}</span>
+          ${estado === 'CONTINGENCIA' ? renderResumenContingenciaTabla(f) : ''}
+        </td>
         <td class="status-cell">${renderCheckVerde(facturaTieneError(f))}</td>
         <td class="status-cell">${renderCheckVerde(facturaEstaAceptada(f))}</td>
         <td class="status-cell">${renderCheckVerde(facturaFueEnviadaPorCorreo(f))}</td>
         <td>
           <button class="btn btn-small btn-primary" onclick="verFactura(${f.id})">Ver</button>
           ${estado === 'PENDIENTE' ? `<button class="btn btn-small btn-success" onclick="firmarFactura(${f.id})">Firmar</button>` : ''}
-          ${estado === 'FIRMADO' ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
-          ${estado === 'CONTINGENCIA' ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' && (facturaRechazadaPorConexion(f) || facturaRechazadaPorTipoOperacion(f)) ? `<button class="btn btn-small btn-warning" onclick="convertirRechazoConexionAContingencia(${f.id})">Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' && !facturaRechazadaPorConexion(f) && !facturaRechazadaPorTipoOperacion(f) ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
+          ${estado === 'FIRMADO' && !facturaEstaAceptada(f) ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
+          ${estado === 'CONTINGENCIA' && !facturaEstaAceptada(f) ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && (facturaRechazadaPorTipoOperacionEnLote(f) || facturaRechazadaPorEventoContingencia(f)) ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && !facturaRechazadaPorTipoOperacionEnLote(f) && !facturaRechazadaPorEventoContingencia(f) && (facturaRechazadaPorConexion(f) || facturaRechazadaPorTipoOperacion(f)) ? `<button class="btn btn-small btn-warning" onclick="convertirRechazoConexionAContingencia(${f.id})">Contingencia</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && !facturaRechazadaPorConexion(f) && !facturaRechazadaPorTipoOperacion(f) && !facturaRechazadaPorEventoContingencia(f) ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
           ${estado === 'ENVIADO' ? `<button class="btn btn-small btn-danger" onclick="anularFactura(${f.id})">Anular</button>` : ''}
         </td>
       </tr>
@@ -2546,13 +2575,43 @@ function limpiarDocumentoFiscal(valor) {
   return String(valor || '').replace(/[^0-9]/g, '');
 }
 
+function normalizarDocumentoReceptorDTE(tipoDocumento, valor) {
+  const tipo = String(tipoDocumento || '');
+  const limpio = limpiarDocumentoFiscal(valor);
+  if (tipo === '13' && limpio.length === 9) return `${limpio.slice(0, 8)}-${limpio.slice(8)}`;
+  if (tipo === '36') return limpio;
+  return String(valor || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
 function validarReceptorParaHacienda(tipoDte, cliente, config) {
   const tipo = String(tipoDte || '');
-  if (!['03', '05', '06', '07'].includes(tipo)) return null;
+  if (!['01', '03', '05', '06', '07'].includes(tipo)) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || config?.hacienda_usuario);
   const tipoDocumento = String(cliente?.tipo_documento || '');
   const numeroReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
+
+  if (tipo === '01') {
+    if (!tipoDocumento && !numeroReceptor) return null;
+
+    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
+      return 'Para Factura con receptor DUI, el documento debe tener 9 dígitos.';
+    }
+
+    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
+      return 'Para Factura con receptor NIT, el documento debe tener 14 dígitos.';
+    }
+
+    if (tipoDocumento && !['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
+      return 'Seleccione un tipo de documento válido para el receptor.';
+    }
+
+    if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
+      return 'El receptor no puede ser el mismo NIT del emisor.';
+    }
+
+    return null;
+  }
 
   if (tipo === '07') {
     if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
@@ -2626,9 +2685,34 @@ function validarClienteSujetoExcluido(tipoDte, cliente) {
 
 function validarReceptorDTEParaHacienda(dte, config) {
   const tipoDte = dte?.identificacion?.tipoDte;
-  if (!['03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
+  if (!['01', '03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || dte?.emisor?.nit);
+  if (tipoDte === '01') {
+    const tipoDocumento = String(dte?.receptor?.tipoDocumento || '');
+    const numeroReceptor = limpiarDocumentoFiscal(dte?.receptor?.numDocumento);
+
+    if (!tipoDocumento && !numeroReceptor) return null;
+
+    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
+      return 'El DTE firmado tiene receptor.numDocumento inválido para DUI. Genere nuevamente el DTE con un DUI de 9 dígitos.';
+    }
+
+    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
+      return 'El DTE firmado tiene receptor.numDocumento inválido para NIT. Genere nuevamente el DTE con un NIT de 14 dígitos.';
+    }
+
+    if (tipoDocumento && !['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
+      return 'El DTE firmado tiene receptor.tipoDocumento inválido. Genere nuevamente el DTE.';
+    }
+
+    if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
+      return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+    }
+
+    return null;
+  }
+
   if (tipoDte === '07') {
     const tipoRelacionadoInvalido = (dte?.cuerpoDocumento || [])
       .map((item) => String(item?.tipoDte || '').padStart(2, '0'))
@@ -2697,6 +2781,15 @@ function formatearObservacionesFactura(observaciones) {
 
   try {
     const parsed = typeof observaciones === 'string' ? JSON.parse(observaciones) : observaciones;
+    if (parsed?.contingenciaLote) {
+      const lote = parsed.contingenciaLote;
+      return [
+        lote.mensaje,
+        lote.codigoLote ? `Lote: ${lote.codigoLote}` : null,
+        lote.estado ? `Estado: ${lote.estado}` : null,
+        lote.descripcionMsg
+      ].filter(Boolean).join(' | ');
+    }
     if (parsed?.bitacoraRechazo) {
       const bitacora = parsed.bitacoraRechazo;
       const detalles = formatearObservaciones(bitacora.observaciones || []);
@@ -2762,6 +2855,68 @@ function obtenerBitacoraRechazoFactura(factura) {
     observaciones: typeof parsed === 'string' ? [parsed] : parsed,
     raw: parsed
   };
+}
+
+function obtenerRespuestaContingenciaFactura(factura) {
+  const parsed = parseObservacionesFactura(factura?.observaciones);
+  if (!parsed || typeof parsed === 'string') return null;
+  return parsed.contingenciaLote || null;
+}
+
+function renderResumenContingenciaTabla(factura) {
+  const respuesta = obtenerRespuestaContingenciaFactura(factura);
+  if (!respuesta) return '';
+
+  const titulo = [
+    respuesta.mensaje,
+    respuesta.codigoLote ? `Lote: ${respuesta.codigoLote}` : null,
+    respuesta.estado ? `Estado: ${respuesta.estado}` : null,
+    respuesta.descripcionMsg
+  ].filter(Boolean).join('\n');
+
+  const texto = respuesta.codigoLote
+    ? `Lote ${respuesta.codigoLote.slice(0, 8)}... ${respuesta.estado || 'pendiente'}`
+    : (respuesta.estado || respuesta.mensaje || 'Respuesta MH');
+
+  return `<div class="mh-response-summary" title="${escaparHtml(titulo)}">${escaparHtml(texto)}</div>`;
+}
+
+function renderRespuestaContingencia(factura) {
+  const section = document.getElementById('factura-respuesta-contingencia');
+  const container = document.getElementById('factura-respuesta-contingencia-contenido');
+  if (!section || !container) return;
+
+  const respuesta = obtenerRespuestaContingenciaFactura(factura);
+  if (!respuesta) {
+    section.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+
+  const raw = respuesta.raw ? JSON.stringify(respuesta.raw, null, 2) : '';
+  const filas = [
+    ['Fecha', respuesta.fecha ? formatDate(respuesta.fecha) : 'N/A'],
+    ['Código de lote', respuesta.codigoLote || 'N/A'],
+    ['Estado', respuesta.estado || 'N/A'],
+    ['Código', respuesta.codigoMsg || respuesta.codigo || 'N/A'],
+    ['Mensaje', respuesta.descripcionMsg || respuesta.mensaje || 'Sin mensaje adicional']
+  ];
+
+  section.style.display = '';
+  container.innerHTML = `
+    ${filas.map(([label, value]) => `
+      <div class="rejection-log-row">
+        <span class="rejection-log-label">${escaparHtml(label)}</span>
+        <span class="rejection-log-value">${escaparHtml(value)}</span>
+      </div>
+    `).join('')}
+    ${raw ? `
+      <details open>
+        <summary>Ver respuesta completa de Hacienda</summary>
+        <pre>${escaparHtml(raw)}</pre>
+      </details>
+    ` : ''}
+  `;
 }
 
 function renderBitacoraRechazo(factura) {
@@ -2923,10 +3078,12 @@ function construirEventoContingencia(factura, contingencia, dte) {
   const config = state.configuracion || {};
   const identificacion = dte.identificacion || {};
   const emisor = dte.emisor || {};
-  const fechaInicio = String(contingencia?.fecha_contingencia || factura.fecha_emision || '').slice(0, 10) || identificacion.fecEmi;
-  const horaInicio = String(contingencia?.fecha_contingencia || '').includes('T')
-    ? String(contingencia.fecha_contingencia).slice(11, 19)
-    : (identificacion.horEmi || '00:00:00');
+  const fechaInicio = identificacion.fecEmi || String(factura.fecha_emision || contingencia?.fecha_contingencia || '').slice(0, 10);
+  const horaInicio = identificacion.horEmi || (
+    String(factura.fecha_emision || '').includes('T')
+      ? String(factura.fecha_emision).slice(11, 19)
+      : '00:00:00'
+  );
   const tipoContingencia = normalizarTipoContingenciaDTE(contingencia?.tipo_contingencia || identificacion.tipoContingencia || 5);
   const motivo = normalizarMotivoContingenciaDTE(
     contingencia?.motivo || identificacion.motivoContin || identificacion.motivoContigencia,
@@ -2949,15 +3106,14 @@ function construirEventoContingencia(factura, contingencia, dte) {
       numeroDocResponsable: limpiarDocumentoFiscal(config.nit || config.hacienda_usuario),
       tipoEstablecimiento: emisor.tipoEstablecimiento || config.tipo_establecimiento || '01',
       codEstableMH: emisor.codEstableMH || config.codigo_establecimiento || null,
-      codPuntoVentaMH: emisor.codPuntoVentaMH || config.punto_venta || null,
+      codPuntoVenta: emisor.codPuntoVenta || config.punto_venta || null,
       telefono: emisor.telefono || config.telefono || null,
       correo: emisor.correo || config.email || null
     },
     detalleDTE: [{
       noItem: 1,
       codigoGeneracion: identificacion.codigoGeneracion,
-      tipoDoc: identificacion.tipoDte || factura.tipo_dte,
-      numeroControl: identificacion.numeroControl || factura.numero_control
+      tipoDoc: identificacion.tipoDte || factura.tipo_dte
     }],
     motivo: {
       fInicio: fechaInicio,
@@ -2980,6 +3136,144 @@ async function firmarJsonDTE(documento) {
     usuario: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit,
     nit: state.configuracion.firmador_usuario || state.configuracion.hacienda_usuario || state.configuracion.nit
   });
+}
+
+function obtenerDetalleDteDesdeLote(consultaLote, codigoGeneracion) {
+  const lote = consultaLote?.raw || consultaLote || {};
+  const detalles = [
+    ...(Array.isArray(lote.feDtes) ? lote.feDtes : []),
+    ...(Array.isArray(lote.procesados) ? lote.procesados : []),
+    ...(Array.isArray(lote.rechazados) ? lote.rechazados : [])
+  ];
+  const codigo = String(codigoGeneracion || '').toUpperCase();
+
+  for (const item of detalles) {
+    const detalle = item?.detalleDte || item?.detalleDTE || item?.detalle || item;
+    if (String(detalle?.codigoGeneracion || '').toUpperCase() === codigo) {
+      return detalle;
+    }
+  }
+
+  return detalles.length === 1
+    ? (detalles[0]?.detalleDte || detalles[0]?.detalleDTE || detalles[0]?.detalle || detalles[0])
+    : null;
+}
+
+function loteDteFueAceptado(detalleDte) {
+  const estado = normalizarEstadoFactura(detalleDte?.estado);
+  const codigoMsg = String(detalleDte?.codigoMsg || detalleDte?.codigo || '').padStart(3, '0');
+  return estado === 'ENVIADO' || ['001', '002'].includes(codigoMsg) || Boolean(detalleDte?.selloRecibido);
+}
+
+function loteDteFueRechazado(detalleDte) {
+  return normalizarEstadoFactura(detalleDte?.estado) === 'RECHAZADO';
+}
+
+async function transmitirDTEContingenciaPorLote(facturaId, factura, dteFirmado) {
+  const dte = obtenerDTEContenido(dteFirmado);
+  const codigoGeneracion = dte?.identificacion?.codigoGeneracion || factura.codigo_generacion;
+  const documentoFirmado = dteFirmado?.firmaMh || dteFirmado?.documentoFirmado || dteFirmado?.documento || dteFirmado;
+
+  const resultadoLote = await window.electronAPI.enviarLoteDTE({
+    dtesFirmados: [dteFirmado],
+    nit: state.configuracion.nit
+  });
+
+  if (!resultadoLote.success) {
+    throw new Error(obtenerMensajeErrorHacienda(resultadoLote, 'enviar lote de contingencia'));
+  }
+
+  const codigoLote = resultadoLote.codigoLote || resultadoLote.raw?.codigoLote || resultadoLote.raw?.codigoGeneracion;
+  if (!codigoLote) {
+    throw new Error('Hacienda recibió el lote, pero no devolvió código de lote para consultarlo.');
+  }
+
+  const crearObservacionPendiente = (consultaLote = null) => JSON.stringify({
+    contingenciaLote: {
+      fecha: new Date().toISOString(),
+      mensaje: 'Lote recibido por Hacienda. Pendiente de procesamiento.',
+      codigoLote,
+      estado: consultaLote?.estado || consultaLote?.raw?.estado || resultadoLote.estado || 'PENDIENTE',
+      codigoMsg: consultaLote?.codigoMsg || consultaLote?.raw?.codigoMsg || resultadoLote.codigoMsg || null,
+      descripcionMsg: consultaLote?.descripcionMsg || consultaLote?.raw?.descripcionMsg || resultadoLote.descripcionMsg || null,
+      raw: {
+        envio: resultadoLote.raw || resultadoLote,
+        consulta: consultaLote?.raw || consultaLote || null
+      }
+    }
+  });
+  let ultimaConsultaLote = null;
+
+  for (let intento = 0; intento < 8; intento++) {
+    await esperar(intento === 0 ? 2500 : 8000);
+
+    const consultaLote = await window.electronAPI.consultarLoteDTE({ codigoLote });
+    if (!consultaLote.success) continue;
+    ultimaConsultaLote = consultaLote;
+
+    const lote = consultaLote.raw || consultaLote || {};
+    const estadoLote = String(lote.estado || '').toUpperCase();
+    const tieneDetalleLote = ['feDtes', 'procesados', 'rechazados']
+      .some(key => Array.isArray(lote[key]) && lote[key].length > 0);
+    if (estadoLote !== 'PROCESADO' && !tieneDetalleLote) continue;
+
+    const detalleDte = obtenerDetalleDteDesdeLote(consultaLote, codigoGeneracion);
+    if (!detalleDte) continue;
+
+    if (loteDteFueRechazado(detalleDte)) {
+      const bitacoraRechazo = {
+        bitacoraRechazo: {
+          fecha: new Date().toISOString(),
+          origen: 'API Hacienda - Lote',
+          estado: 'RECHAZADO',
+          tipo: 'VALIDACION',
+          codigo: detalleDte.codigoMsg || detalleDte.codigo || null,
+          mensaje: detalleDte.descripcionMsg || detalleDte.mensaje || 'DTE rechazado dentro del lote de contingencia.',
+          observaciones: detalleDte.observaciones || [],
+          raw: {
+            envio: resultadoLote.raw || resultadoLote,
+            consulta: lote,
+            detalleDte
+          }
+        }
+      };
+
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'RECHAZADO',
+        null,
+        JSON.stringify(bitacoraRechazo),
+        documentoFirmado
+      );
+
+      return { success: false, rechazado: true, codigoLote, detalleDte, resultadoLote, consultaLote };
+    }
+
+    if (!loteDteFueAceptado(detalleDte)) {
+      throw new Error(detalleDte.descripcionMsg || detalleDte.mensaje || 'El DTE fue rechazado dentro del lote de contingencia.');
+    }
+
+    const selloRecibido = detalleDte.selloRecibido || detalleDte.numValidacion || detalleDte.numeroValidacion || null;
+    await window.electronAPI.updateFacturaEstado(
+      facturaId,
+      normalizarEstadoFactura(detalleDte.estado || 'PROCESADO'),
+      selloRecibido,
+      detalleDte.observaciones ? JSON.stringify(detalleDte.observaciones) : null,
+      documentoFirmado
+    );
+
+    return { success: true, selloRecibido, codigoLote, detalleDte, resultadoLote, consultaLote };
+  }
+
+  await window.electronAPI.updateFacturaEstado(
+    facturaId,
+    'CONTINGENCIA',
+    null,
+    crearObservacionPendiente(ultimaConsultaLote),
+    documentoFirmado
+  );
+
+  return { success: false, pendiente: true, codigoLote, resultadoLote };
 }
 
 async function procesarContingenciaFactura(facturaId) {
@@ -3029,26 +3323,112 @@ async function procesarContingenciaFactura(facturaId) {
       throw new Error(obtenerMensajeErrorHacienda(resultadoEvento, 'registrar contingencia'));
     }
 
-    await avanzarProcesoEnvio('Transmitiendo DTE diferido a Hacienda...');
-    const enviado = await enviarFacturaHacienda(facturaId, { confirmar: false, progreso: false });
-    if (!enviado) {
-      await finalizarProcesoEnvio('Evento registrado, pero el DTE no fue aprobado.', 'error');
+    if (normalizarEstadoFactura(resultadoEvento.estado) === 'RECHAZADO') {
+      const bitacoraEvento = crearBitacoraRechazoHacienda(
+        {
+          ...resultadoEvento,
+          error: resultadoEvento.descripcionMsg || resultadoEvento.mensaje || 'Evento de contingencia rechazado por Hacienda',
+          errorDetalle: {
+            tipo: 'VALIDACION',
+            codigo: resultadoEvento.codigoMsg || resultadoEvento.codigo || null,
+            mensaje: resultadoEvento.descripcionMsg || resultadoEvento.mensaje || 'Evento de contingencia rechazado por Hacienda',
+            observaciones: resultadoEvento.observaciones || [],
+            raw: resultadoEvento.raw || resultadoEvento
+          }
+        },
+        resultadoEvento.descripcionMsg || resultadoEvento.mensaje
+      );
+
+      await window.electronAPI.updateFacturaEstado(
+        facturaId,
+        'RECHAZADO',
+        null,
+        JSON.stringify(bitacoraEvento),
+        dteFirmado.documentoFirmado || dte
+      );
+      await finalizarProcesoEnvio('Hacienda rechazó el evento de contingencia. Revise la respuesta.', 'error');
+      await loadFacturas();
+      return false;
+    }
+
+    await avanzarProcesoEnvio('Transmitiendo DTE diferido a Hacienda por lote...');
+    const documentoFirmadoContingencia = dteFirmado.documentoFirmado || { ...dte, firmaMh: dteFirmado.firmaMh };
+    const resultadoTransmision = await transmitirDTEContingenciaPorLote(facturaId, factura, documentoFirmadoContingencia);
+    if (resultadoTransmision.pendiente) {
+      await finalizarProcesoEnvio(
+        `Evento registrado y lote ${resultadoTransmision.codigoLote} recibido. Hacienda aún no termina de procesarlo.`,
+        'warning'
+      );
+      await loadFacturas();
+      return false;
+    }
+
+    if (resultadoTransmision.rechazado) {
+      await finalizarProcesoEnvio(
+        resultadoTransmision.detalleDte?.descripcionMsg || 'Hacienda rechazó el DTE dentro del lote.',
+        'error'
+      );
+      await loadFacturas();
+      return false;
+    }
+
+    if (!resultadoTransmision.success) {
+      await finalizarProcesoEnvio('Evento registrado, pero el DTE no fue aprobado en el lote.', 'error');
       return false;
     }
 
     await window.electronAPI.resolverContingenciaConDatos({
       contingenciaId: contingencia.contingencia_id,
-      sello: resultadoEvento.numeroValidacion || resultadoEvento.selloRecibido || null,
+      sello: resultadoTransmision.selloRecibido || resultadoEvento.numeroValidacion || resultadoEvento.selloRecibido || null,
       datos: {
         numeroValidacion: resultadoEvento.numeroValidacion,
         jsonEvento: {
           evento: eventoFirmado.documentoFirmado || evento,
-          respuesta: resultadoEvento.raw || resultadoEvento
+          respuesta: resultadoEvento.raw || resultadoEvento,
+          lote: {
+            envio: resultadoTransmision.resultadoLote?.raw || resultadoTransmision.resultadoLote,
+            consulta: resultadoTransmision.consultaLote?.raw || resultadoTransmision.consultaLote,
+            detalleDte: resultadoTransmision.detalleDte
+          }
         }
       }
     });
 
-    await finalizarProcesoEnvio('Contingencia procesada y DTE aprobado por Hacienda.', 'success');
+    await loadFacturas();
+    await avanzarProcesoEnvio('Creando JSON con respuesta MH y adjuntos de correo...');
+    const respuestaHaciendaContingencia = {
+      estado: resultadoTransmision.detalleDte?.estado || 'PROCESADO',
+      selloRecibido: resultadoTransmision.selloRecibido,
+      codigoGeneracion: resultadoTransmision.detalleDte?.codigoGeneracion || dte.identificacion?.codigoGeneracion,
+      observaciones: resultadoTransmision.detalleDte?.observaciones || null,
+      fechaHora: resultadoTransmision.detalleDte?.fhProcesamiento || resultadoEvento.fechaHora || null,
+      raw: {
+        evento: resultadoEvento.raw || resultadoEvento,
+        lote: {
+          envio: resultadoTransmision.resultadoLote?.raw || resultadoTransmision.resultadoLote,
+          consulta: resultadoTransmision.consultaLote?.raw || resultadoTransmision.consultaLote,
+          detalleDte: resultadoTransmision.detalleDte
+        }
+      }
+    };
+    const jsonConRespuesta = construirJsonDTEConRespuestaHacienda(
+      documentoFirmadoContingencia,
+      respuestaHaciendaContingencia,
+      resultadoTransmision.selloRecibido
+    );
+    const correoEnviado = await enviarCorreoAutomaticoDocumentoAprobado(
+      facturaId,
+      documentoFirmadoContingencia,
+      resultadoTransmision.selloRecibido,
+      jsonConRespuesta
+    );
+
+    await finalizarProcesoEnvio(
+      correoEnviado
+        ? 'Contingencia procesada, DTE aprobado por Hacienda y enviado por correo.'
+        : 'Contingencia procesada y DTE aprobado por Hacienda. Revise el envío por correo.',
+      'success'
+    );
     return true;
   } catch (error) {
     console.error('Error procesando contingencia:', error);
@@ -3097,10 +3477,52 @@ function normalizarEstadoFactura(estado) {
   return estadoNormalizado;
 }
 
+function pareceJWS(valor) {
+  return typeof valor === 'string' && valor.split('.').length === 3;
+}
+
+function decodificarBase64Url(valor) {
+  const base64 = String(valor || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(String(valor || '').length / 4) * 4, '=');
+  const binario = atob(base64);
+  const bytes = Uint8Array.from(binario, char => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function parseJWSDTE(jws) {
+  const partes = String(jws || '').split('.');
+  if (partes.length !== 3) {
+    throw new Error('El documento firmado no tiene formato JWS válido.');
+  }
+
+  const payload = JSON.parse(decodificarBase64Url(partes[1]));
+  return {
+    ...payload,
+    firmaMh: jws
+  };
+}
+
 function parseDTEGuardado(jsonDte) {
   if (!jsonDte) return {};
-  let parsed = typeof jsonDte === 'string' ? JSON.parse(jsonDte) : jsonDte;
+  let parsed = jsonDte;
+
+  if (pareceJWS(parsed)) {
+    return parseJWSDTE(parsed);
+  }
+
   if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (error) {
+      if (pareceJWS(parsed)) return parseJWSDTE(parsed);
+      throw error;
+    }
+  }
+
+  if (typeof parsed === 'string') {
+    if (pareceJWS(parsed)) return parseJWSDTE(parsed);
     parsed = JSON.parse(parsed);
   }
   return parsed;
@@ -3118,7 +3540,7 @@ function obtenerDTEContenido(dte) {
   for (let candidato of candidatos) {
     if (typeof candidato === 'string') {
       try {
-        candidato = JSON.parse(candidato);
+        candidato = parseDTEGuardado(candidato);
       } catch {
         continue;
       }
@@ -4183,7 +4605,7 @@ function construirReceptorCorregido(tipoDte, cliente) {
   if (tipoDte === '01') {
     return {
       tipoDocumento,
-      numDocumento: tipoDocumento === '36' ? numeroDocumento : String(clienteDte.numero_documento || '').trim(),
+      numDocumento: normalizarDocumentoReceptorDTE(tipoDocumento, clienteDte.numero_documento),
       nrc: tipoDocumento === '36' ? (limpiarDocumentoFiscal(clienteDte.nrc) || null) : null,
       nombre: clienteDte.nombre || null,
       codActividad: clienteDte.giro || null,
@@ -4211,7 +4633,7 @@ function construirReceptorCorregido(tipoDte, cliente) {
   if (tipoDte === '07') {
     return {
       tipoDocumento,
-      numDocumento: tipoDocumento === '36' ? numeroDocumento : String(clienteDte.numero_documento || '').trim(),
+      numDocumento: normalizarDocumentoReceptorDTE(tipoDocumento, clienteDte.numero_documento),
       nrc: limpiarDocumentoFiscal(clienteDte.nrc) || null,
       nombre: clienteDte.nombre,
       codActividad: clienteDte.giro,
@@ -4691,6 +5113,7 @@ function abrirModalVerFactura(factura) {
   }
 
   renderBitacoraRechazo(factura);
+  renderRespuestaContingencia(factura);
 
   const notasDetalle = document.getElementById('factura-notas-detalle');
   const notasTexto = document.getElementById('factura-notas-texto');
@@ -4747,23 +5170,23 @@ function abrirModalVerFactura(factura) {
   if (btnEditarItemsFactura) btnEditarItemsFactura.style.display = 'none';
   if (btnGuardarItemsFactura) btnGuardarItemsFactura.style.display = 'none';
   if (btnReenviarFactura) btnReenviarFactura.style.display = 'none';
+  btnEnviar.onclick = null;
+  btnEnviar.textContent = '📤 Enviar a Hacienda';
   
   if (estadoFactura === 'PENDIENTE') {
     btnFirmar.style.display = 'inline-flex';
     btnFirmar.onclick = () => firmarFactura(factura.id);
   }
   
-  if (estadoFactura === 'FIRMADO') {
+  if (estadoFactura === 'FIRMADO' && !tieneSelloRecepcion) {
     btnEnviar.style.display = 'inline-flex';
     btnEnviar.onclick = () => enviarFacturaHacienda(factura.id);
   }
 
-  if (estadoFactura === 'CONTINGENCIA') {
+  if (estadoFactura === 'CONTINGENCIA' && !tieneSelloRecepcion) {
     btnEnviar.style.display = 'inline-flex';
     btnEnviar.textContent = 'Procesar Contingencia';
     btnEnviar.onclick = () => procesarContingenciaFactura(factura.id);
-  } else {
-    btnEnviar.textContent = '📤 Enviar a Hacienda';
   }
 
   if (estadoFactura === 'ENVIADO' && btnAnular) {
@@ -4771,8 +5194,12 @@ function abrirModalVerFactura(factura) {
     btnAnular.onclick = () => anularFacturaHacienda(factura.id);
   }
 
-  if (estadoFactura === 'RECHAZADO') {
-    if (facturaRechazadaPorConexion(factura) || facturaRechazadaPorTipoOperacion(factura)) {
+  if (estadoFactura === 'RECHAZADO' && !tieneSelloRecepcion) {
+    if (facturaRechazadaPorTipoOperacionEnLote(factura) || facturaRechazadaPorEventoContingencia(factura)) {
+      btnEnviar.style.display = 'inline-flex';
+      btnEnviar.textContent = 'Procesar Contingencia';
+      btnEnviar.onclick = () => procesarContingenciaFactura(factura.id);
+    } else if (facturaRechazadaPorConexion(factura) || facturaRechazadaPorTipoOperacion(factura)) {
       btnEnviar.style.display = 'inline-flex';
       btnEnviar.textContent = 'Pasar a Contingencia';
       btnEnviar.onclick = () => convertirRechazoConexionAContingencia(factura.id);
@@ -4783,7 +5210,10 @@ function abrirModalVerFactura(factura) {
       btnEditarClienteFactura.onclick = () => editarClienteFacturaRechazada(factura.id);
     }
 
-    if (btnReenviarFactura) {
+    if (btnReenviarFactura &&
+      !facturaRechazadaPorConexion(factura) &&
+      !facturaRechazadaPorTipoOperacion(factura) &&
+      !facturaRechazadaPorEventoContingencia(factura)) {
       btnReenviarFactura.style.display = 'inline-flex';
       btnReenviarFactura.onclick = () => reenviarFacturaCorregida(factura.id);
     }
@@ -5355,6 +5785,14 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
     } catch (e) {
       if (usarProgreso) await finalizarProcesoEnvio('No se pudo leer el JSON firmado.', 'error');
       showNotification('Error al parsear DTE: ' + e.message, 'error');
+      return false;
+    }
+
+    if (dteUsaTransmisionContingencia(dteFirmado) && opciones.permitirTransmisionContingencia !== true) {
+      if (usarProgreso) {
+        await finalizarProcesoEnvio('El DTE está marcado para transmisión por contingencia.', 'warning');
+      }
+      showNotification('Este DTE usa tipoOperacion 2. Procéselo desde el flujo de contingencia, no con el envío normal.', 'warning');
       return false;
     }
 

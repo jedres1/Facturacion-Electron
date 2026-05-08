@@ -228,6 +228,70 @@ class HaciendaAPI {
     }
   }
 
+  /**
+   * Enviar DTEs por lote (modelo asíncrono), requerido para DTEs emitidos en contingencia.
+   * @param {Array<Object|string>} dtes - Documentos firmados.
+   * @param {string} nit - NIT del emisor.
+   * @returns {Promise<Object>} Respuesta del MH con código de lote.
+   */
+  async enviarLoteDTE(dtes, nit) {
+    if (!this.token) {
+      throw new Error('No hay token de autenticación. Autentique primero.');
+    }
+
+    try {
+      const documentos = (Array.isArray(dtes) ? dtes : [dtes])
+        .map(dte => this.obtenerDocumentoFirmado(dte))
+        .filter(Boolean);
+
+      if (!documentos.length) {
+        throw new Error('El lote no contiene documentos firmados.');
+      }
+
+      const primerDte = Array.isArray(dtes) ? dtes[0] : dtes;
+      const identificacion = this.obtenerIdentificacion(primerDte);
+      const nitEmisor = String(nit || primerDte?.emisor?.nit || primerDte?.dteJson?.emisor?.nit || '')
+        .replace(/[^0-9]/g, '');
+
+      if (!nitEmisor) {
+        throw new Error('No se encontró NIT del emisor para enviar el lote.');
+      }
+
+      const payload = {
+        version: 1,
+        ambiente: this.obtenerCodigoAmbiente(identificacion?.ambiente || this.ambiente),
+        idEnvio: crypto.randomUUID().toUpperCase(),
+        nitEmisor,
+        documentos
+      };
+
+      const response = await this.axiosInstance.post('/fesv/recepcionlote', payload, {
+        headers: {
+          'Authorization': this.token,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      return {
+        success: true,
+        estado: response.data.estado,
+        idEnvio: response.data.idEnvio,
+        codigoLote: response.data.codigoLote || response.data.codigoGeneracion,
+        codigoMsg: response.data.codigoMsg || response.data.codigo,
+        descripcionMsg: response.data.descripcionMsg || response.data.mensaje,
+        fhProcesamiento: response.data.fhProcesamiento || response.data.fechaHora,
+        raw: response.data
+      };
+    } catch (error) {
+      const errorResponse = this.procesarErrorHacienda(error);
+      return {
+        success: false,
+        error: errorResponse.error,
+        errorDetalle: errorResponse
+      };
+    }
+  }
+
   obtenerIdentificacion(dte) {
     if (typeof dte === 'string') return null;
     return dte?.identificacion || dte?.dteJson?.identificacion || null;
@@ -367,6 +431,36 @@ class HaciendaAPI {
       return response.data;
     } catch (error) {
       throw new Error(`Error al consultar DTE: ${error.message}`);
+    }
+  }
+
+  async consultarLoteDTE(codigoLote) {
+    if (!this.token) {
+      throw new Error('No hay token de autenticación. Autentique primero.');
+    }
+
+    try {
+      const response = await this.axiosInstance.get(
+        `/fesv/recepcion/consultadtelote/${codigoLote}`,
+        {
+          headers: {
+            'Authorization': this.token
+          }
+        }
+      );
+
+      return {
+        success: true,
+        ...response.data,
+        raw: response.data
+      };
+    } catch (error) {
+      const errorResponse = this.procesarErrorHacienda(error);
+      return {
+        success: false,
+        error: errorResponse.error,
+        errorDetalle: errorResponse
+      };
     }
   }
 

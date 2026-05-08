@@ -31,9 +31,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // API de Hacienda
   autenticar: (credenciales) => ipcRenderer.invoke('hacienda:autenticar', credenciales),
   enviarDTE: (data) => ipcRenderer.invoke('hacienda:enviarDTE', data),
+  enviarLoteDTE: (data) => ipcRenderer.invoke('hacienda:enviarLoteDTE', data),
   anularDTE: (data) => ipcRenderer.invoke('hacienda:anularDTE', data),
   enviarContingencia: (data) => ipcRenderer.invoke('hacienda:enviarContingencia', data),
   consultarDTE: (data) => ipcRenderer.invoke('hacienda:consultarDTE', data),
+  consultarLoteDTE: (data) => ipcRenderer.invoke('hacienda:consultarLoteDTE', data),
   
   // Firmador
   firmarDocumento: (data) => ipcRenderer.invoke('firmador:firmarDocumento', data),
