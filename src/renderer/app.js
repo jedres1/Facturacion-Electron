@@ -1,5 +1,7 @@
 // Estado de la aplicación
 let state = {
+  usuario: null,
+  appInicializada: false,
   currentView: 'dashboard',
   clientes: [],
   productos: [],
@@ -167,6 +169,98 @@ function poblarDatalistActividades(datalistId) {
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('Aplicación iniciada');
 
+  setupLogin();
+});
+
+function setupLogin() {
+  const formLogin = document.getElementById('form-login');
+  const btnLogout = document.getElementById('btn-logout');
+
+  if (formLogin) {
+    formLogin.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await iniciarSesion();
+    });
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener('click', cerrarSesion);
+  }
+}
+
+async function iniciarSesion() {
+  const identificadorInput = document.getElementById('login-identificador');
+  const passwordInput = document.getElementById('login-password');
+  const errorBox = document.getElementById('login-error');
+  const submitButton = document.querySelector('#form-login .login-submit');
+
+  const identificador = identificadorInput?.value.trim();
+  const password = passwordInput?.value || '';
+
+  if (!identificador || !password) {
+    if (errorBox) errorBox.textContent = 'Ingrese su NIT, DUI o correo y la clave.';
+    return;
+  }
+
+  try {
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Validando...';
+    }
+    if (errorBox) errorBox.textContent = '';
+
+    const resultado = await window.electronAPI.login({ identificador, password });
+    if (!resultado?.success) {
+      if (errorBox) errorBox.textContent = resultado?.error || 'Credenciales inválidas';
+      return;
+    }
+
+    state.usuario = resultado.user;
+    mostrarAplicacionAutenticada();
+    await inicializarAplicacionAutenticada();
+  } catch (error) {
+    console.error('Error iniciando sesión:', error);
+    if (errorBox) errorBox.textContent = 'No se pudo iniciar sesión.';
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Ingresar';
+    }
+  }
+}
+
+function mostrarAplicacionAutenticada() {
+  const loginScreen = document.getElementById('login-screen');
+  const appContainer = document.getElementById('app-container');
+  const usuarioActual = document.getElementById('usuario-actual');
+
+  if (loginScreen) loginScreen.classList.add('hidden');
+  if (appContainer) appContainer.classList.remove('hidden');
+  if (usuarioActual) usuarioActual.textContent = state.usuario?.email || 'Usuario';
+}
+
+function cerrarSesion() {
+  state.usuario = null;
+
+  const loginScreen = document.getElementById('login-screen');
+  const appContainer = document.getElementById('app-container');
+  const passwordInput = document.getElementById('login-password');
+  const errorBox = document.getElementById('login-error');
+
+  if (appContainer) appContainer.classList.add('hidden');
+  if (loginScreen) loginScreen.classList.remove('hidden');
+  if (passwordInput) passwordInput.value = '';
+  if (errorBox) errorBox.textContent = '';
+}
+
+async function inicializarAplicacionAutenticada() {
+  if (state.appInicializada) {
+    await loadInitialData();
+    updateDashboard();
+    return;
+  }
+
+  state.appInicializada = true;
   await cargarCatalogoActividadesEconomicas();
   
   // Configurar navegación
@@ -191,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Configurar cambio de departamento para cargar municipios
   setupDepartamentoMunicipioHandler();
   setupDepartamentoMunicipioConfigHandler();
-});
+}
 
 // Establecer fecha actual en filtros
 function establecerFechaActualFiltros() {
@@ -285,10 +379,69 @@ async function loadInitialData() {
     
     // Verificar estado de conexión con Hacienda si hay credenciales guardadas
     verificarEstadoConexion();
+    ejecutarBackupDiarioSiCorresponde();
   } catch (error) {
     console.error('Error cargando datos iniciales:', error);
     showNotification('Error al cargar datos', 'error');
   }
+}
+
+function fechaLocalDesdeISO(valor) {
+  if (!valor) return '';
+  const fecha = new Date(valor);
+  if (Number.isNaN(fecha.getTime())) return '';
+  return formatearFechaLocal(fecha);
+}
+
+function backupHechoHoy(config = state.configuracion) {
+  return fechaLocalDesdeISO(config?.backup_ultimo_at) === formatearFechaLocal(new Date());
+}
+
+async function ejecutarBackupServidor(manual = false) {
+  if (!manual && (!state.configuracion?.backup_automatico || backupHechoHoy())) return;
+
+  try {
+    if (manual) showNotification('Generando y subiendo backup...', 'info');
+    const resultado = await window.electronAPI.subirBackupServidor({ manual });
+
+    if (!resultado?.success) {
+      if (manual) showNotification(resultado?.error || 'No se pudo subir el backup', 'error');
+      console.warn('Backup no subido:', resultado?.error || resultado);
+      return false;
+    }
+
+    state.configuracion = await window.electronAPI.getConfiguracion();
+    actualizarEstadoBackupConfig();
+
+    if (manual) {
+      const kb = Math.max(1, Math.round(Number(resultado.sizeBytes || 0) / 1024));
+      showNotification(`Backup subido correctamente (${kb} KB)`, 'success');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error subiendo backup:', error);
+    if (manual) showNotification('Error subiendo backup al servidor', 'error');
+    return false;
+  }
+}
+
+function ejecutarBackupDiarioSiCorresponde() {
+  setTimeout(() => {
+    ejecutarBackupServidor(false);
+  }, 1500);
+}
+
+function actualizarEstadoBackupConfig() {
+  const input = document.getElementById('config-backup-ultimo');
+  if (!input) return;
+
+  if (!state.configuracion?.backup_ultimo_at) {
+    input.value = 'Sin backup';
+    return;
+  }
+
+  input.value = formatDate(state.configuracion.backup_ultimo_at);
 }
 
 // Verificar estado de conexión con Hacienda
@@ -311,16 +464,15 @@ function updateDashboard() {
   const hoy = formatearFechaLocal(new Date());
   const facturasHoy = state.facturas.filter(f => f.fecha_emision?.startsWith(hoy));
   const esEnviadaHacienda = (factura) => {
-    const estado = normalizarEstadoFactura(factura.estado);
-    return estado === 'ENVIADO' || estado === 'ACEPTADO';
+    return facturaEstaAceptada(factura);
   };
-  const esAnulada = (factura) => normalizarEstadoFactura(factura.estado) === 'ANULADO';
+  const esAnulada = (factura) => obtenerEstadoFacturaVisual(factura) === 'ANULADO';
   
   const totalHoy = facturasHoy
     .filter(esEnviadaHacienda)
     .reduce((sum, f) => sum + (f.total || 0), 0);
   const enviadas = state.facturas.filter(esEnviadaHacienda).length;
-  const pendientes = state.facturas.filter(f => !esEnviadaHacienda(f) && !esAnulada(f)).length;
+  const pendientes = state.facturas.filter(facturaEsPendienteOperativa).length;
   const anuladas = state.facturas.filter(esAnulada).length;
   
   document.getElementById('facturas-hoy').textContent = facturasHoy.length;
@@ -337,13 +489,14 @@ function updateDashboard() {
     const recientes = state.facturas.slice(0, 10);
     tbody.innerHTML = recientes.map(f => {
       const clienteData = JSON.parse(f.cliente_datos || '{}');
+      const estado = obtenerEstadoFacturaVisual(f);
       return `
         <tr>
           <td>${formatDate(f.fecha_emision)}</td>
           <td>${f.numero_control || 'N/A'}</td>
           <td>${clienteData.nombre || 'N/A'}</td>
           <td>${formatCurrency(f.total)}</td>
-          <td><span class="badge badge-${getEstadoBadgeClass(f.estado)}">${f.estado}</span></td>
+          <td><span class="badge badge-${getEstadoBadgeClass(estado)}">${estado}</span></td>
         </tr>
       `;
     }).join('');
@@ -448,16 +601,27 @@ function renderCheckVerde(activo) {
 }
 
 function facturaEstaAceptada(factura) {
-  const estado = normalizarEstadoFactura(factura?.estado);
-  return Boolean(factura?.sello_recepcion) || estado === 'ACEPTADO' || estado === 'ENVIADO';
+  const estado = obtenerEstadoFacturaVisual(factura);
+  return Boolean(factura?.sello_recepcion) || estado === 'ACEPTADO';
 }
 
 function facturaTieneError(factura) {
-  return normalizarEstadoFactura(factura?.estado) === 'RECHAZADO';
+  return obtenerEstadoFacturaVisual(factura) === 'RECHAZADO';
+}
+
+function facturaEsContingenciaOperativa(factura) {
+  return obtenerEstadoFacturaVisual(factura) === 'CONTINGENCIA';
+}
+
+function facturaEsPendienteOperativa(factura) {
+  const estado = obtenerEstadoFacturaVisual(factura);
+  return estado === 'PENDIENTE' ||
+    facturaEsContingenciaOperativa(factura) ||
+    (estado === 'RECHAZADO' && !factura?.sello_recepcion);
 }
 
 function facturaRechazadaPorConexion(factura) {
-  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  if (obtenerEstadoFacturaVisual(factura) !== 'RECHAZADO') return false;
   const bitacora = obtenerBitacoraRechazoFactura(factura);
   return bitacora?.tipo === 'RED' ||
     bitacora?.tipo === 'TIMEOUT' ||
@@ -466,8 +630,13 @@ function facturaRechazadaPorConexion(factura) {
     esErrorConexionHaciendaTexto(JSON.stringify(bitacora?.raw || ''));
 }
 
+function facturaPuedePasarAContingencia(factura) {
+  if (obtenerEstadoFacturaVisual(factura) !== 'RECHAZADO' || factura?.sello_recepcion) return false;
+  return facturaRechazadaPorConexion(factura);
+}
+
 function facturaRechazadaPorTipoOperacion(factura) {
-  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  if (obtenerEstadoFacturaVisual(factura) !== 'RECHAZADO') return false;
   const bitacora = obtenerBitacoraRechazoFactura(factura);
   const detalle = `${bitacora?.mensaje || ''} ${JSON.stringify(bitacora?.raw || '')}`;
   return /identificacion\.tipoOperacion|tipoOperacion/i.test(detalle);
@@ -482,7 +651,7 @@ function facturaRechazadaPorTipoOperacionEnLote(factura) {
 }
 
 function facturaRechazadaPorEventoContingencia(factura) {
-  if (normalizarEstadoFactura(factura?.estado) !== 'RECHAZADO') return false;
+  if (obtenerEstadoFacturaVisual(factura) !== 'RECHAZADO') return false;
   const bitacora = obtenerBitacoraRechazoFactura(factura);
   const detalle = `${bitacora?.mensaje || ''} ${JSON.stringify(bitacora?.observaciones || [])} ${JSON.stringify(bitacora?.raw || {})}`;
   return /contingencia/i.test(String(bitacora?.origen || '')) ||
@@ -498,8 +667,27 @@ function dteUsaTransmisionContingencia(dte) {
       identificacion.tipoContingencia !== '');
 }
 
+function dteRetencionNecesitaRefirmaPorDocumento(dte) {
+  const contenido = obtenerDTEContenido(dte);
+  if (String(contenido?.identificacion?.tipoDte || '').padStart(2, '0') !== '07') return false;
+  const receptor = contenido.receptor || {};
+  return String(receptor.tipoDocumento || '') === '13' &&
+    /^\d{9}$/.test(String(receptor.numDocumento || ''));
+}
+
 function facturaFueEnviadaPorCorreo(factura) {
+  if (facturaTieneError(factura)) return false;
   return Number(factura?.correo_enviado || 0) === 1 || Boolean(factura?.fecha_correo);
+}
+
+function facturaPuedeEnviarsePorCorreo(factura) {
+  if (!factura || facturaTieneError(factura)) return false;
+
+  const estado = obtenerEstadoFacturaVisual(factura);
+  if (!['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estado)) return false;
+  if (estado !== 'ANULADO' && !factura.sello_recepcion) return false;
+
+  return true;
 }
 
 function parseTiposDteHabilitados(valor) {
@@ -635,7 +823,11 @@ function obtenerFacturasFiltradas() {
   }
 
   if (estadoFiltro) {
-    facturasFiltradas = facturasFiltradas.filter(f => normalizarEstadoFactura(f.estado) === estadoFiltro);
+    facturasFiltradas = facturasFiltradas.filter(f => {
+      if (estadoFiltro === 'PENDIENTE') return facturaEsPendienteOperativa(f);
+      if (estadoFiltro === 'CONTINGENCIA') return facturaEsContingenciaOperativa(f);
+      return obtenerEstadoFacturaVisual(f) === estadoFiltro;
+    });
   }
 
   if (tipoDteFiltro) {
@@ -648,9 +840,11 @@ function obtenerFacturasFiltradas() {
       return coincideBusqueda(busqueda, [
         f.numero_control,
         f.codigo_generacion,
+        f.sello_recepcion,
         f.tipo_dte,
         f.estado,
-        normalizarEstadoFactura(f.estado),
+        obtenerEstadoFacturaVisual(f),
+        f.observaciones,
         f.total,
         clienteData.nombre,
         clienteData.nombre_comercial,
@@ -677,7 +871,7 @@ function renderFacturas() {
 
   tbody.innerHTML = pagina.items.map(f => {
     const clienteData = obtenerClienteDataFactura(f);
-    const estado = normalizarEstadoFactura(f.estado);
+    const estado = obtenerEstadoFacturaVisual(f);
     return `
       <tr>
         <td>${formatDate(f.fecha_emision)}</td>
@@ -685,7 +879,7 @@ function renderFacturas() {
         <td>${clienteData.nombre || 'N/A'}</td>
         <td>${formatCurrency(f.total)}</td>
         <td>
-          <span class="badge badge-${getEstadoBadgeClass(f.estado)}">${f.estado}</span>
+          <span class="badge badge-${getEstadoBadgeClass(estado)}">${estado}</span>
           ${estado === 'CONTINGENCIA' ? renderResumenContingenciaTabla(f) : ''}
         </td>
         <td class="status-cell">${renderCheckVerde(facturaTieneError(f))}</td>
@@ -696,10 +890,9 @@ function renderFacturas() {
           ${estado === 'PENDIENTE' ? `<button class="btn btn-small btn-success" onclick="firmarFactura(${f.id})">Firmar</button>` : ''}
           ${estado === 'FIRMADO' && !facturaEstaAceptada(f) ? `<button class="btn btn-small btn-success" onclick="enviarFactura(${f.id})">Enviar</button>` : ''}
           ${estado === 'CONTINGENCIA' && !facturaEstaAceptada(f) ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && (facturaRechazadaPorTipoOperacionEnLote(f) || facturaRechazadaPorEventoContingencia(f)) ? `<button class="btn btn-small btn-warning" onclick="procesarContingenciaFactura(${f.id})">Procesar Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && !facturaRechazadaPorTipoOperacionEnLote(f) && !facturaRechazadaPorEventoContingencia(f) && (facturaRechazadaPorConexion(f) || facturaRechazadaPorTipoOperacion(f)) ? `<button class="btn btn-small btn-warning" onclick="convertirRechazoConexionAContingencia(${f.id})">Contingencia</button>` : ''}
-          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && !facturaRechazadaPorConexion(f) && !facturaRechazadaPorTipoOperacion(f) && !facturaRechazadaPorEventoContingencia(f) ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
-          ${estado === 'ENVIADO' ? `<button class="btn btn-small btn-danger" onclick="anularFactura(${f.id})">Anular</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && facturaPuedePasarAContingencia(f) ? `<button class="btn btn-small btn-warning" onclick="convertirRechazoConexionAContingencia(${f.id})">Contingencia</button>` : ''}
+          ${estado === 'RECHAZADO' && !facturaEstaAceptada(f) && !facturaPuedePasarAContingencia(f) ? `<button class="btn btn-small btn-warning" onclick="reenviarFacturaCorregida(${f.id})">Reenviar</button>` : ''}
+          ${estado === 'ENVIADO' && facturaPuedeAnularsePorPlazo(f) ? `<button class="btn btn-small btn-danger" onclick="anularFactura(${f.id})">Anular</button>` : ''}
         </td>
       </tr>
     `;
@@ -776,11 +969,12 @@ function renderClientes() {
       ubicacion = 'N/A';
     }
 
+    const sujetoExcluidoNoDomiciliado = c.tipo_dte_default === '14' && Number(c.sujeto_excluido_domiciliado) === 0;
     return `
       <tr>
         <td>${c.numero_documento}</td>
         <td>${c.nrc || 'N/A'}</td>
-        <td>${c.nombre}${Number(c.aplica_exportacion) ? ' <span class="badge badge-info">Exportación</span>' : ''} <span class="badge ${c.condicion_iva === 'EXENTO' ? 'badge-warning' : 'badge-success'}">${c.condicion_iva === 'EXENTO' ? 'Exento' : 'Gravado'}</span><br><small>Pago: ${c.plazo_pago || '01'} / ${Number(c.periodo_pago || 1)}</small></td>
+        <td>${c.nombre}${Number(c.aplica_exportacion) ? ' <span class="badge badge-info">Exportación</span>' : ''}${sujetoExcluidoNoDomiciliado ? ' <span class="badge badge-warning">No domiciliado</span>' : ''} <span class="badge ${c.condicion_iva === 'EXENTO' ? 'badge-warning' : 'badge-success'}">${c.condicion_iva === 'EXENTO' ? 'Exento' : 'Gravado'}</span><br><small>Pago: ${c.plazo_pago || '01'} / ${Number(c.periodo_pago || 1)}</small></td>
         <td>${c.tipo_persona || 'N/A'}</td>
         <td>${ubicacion}</td>
         <td>${c.telefono || 'N/A'}</td>
@@ -935,8 +1129,14 @@ async function loadConfiguracion() {
       document.getElementById('config-correo-password').value = config.correo_password || '';
       document.getElementById('config-correo-remitente').value = config.correo_remitente || config.correo_usuario || '';
       document.getElementById('config-correo-nombre').value = config.correo_nombre || config.nombre_empresa || '';
+      document.getElementById('config-backup-url').value = config.backup_url || '';
+      document.getElementById('config-backup-token').value = config.backup_token || '';
+      document.getElementById('config-backup-encryption-key').value = config.backup_encryption_key || '';
+      document.getElementById('config-backup-automatico').value = String(config.backup_automatico || 0);
+      actualizarEstadoBackupConfig();
     } else {
       aplicarTiposDteConfiguracion(TIPOS_DTE_DEFAULT);
+      actualizarEstadoBackupConfig();
     }
     renderSelectsTiposDte();
     await loadCorrelativosConfig();
@@ -953,6 +1153,7 @@ function setConfiguracionEditable(editable) {
 
   form.querySelectorAll('input, select, textarea, button').forEach(control => {
     if (control.id === 'switch-config-edicion') return;
+    if (control.id === 'btn-subir-backup') return;
     control.disabled = !editable;
   });
 
@@ -962,9 +1163,12 @@ function setConfiguracionEditable(editable) {
   const help = document.getElementById('config-lock-help');
 
   if (switchEdicion) switchEdicion.checked = editable;
-  if (switchLabel) switchLabel.textContent = editable ? 'Editable' : 'Bloqueada';
+  if (switchLabel) {
+    switchLabel.setAttribute('aria-label', editable ? 'Configuración desbloqueada' : 'Configuración bloqueada');
+    switchLabel.title = editable ? 'Configuración desbloqueada' : 'Configuración bloqueada';
+  }
 
-  if (title) title.textContent = editable ? 'Configuración editable' : 'Configuración bloqueada';
+  if (title) title.textContent = editable ? 'Configuración desbloqueada' : 'Configuración bloqueada';
   if (help) {
     help.textContent = editable
       ? 'Los cambios pueden afectar emisión, firma, correlativos y envío a Hacienda.'
@@ -1137,6 +1341,9 @@ function setupEventListeners() {
     });
   });
   document.getElementById('btn-recargar-correlativos')?.addEventListener('click', loadCorrelativosConfig);
+  document.getElementById('btn-subir-backup')?.addEventListener('click', async () => {
+    await ejecutarBackupServidor(true);
+  });
   
   // Nueva factura
   document.getElementById('form-factura')?.addEventListener('submit', async (e) => {
@@ -1147,16 +1354,21 @@ function setupEventListeners() {
   document.getElementById('tipo-dte')?.addEventListener('change', () => {
     actualizarCamposNotaCredito();
     aplicarCondicionIvaClienteAItems();
+    actualizarResumenFactura();
   });
   document.getElementById('cliente-select')?.addEventListener('change', () => {
     sugerirTipoDteClienteSeleccionado();
     aplicarCondicionIvaClienteAItems();
+    actualizarResumenFactura();
   });
   document.getElementById('nc-tipo-generacion')?.addEventListener('change', actualizarPlaceholderDocumentoRelacionado);
   document.getElementById('btn-agregar-documento-relacionado')?.addEventListener('click', agregarDocumentoRelacionadoNotaCredito);
   document.getElementById('exportacion-tipo-item')?.addEventListener('change', actualizarCamposExportacionFactura);
   document.getElementById('retencion-monto-sujeto')?.addEventListener('input', actualizarResumenFactura);
   document.getElementById('retencion-porcentaje')?.addEventListener('input', actualizarResumenFactura);
+  document.getElementById('retencion-iva-factura')?.addEventListener('input', actualizarResumenFactura);
+  document.getElementById('percepcion-iva-factura')?.addEventListener('input', actualizarResumenFactura);
+  document.getElementById('retencion-renta-factura')?.addEventListener('input', actualizarResumenFactura);
   
   document.getElementById('btn-agregar-item')?.addEventListener('click', agregarItem);
   document.getElementById('btn-cancelar')?.addEventListener('click', () => {
@@ -1205,7 +1417,7 @@ function setupEventListeners() {
 
   document.getElementById('anulacion-tipo')?.addEventListener('change', (e) => {
     const facturaId = Number(document.getElementById('anulacion-factura-id')?.value || 0);
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     toggleCodigoReemplazoAnulacion(Number(e.target.value), factura?.tipo_dte);
   });
 
@@ -1237,6 +1449,7 @@ function setupEventListeners() {
 
   document.getElementById('cliente-aplica-exportacion')?.addEventListener('change', actualizarCamposExportacionCliente);
   document.getElementById('cliente-tipo-dte-default')?.addEventListener('change', actualizarCamposExportacionCliente);
+  document.getElementById('cliente-tipo-documento')?.addEventListener('change', actualizarCamposExportacionCliente);
   document.getElementById('cliente-cod-pais')?.addEventListener('change', completarPaisExportacionCliente);
 }
 
@@ -1493,11 +1706,16 @@ async function guardarConfiguracion() {
       correo_password: document.getElementById('config-correo-password').value,
       correo_remitente: document.getElementById('config-correo-remitente').value,
       correo_nombre: document.getElementById('config-correo-nombre').value,
+      backup_url: document.getElementById('config-backup-url').value,
+      backup_token: document.getElementById('config-backup-token').value,
+      backup_encryption_key: document.getElementById('config-backup-encryption-key').value,
+      backup_automatico: Number(document.getElementById('config-backup-automatico').value || 0),
       tipos_dte_habilitados: obtenerTiposDteConfiguradosFormulario()
     };
     
     await window.electronAPI.updateConfiguracion(config);
-    state.configuracion = config;
+    state.configuracion = await window.electronAPI.getConfiguracion();
+    actualizarEstadoBackupConfig();
     renderSelectsTiposDte();
     showNotification('Configuración guardada exitosamente', 'success');
     
@@ -1556,6 +1774,7 @@ async function generarFactura() {
     const notasFactura = obtenerNotasFacturaFormulario(tipoDte);
     const requiereDocumentoRelacionado = ['05', '06', '07'].includes(tipoDte);
     const esRetencion = tipoDte === '07';
+    const esFacturaConsumidorFinal = tipoDte === '01';
 
     if (!esRetencion && state.currentFactura.items.length === 0) {
       await finalizarProcesoEnvio('Agregue al menos un producto o servicio.', 'error');
@@ -1586,6 +1805,7 @@ async function generarFactura() {
 
     // Calcular totales
     const resumen = calcularResumenFactura(itemsFactura);
+    const ajustesIvaFactura = obtenerAjustesIvaFactura(tipoDte, cliente);
     
     const documentoRelacionado = requiereDocumentoRelacionado ? obtenerDocumentoRelacionadoNotaCredito() : null;
 
@@ -1608,7 +1828,7 @@ async function generarFactura() {
       }
     }
 
-    const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion);
+    const errorReceptor = validarReceptorParaHacienda(tipoDte, cliente, state.configuracion, resumen.total);
     if (errorReceptor) {
       await finalizarProcesoEnvio('El receptor no cumple las validaciones requeridas.', 'error');
       showNotification(errorReceptor, 'error');
@@ -1680,7 +1900,6 @@ async function generarFactura() {
     });
     
     // Preparar resumen para el generador
-    const esFacturaConsumidorFinal = tipoDte === '01';
     const esDocumentoSinIva = ['07', '11', '14'].includes(tipoDte);
     const opcionesExportacion = tipoDte === '11' ? obtenerOpcionesExportacionFactura() : {};
     const totalGravadoDte = esFacturaConsumidorFinal
@@ -1697,6 +1916,9 @@ async function generarFactura() {
       : tipoDte === '11'
       ? totalExportacion
       : (esDocumentoSinIva ? resumen.subtotalTotal : resumen.total);
+    const totalPagarDte = esRetencion
+      ? totalDte
+      : roundMoney(Math.max(0, totalDte + ajustesIvaFactura.ivaPerci1 - ajustesIvaFactura.ivaRete1 - ajustesIvaFactura.reteRenta));
     const ivaDte = esDocumentoSinIva ? 0 : resumen.totalIva;
     const montoRetencion = esRetencion ? datosRetencion.ivaRetenido : 0;
 
@@ -1721,17 +1943,25 @@ async function generarFactura() {
         valor: ivaDte
       }] : null,
       subTotal: subtotalDte,
-      ivaRete1: 0,
-      reteRenta: 0,
+      ivaRete1: ajustesIvaFactura.ivaRete1,
+      ivaPerci1: tipoDte === '03' ? ajustesIvaFactura.ivaPerci1 : undefined,
+      reteRenta: ajustesIvaFactura.reteRenta,
       montoTotalOperacion: roundMoney(totalDte),
       totalNoGravado: 0,
-      totalPagar: roundMoney(totalDte),
-      totalLetras: numeroALetras(totalDte),
+      totalPagar: roundMoney(totalPagarDte),
+      totalLetras: numeroALetras(totalPagarDte),
       condicionOperacion: parseInt(document.getElementById('condicion-operacion').value),
-      pagos: [obtenerPagoDesdeCliente(cliente, totalDte)],
+      pagos: [obtenerPagoDesdeCliente(cliente, totalPagarDte)],
       totalSujetoRetencion: esRetencion ? datosRetencion.montoSujeto : undefined,
       totalIVAretenido: esRetencion ? montoRetencion : undefined
     };
+
+    const errorMaximoIvaRete1 = validarMaximoIvaRete1DTE(tipoDte, resumenDte, resumenDte.ivaRete1);
+    if (errorMaximoIvaRete1) {
+      await finalizarProcesoEnvio('La retención IVA excede el máximo permitido.', 'error');
+      showNotification(errorMaximoIvaRete1, 'error');
+      return;
+    }
     
     await avanzarProcesoEnvio('Creando factura local y DTE base...');
 
@@ -1796,7 +2026,7 @@ async function generarFactura() {
       iva: ivaFinalDte,
       total: totalFinalDte,
       descuento: roundMoney(resumenFinalDte.totalDescu ?? resumen.totalDescuentoCompleto),
-      retencion: montoRetencion,
+      retencion: esRetencion ? montoRetencion : roundMoney(ajustesIvaFactura.ivaRete1 + ajustesIvaFactura.reteRenta),
       condicion_operacion: resumenDte.condicionOperacion,
       estado: 'PENDIENTE',
       json_dte: dte,
@@ -1838,7 +2068,7 @@ async function generarFactura() {
         await finalizarProcesoEnvio('No se pudo firmar el documento.', 'error');
       }
 
-      const facturaActualizada = state.facturas.find(f => f.id === facturaGuardadaId);
+      const facturaActualizada = state.facturas.find(f => Number(f.id) === Number(facturaGuardadaId));
       if (facturaActualizada) {
         abrirModalVerFactura(facturaActualizada);
       }
@@ -2076,14 +2306,14 @@ function obtenerAyudaDocumentoRelacionado(tipoDte) {
   const ayudas = {
     '05': 'Para Nota de Crédito tipo 05, agregue uno o varios CCF relacionados. Cada ítem puede aplicar el monto total o parcial al CCF seleccionado.',
     '06': 'Para Nota de Débito tipo 06, agregue uno o varios CCF relacionados. Cada ítem puede aplicar el monto total o parcial al CCF seleccionado.',
-    '07': 'Para Comprobante de Retención tipo 07, relacione la Factura o CCF sujeto a retención.'
+    '07': 'Para Comprobante de Retención tipo 07, relacione la Factura, CCF o Sujeto Excluido sujeto a retención.'
   };
   return ayudas[tipoDte] || 'Hacienda requiere relacionar el documento tributario afectado.';
 }
 
 function obtenerTiposDocumentoRelacionadoPermitidos(tipoDte) {
   if (tipoDte === '05' || tipoDte === '06') return ['03'];
-  if (tipoDte === '07') return ['01', '03'];
+  if (tipoDte === '07') return ['01', '03', '14'];
   return [];
 }
 
@@ -2273,22 +2503,61 @@ function actualizarResumenFactura() {
   const resumen = calcularResumenFactura();
   const tipoDte = document.getElementById('tipo-dte')?.value;
   const esRetencion = tipoDte === '07';
+  const esFacturaConsumidorFinal = tipoDte === '01';
+  const esCCF = tipoDte === '03';
+  const esSujetoExcluido = tipoDte === '14';
+  const clienteSeleccionado = obtenerClienteSeleccionadoFactura();
   const datosRetencion = esRetencion ? obtenerDatosRetencion() : null;
   const mostrarSinIva = ['07', '11', '14'].includes(tipoDte);
-  const totalVisual = esRetencion ? datosRetencion.ivaRetenido : (mostrarSinIva ? resumen.subtotalTotal : resumen.total);
+  const montoOperacionVisual = esRetencion ? datosRetencion.ivaRetenido : (mostrarSinIva ? resumen.subtotalTotal : resumen.total);
+  const ajustesIvaFactura = obtenerAjustesIvaFactura(tipoDte, clienteSeleccionado);
+  const totalVisual = esRetencion
+    ? datosRetencion.ivaRetenido
+    : roundMoney(Math.max(0, montoOperacionVisual + ajustesIvaFactura.ivaPerci1 - ajustesIvaFactura.ivaRete1 - ajustesIvaFactura.reteRenta));
   const ivaVisual = mostrarSinIva ? 0 : resumen.totalIva;
   const subtotalGravadoVisual = esRetencion ? datosRetencion.montoSujeto : resumen.subtotalGravado;
   const subtotalExentoVisual = esRetencion ? 0 : resumen.subtotalExento;
   const subtotalTotalVisual = esRetencion ? datosRetencion.montoSujeto : resumen.subtotalTotal;
+  const mostrarRetencionIvaFactura = (esFacturaConsumidorFinal || esCCF) && !esClienteGenericoFactura(clienteSeleccionado);
+  const mostrarPercepcionIvaFactura = esCCF;
+  const mostrarRetencionRentaFactura = esSujetoExcluido;
+  const retencionRentaInput = document.getElementById('retencion-renta-factura');
+  if (retencionRentaInput && esSujetoExcluido) {
+    const porcentajeRenta = obtenerPorcentajeRentaSujetoExcluido(clienteSeleccionado);
+    retencionRentaInput.value = String(roundMoney(subtotalTotalVisual * (porcentajeRenta / 100)));
+    retencionRentaInput.readOnly = true;
+    retencionRentaInput.title = `Calculado automáticamente al ${porcentajeRenta}%`;
+  } else if (retencionRentaInput) {
+    retencionRentaInput.readOnly = false;
+    retencionRentaInput.title = '';
+  }
+  const maximoIvaRete1 = obtenerMaximoIvaRete1DTE(tipoDte, {
+    totalGravada: esFacturaConsumidorFinal
+      ? roundMoney(resumen.subtotalGravado + resumen.totalIva)
+      : resumen.subtotalGravado,
+    subTotal: montoOperacionVisual,
+    totalCompra: montoOperacionVisual,
+    montoTotalOperacion: montoOperacionVisual,
+    total: montoOperacionVisual
+  });
+  const retencionIvaInput = document.getElementById('retencion-iva-factura');
+  if (retencionIvaInput) {
+    retencionIvaInput.max = String(maximoIvaRete1);
+    retencionIvaInput.title = maximoIvaRete1 > 0
+      ? `Máximo permitido: ${formatCurrency(maximoIvaRete1)}`
+      : '';
+  }
   
   document.getElementById('resumen-subtotal-gravado').textContent = formatCurrency(subtotalGravadoVisual);
   document.getElementById('resumen-subtotal-exento').textContent = formatCurrency(subtotalExentoVisual);
   document.getElementById('resumen-subtotal').textContent = formatCurrency(subtotalTotalVisual);
   document.getElementById('resumen-descuento-general').textContent = formatCurrency(esRetencion ? 0 : resumen.descuentoGeneral);
   document.getElementById('resumen-iva').textContent = formatCurrency(esRetencion ? datosRetencion.ivaRetenido : ivaVisual);
+  document.getElementById('resumen-monto-operacion').textContent = formatCurrency(montoOperacionVisual);
   document.getElementById('resumen-total').textContent = formatCurrency(totalVisual);
   document.getElementById('resumen-letras').textContent = numeroALetras(totalVisual);
 
+  actualizarVisibilidadAjustesIvaFactura(mostrarRetencionIvaFactura, mostrarPercepcionIvaFactura, mostrarRetencionRentaFactura);
   actualizarEtiquetasResumenRetencion(esRetencion);
   actualizarValorRetencionCalculado(datosRetencion);
 }
@@ -2382,6 +2651,102 @@ function calcularResumenFactura(items = state.currentFactura.items) {
 
 function roundMoney(value) {
   return Number(Number(value || 0).toFixed(2));
+}
+
+function obtenerClienteSeleccionadoFactura() {
+  const clienteId = document.getElementById('cliente-select')?.value;
+  return state.clientes.find(c => Number(c.id) === Number(clienteId)) || null;
+}
+
+function clienteSujetoExcluidoNoDomiciliado(cliente = {}) {
+  const tipoDocumento = String(cliente?.tipo_documento || '');
+  return ['37', '03', '02'].includes(tipoDocumento) && Number(cliente?.sujeto_excluido_domiciliado) === 0;
+}
+
+function obtenerPorcentajeRentaSujetoExcluido(cliente = {}) {
+  return clienteSujetoExcluidoNoDomiciliado(cliente) ? 20 : 10;
+}
+
+function calcularIvaRete1DesdeResumenDTE(resumen = {}) {
+  const baseGravadaConIva = roundMoney(Number(resumen.totalGravada || 0));
+  return baseGravadaConIva > 0 ? roundMoney(baseGravadaConIva * 0.01) : 0;
+}
+
+function obtenerMaximoIvaRete1DTE(tipoDte, resumen = {}) {
+  const tipo = String(tipoDte || '').padStart(2, '0');
+  if (!['01', '03', '14'].includes(tipo)) return 0;
+
+  if (tipo === '14') {
+    return 0;
+  }
+
+  return calcularIvaRete1DesdeResumenDTE(resumen);
+}
+
+function validarMaximoIvaRete1DTE(tipoDte, resumen = {}, ivaRete1 = 0) {
+  const valor = roundMoney(Number(ivaRete1 || 0));
+  const maximo = obtenerMaximoIvaRete1DTE(tipoDte, resumen);
+  if (valor <= maximo + 0.000001) return null;
+
+  const tipo = String(tipoDte || '').padStart(2, '0');
+  const regla = tipo === '14'
+    ? 'Sujeto Excluido no aplica IVA retenido; use Retención Renta'
+    : '1% de la venta gravada';
+  return `La retención IVA no puede exceder ${formatCurrency(maximo)} (${regla}). Valor ingresado: ${formatCurrency(valor)}.`;
+}
+
+function limitarIvaRete1DTE(tipoDte, resumen = {}, ivaRete1 = 0) {
+  const valor = roundMoney(Number(ivaRete1 || 0));
+  const maximo = obtenerMaximoIvaRete1DTE(tipoDte, resumen);
+  return roundMoney(Math.min(valor, maximo));
+}
+
+function obtenerMontoManualInput(id) {
+  const input = document.getElementById(id);
+  const valor = roundMoney(Number(input?.value || 0));
+  return Number.isFinite(valor) && valor > 0 ? valor : 0;
+}
+
+function obtenerAjustesIvaFactura(tipoDte, cliente = null) {
+  const tipo = String(tipoDte || '').padStart(2, '0');
+  const puedeRetener = ['01', '03'].includes(tipo) && !esClienteGenericoFactura(cliente);
+  const puedePercibir = tipo === '03';
+  const puedeRetenerRenta = tipo === '14';
+  const resumen = calcularResumenFactura();
+  const rentaSujetoExcluido = puedeRetenerRenta
+    ? roundMoney(resumen.subtotalTotal * (obtenerPorcentajeRentaSujetoExcluido(cliente) / 100))
+    : 0;
+
+  return {
+    ivaRete1: puedeRetener ? obtenerMontoManualInput('retencion-iva-factura') : 0,
+    ivaPerci1: puedePercibir ? obtenerMontoManualInput('percepcion-iva-factura') : 0,
+    reteRenta: rentaSujetoExcluido
+  };
+}
+
+function actualizarVisibilidadAjustesIvaFactura(mostrarRetencion, mostrarPercepcion, mostrarRetencionRenta = false) {
+  const retencionRow = document.getElementById('resumen-retencion-iva-row');
+  const percepcionRow = document.getElementById('resumen-percepcion-iva-row');
+  const retencionRentaRow = document.getElementById('resumen-retencion-renta-row');
+  const montoOperacionRow = document.getElementById('resumen-monto-operacion-row');
+  const inputRetencion = document.getElementById('retencion-iva-factura');
+  const inputPercepcion = document.getElementById('percepcion-iva-factura');
+  const inputRetencionRenta = document.getElementById('retencion-renta-factura');
+  const mostrarMontoOperacion = Boolean(mostrarRetencion || mostrarPercepcion || mostrarRetencionRenta);
+
+  if (retencionRow) retencionRow.style.display = mostrarRetencion ? '' : 'none';
+  if (percepcionRow) percepcionRow.style.display = mostrarPercepcion ? '' : 'none';
+  if (retencionRentaRow) retencionRentaRow.style.display = mostrarRetencionRenta ? '' : 'none';
+  if (montoOperacionRow) montoOperacionRow.style.display = mostrarMontoOperacion ? '' : 'none';
+  if (!mostrarRetencion && inputRetencion) {
+    inputRetencion.value = '0';
+  }
+  if (!mostrarPercepcion && inputPercepcion) {
+    inputPercepcion.value = '0';
+  }
+  if (!mostrarRetencionRenta && inputRetencionRenta) {
+    inputRetencionRenta.value = '0';
+  }
 }
 
 function obtenerDatosRetencion() {
@@ -2530,6 +2895,9 @@ function limpiarFirmasDTE(dte) {
   delete dte.documentoFirmado;
   delete dte.documento;
   delete dte.firma;
+  delete dte.firmaElectronica;
+  delete dte.selloRecibido;
+  delete dte.respuestaHacienda;
 
   return dte;
 }
@@ -2575,36 +2943,230 @@ function limpiarDocumentoFiscal(valor) {
   return String(valor || '').replace(/[^0-9]/g, '');
 }
 
+function valorTextoNoVacio(valor) {
+  const texto = String(valor || '').trim();
+  return texto || null;
+}
+
+function limpiarDocumentoAlfanumerico(valor) {
+  return String(valor || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function normalizarTextoComparacion(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
+function normalizarNumeroDocumentoCliente(tipoDocumento, valor) {
+  const tipo = String(tipoDocumento || '');
+  const limpio = limpiarDocumentoFiscal(valor);
+
+  if (tipo === '13') {
+    return limpio.length === 9 ? `${limpio.slice(0, 8)}-${limpio.slice(8)}` : limpio;
+  }
+
+  if (tipo === '36') {
+    return limpio;
+  }
+
+  return limpiarDocumentoAlfanumerico(valor);
+}
+
+function esDocumentoFiscalSinValor(numero) {
+  return Boolean(numero) && /^(\d)\1+$/.test(String(numero));
+}
+
+function validarNumeroDocumentoCliente(tipoDocumento, valor, contexto = 'receptor') {
+  const tipo = String(tipoDocumento || '');
+  const numeroFiscal = limpiarDocumentoFiscal(valor);
+  const numeroAlfanumerico = limpiarDocumentoAlfanumerico(valor);
+
+  if (!['13', '36', '37', '03', '02'].includes(tipo)) {
+    return 'Seleccione un tipo de documento válido para el receptor.';
+  }
+
+  if (tipo === '13') {
+    if (numeroFiscal.length !== 9) return `El DUI del ${contexto} debe tener 9 dígitos.`;
+    if (esDocumentoFiscalSinValor(numeroFiscal)) return `El DUI del ${contexto} no puede estar compuesto por dígitos repetidos.`;
+    return null;
+  }
+
+  if (tipo === '36') {
+    if (numeroFiscal.length !== 14) return `El NIT del ${contexto} debe tener 14 dígitos.`;
+    if (esDocumentoFiscalSinValor(numeroFiscal)) return `El NIT del ${contexto} no puede estar compuesto por dígitos repetidos.`;
+    return null;
+  }
+
+  if (numeroAlfanumerico.length < 3 || numeroAlfanumerico.length > 20) {
+    return `El documento del ${contexto} debe tener entre 3 y 20 caracteres alfanuméricos.`;
+  }
+
+  return null;
+}
+
+function esClienteGenericoFactura(cliente) {
+  const nombre = normalizarTextoComparacion(cliente?.nombre);
+  return [
+    'CLIENTES VARIOS',
+    'CLIENTE VARIOS',
+    'CONSUMIDOR FINAL',
+    'PUBLICO EN GENERAL'
+  ].includes(nombre);
+}
+
+function debeOmitirReceptorFactura(cliente, montoTotalOperacion = 0) {
+  return esClienteGenericoFactura(cliente) && Number(montoTotalOperacion || 0) < 1095;
+}
+
+function facturaRequiereDuiReceptor(montoTotalOperacion = 0) {
+  return Number(montoTotalOperacion || 0) >= 1095;
+}
+
+function describirDocumentoReceptorDTE(dte) {
+  const contenido = obtenerDTEContenido(dte);
+  const receptor = contenido?.receptor || contenido?.sujetoExcluido || {};
+  const tipoDocumento = receptor.tipoDocumento || (receptor.nit ? '36' : '');
+  const numDocumento = Object.prototype.hasOwnProperty.call(receptor, 'numDocumento')
+    ? receptor.numDocumento
+    : receptor.nit;
+
+  return [
+    tipoDocumento ? `tipoDocumento=${tipoDocumento}` : null,
+    numDocumento ? `numDocumento=${numDocumento}` : null,
+    receptor.nombre ? `nombre=${receptor.nombre}` : null
+  ].filter(Boolean).join(', ');
+}
+
+function agregarDetalleDocumentoReceptor(mensaje, dte) {
+  const detalle = describirDocumentoReceptorDTE(dte);
+  return detalle ? `${mensaje}\n\nReceptor en el DTE: ${detalle}` : mensaje;
+}
+
 function normalizarDocumentoReceptorDTE(tipoDocumento, valor) {
   const tipo = String(tipoDocumento || '');
   const limpio = limpiarDocumentoFiscal(valor);
   if (tipo === '13' && limpio.length === 9) return `${limpio.slice(0, 8)}-${limpio.slice(8)}`;
   if (tipo === '36') return limpio;
-  return String(valor || '').trim().toUpperCase().replace(/\s+/g, '');
+  return limpiarDocumentoAlfanumerico(valor);
 }
 
-function validarReceptorParaHacienda(tipoDte, cliente, config) {
+function normalizarDocumentoSujetoExcluidoDTE(tipoDocumento, valor) {
+  const tipo = String(tipoDocumento || '');
+  const limpio = limpiarDocumentoFiscal(valor);
+  if (['13', '36'].includes(tipo)) return limpio;
+  return limpiarDocumentoAlfanumerico(valor);
+}
+
+function normalizarDocumentoRetencionDTE(tipoDocumento, valor) {
+  const tipo = String(tipoDocumento || '');
+  const limpio = limpiarDocumentoFiscal(valor);
+  if (tipo === '13' && limpio.length === 9) return `${limpio.slice(0, 8)}-${limpio.slice(8)}`;
+  if (tipo === '36') return limpio;
+  return limpiarDocumentoAlfanumerico(valor);
+}
+
+function normalizarDocumentosReceptorDTE(dte) {
+  const contenido = obtenerDTEContenido(dte);
+  if (!contenido) return dte;
+
+  if (contenido.receptor?.tipoDocumento && Object.prototype.hasOwnProperty.call(contenido.receptor, 'numDocumento')) {
+    const tipoDte = String(contenido.identificacion?.tipoDte || '').padStart(2, '0');
+    contenido.receptor.numDocumento = normalizarDocumentoReceptorDTE(
+      contenido.receptor.tipoDocumento,
+      contenido.receptor.numDocumento
+    );
+    if (tipoDte === '07') {
+      contenido.receptor.numDocumento = normalizarDocumentoRetencionDTE(
+        contenido.receptor.tipoDocumento,
+        contenido.receptor.numDocumento
+      );
+    }
+  }
+
+  if (contenido.sujetoExcluido?.tipoDocumento && Object.prototype.hasOwnProperty.call(contenido.sujetoExcluido, 'numDocumento')) {
+    contenido.sujetoExcluido.numDocumento = normalizarDocumentoSujetoExcluidoDTE(
+      contenido.sujetoExcluido.tipoDocumento,
+      contenido.sujetoExcluido.numDocumento
+    );
+  }
+
+  return dte;
+}
+
+function validarFormatoDocumentoDTEHacienda(tipoDocumento, valor, contexto = 'receptor del DTE firmado') {
+  const tipo = String(tipoDocumento || '');
+  const documento = String(valor || '').trim();
+  if (tipo === '13' && !/^\d{8}-\d{1}$/.test(documento)) {
+    return `El DUI del ${contexto} debe enviarse a Hacienda con formato 00000000-0.`;
+  }
+  if (tipo === '36' && !/^\d{14}$/.test(documento)) {
+    return `El NIT del ${contexto} debe enviarse a Hacienda como 14 dígitos sin guiones.`;
+  }
+  return null;
+}
+
+function validarFormatoDocumentoRetencionDTE(tipoDocumento, valor, contexto = 'receptor del Comprobante de Retención') {
+  const tipo = String(tipoDocumento || '');
+  const documento = String(valor || '').trim();
+  if (tipo === '13' && !/^\d{8}-\d{1}$/.test(documento)) {
+    return `El DUI del ${contexto} debe enviarse a Hacienda con formato 00000000-0.`;
+  }
+  if (tipo === '36' && !/^(\d{14}|\d{9})$/.test(documento)) {
+    return `El NIT del ${contexto} debe enviarse a Hacienda como 14 dígitos o DUI homologado de 9 dígitos, sin guiones.`;
+  }
+  return null;
+}
+
+function esDocumentoContribuyenteNaturalValido(tipoDocumento, valor) {
+  const tipo = String(tipoDocumento || '');
+  const numero = limpiarDocumentoFiscal(valor);
+  if (tipo === '13') return numero.length === 9;
+  if (tipo === '36') return numero.length === 14 || numero.length === 9;
+  return false;
+}
+
+function validarReceptorParaHacienda(tipoDte, cliente, config, montoTotalOperacion = 0) {
   const tipo = String(tipoDte || '');
   if (!['01', '03', '05', '06', '07'].includes(tipo)) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || config?.hacienda_usuario);
   const tipoDocumento = String(cliente?.tipo_documento || '');
   const numeroReceptor = limpiarDocumentoFiscal(cliente?.numero_documento);
+  const direccionReceptor = String(cliente?.direccion || '').trim();
+
+  if (direccionReceptor && direccionReceptor.length < 5) {
+    return 'La dirección del receptor debe tener al menos 5 caracteres o dejarse vacía cuando el tipo de DTE lo permita.';
+  }
 
   if (tipo === '01') {
+    if (debeOmitirReceptorFactura(cliente, montoTotalOperacion)) return null;
+    const facturaAlta = facturaRequiereDuiReceptor(montoTotalOperacion);
+
+    if (esClienteGenericoFactura(cliente)) {
+      return 'Para Factura de $1,095.00 o más, CLIENTES VARIOS no es válido: seleccione un receptor real con DUI válido de 9 dígitos.';
+    }
+
+    if (facturaAlta && (tipoDocumento !== '13' || numeroReceptor.length !== 9)) {
+      return 'Para Factura de $1,095.00 o más, el receptor debe estar registrado con DUI válido de 9 dígitos.';
+    }
+
+    if (facturaAlta) {
+      const telefonoReceptor = limpiarDocumentoFiscal(cliente?.telefono);
+      if (!cliente?.departamento || !cliente?.municipio || direccionReceptor.length < 5) {
+        return 'Para Factura de $1,095.00 o más con DUI, complete departamento, municipio y dirección real del receptor.';
+      }
+      if (telefonoReceptor.length !== 8) {
+        return 'Para Factura de $1,095.00 o más con DUI, complete un teléfono del receptor de 8 dígitos.';
+      }
+    }
+
     if (!tipoDocumento && !numeroReceptor) return null;
 
-    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
-      return 'Para Factura con receptor DUI, el documento debe tener 9 dígitos.';
-    }
-
-    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
-      return 'Para Factura con receptor NIT, el documento debe tener 14 dígitos.';
-    }
-
-    if (tipoDocumento && !['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
-      return 'Seleccione un tipo de documento válido para el receptor.';
-    }
+    const errorDocumento = validarNumeroDocumentoCliente(tipoDocumento, cliente?.numero_documento, 'receptor');
+    if (errorDocumento) return `Para Factura, ${errorDocumento}`;
 
     if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
       return 'El receptor no puede ser el mismo NIT del emisor.';
@@ -2614,21 +3176,12 @@ function validarReceptorParaHacienda(tipoDte, cliente, config) {
   }
 
   if (tipo === '07') {
-    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
-      return 'Para Comprobante de Retención con receptor NIT, el documento debe tener 14 dígitos.';
-    }
-
-    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
-      return 'Para Comprobante de Retención con receptor DUI, el documento debe tener 9 dígitos.';
-    }
-
-    if (!['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
-      return 'Seleccione un tipo de documento válido para el sujeto de retención.';
-    }
-
     if (!String(cliente?.numero_documento || '').trim()) {
       return 'Ingrese el número de documento del sujeto de retención.';
     }
+
+    const errorDocumento = validarNumeroDocumentoCliente(tipoDocumento, cliente?.numero_documento, 'sujeto de retención');
+    if (errorDocumento) return `Para Comprobante de Retención, ${errorDocumento}`;
 
     if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
       return 'Para Comprobante de Retención el receptor no puede ser el mismo NIT del emisor.';
@@ -2637,8 +3190,8 @@ function validarReceptorParaHacienda(tipoDte, cliente, config) {
     return null;
   }
 
-  if (!numeroReceptor || numeroReceptor.length !== 14) {
-    return 'Para CCF y notas el receptor debe tener NIT válido de 14 dígitos.';
+  if (!esDocumentoContribuyenteNaturalValido(tipoDocumento, cliente?.numero_documento)) {
+    return 'Para CCF y notas el receptor debe tener NIT de 14 dígitos o DUI homologado de 9 dígitos.';
   }
 
   if (nitEmisor && numeroReceptor === nitEmisor) {
@@ -2650,6 +3203,9 @@ function validarReceptorParaHacienda(tipoDte, cliente, config) {
 
 function validarClienteExportacion(tipoDte, cliente) {
   if (String(tipoDte || '') !== '11') return null;
+
+  const errorDocumento = validarNumeroDocumentoCliente(cliente?.tipo_documento || '37', cliente?.numero_documento, 'receptor de exportación');
+  if (errorDocumento) return errorDocumento;
 
   if (Number(cliente?.aplica_exportacion) !== 1) {
     return 'Marque el cliente como cliente para factura de exportación y complete los datos de país/tipo de persona.';
@@ -2685,29 +3241,41 @@ function validarClienteSujetoExcluido(tipoDte, cliente) {
 
 function validarReceptorDTEParaHacienda(dte, config) {
   const tipoDte = dte?.identificacion?.tipoDte;
-  if (!['01', '03', '05', '06', '07'].includes(String(tipoDte || ''))) return null;
+  if (!['01', '03', '05', '06', '07', '11'].includes(String(tipoDte || ''))) return null;
 
   const nitEmisor = limpiarDocumentoFiscal(config?.nit || dte?.emisor?.nit);
-  if (tipoDte === '01') {
+  if (tipoDte === '01' || tipoDte === '11') {
+    const receptor = dte?.receptor || {};
     const tipoDocumento = String(dte?.receptor?.tipoDocumento || '');
     const numeroReceptor = limpiarDocumentoFiscal(dte?.receptor?.numDocumento);
+    const documentoReceptor = dte?.receptor?.numDocumento;
+    const montoTotalOperacion = Number(dte?.resumen?.montoTotalOperacion || dte?.resumen?.totalPagar || 0);
 
-    if (!tipoDocumento && !numeroReceptor) return null;
-
-    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
-      return 'El DTE firmado tiene receptor.numDocumento inválido para DUI. Genere nuevamente el DTE con un DUI de 9 dígitos.';
+    if (tipoDte === '01' && !tipoDocumento && !numeroReceptor) {
+      if (facturaRequiereDuiReceptor(montoTotalOperacion)) {
+        return 'La Factura firmada supera $1,095.00 y requiere receptor real con DUI válido de 9 dígitos. Genere nuevamente el DTE.';
+      }
+      return null;
     }
 
-    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
-      return 'El DTE firmado tiene receptor.numDocumento inválido para NIT. Genere nuevamente el DTE con un NIT de 14 dígitos.';
+    if (tipoDte === '01' && esClienteGenericoFactura({ nombre: receptor.nombre })) {
+      const mensaje = facturaRequiereDuiReceptor(montoTotalOperacion)
+        ? 'La Factura firmada usa CLIENTES VARIOS, pero por el monto requiere un receptor real con DUI válido de 9 dígitos. Genere nuevamente el DTE.'
+        : 'La Factura firmada usa CLIENTES VARIOS como receptor identificado. Genere nuevamente el DTE para emitirla como consumidor final sin receptor.';
+      return agregarDetalleDocumentoReceptor(mensaje, dte);
     }
 
-    if (tipoDocumento && !['13', '36', '37', '03', '02'].includes(tipoDocumento)) {
-      return 'El DTE firmado tiene receptor.tipoDocumento inválido. Genere nuevamente el DTE.';
+    const errorDocumento = validarNumeroDocumentoCliente(tipoDocumento, documentoReceptor, 'receptor del DTE firmado');
+    if (errorDocumento) return agregarDetalleDocumentoReceptor(`${errorDocumento} Genere nuevamente el DTE.`, dte);
+    const errorFormatoDocumento = validarFormatoDocumentoDTEHacienda(tipoDocumento, documentoReceptor);
+    if (errorFormatoDocumento) return agregarDetalleDocumentoReceptor(`${errorFormatoDocumento} Genere nuevamente el DTE.`, dte);
+
+    if (tipoDte === '01' && facturaRequiereDuiReceptor(montoTotalOperacion) && (tipoDocumento !== '13' || numeroReceptor.length !== 9)) {
+      return agregarDetalleDocumentoReceptor('La Factura firmada supera $1,095.00 y debe usar receptor con DUI válido de 9 dígitos. Genere nuevamente el DTE con un cliente registrado con DUI.', dte);
     }
 
-    if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
-      return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+    if (tipoDte === '01' && tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
+      return agregarDetalleDocumentoReceptor('El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.', dte);
     }
 
     return null;
@@ -2716,29 +3284,23 @@ function validarReceptorDTEParaHacienda(dte, config) {
   if (tipoDte === '07') {
     const tipoRelacionadoInvalido = (dte?.cuerpoDocumento || [])
       .map((item) => String(item?.tipoDte || '').padStart(2, '0'))
-      .find((tipoRelacionado) => !['01', '03'].includes(tipoRelacionado));
+      .find((tipoRelacionado) => !['01', '03', '14'].includes(tipoRelacionado));
 
     if (tipoRelacionadoInvalido) {
-      return `El Comprobante de Retención tiene cuerpoDocumento.tipoDte ${tipoRelacionadoInvalido}, pero Hacienda solo acepta Factura 01 o CCF 03 en ese campo. Genere nuevamente el DTE.`;
+      return `El Comprobante de Retención tiene cuerpoDocumento.tipoDte ${tipoRelacionadoInvalido}, pero Hacienda solo acepta Factura 01, CCF 03 o Sujeto Excluido 14 en ese campo. Genere nuevamente el DTE.`;
     }
 
     const tipoDocumento = String(dte?.receptor?.tipoDocumento || '');
     const numeroReceptor = limpiarDocumentoFiscal(dte?.receptor?.numDocumento);
+    const documentoReceptor = dte?.receptor?.numDocumento;
 
-    if (tipoDocumento === '36' && numeroReceptor.length !== 14) {
-      return 'El DTE firmado tiene receptor.numDocumento inválido para NIT. Genere nuevamente el DTE con un NIT de 14 dígitos.';
-    }
-
-    if (tipoDocumento === '13' && numeroReceptor.length !== 9) {
-      return 'El DTE firmado tiene receptor.numDocumento inválido para DUI. Genere nuevamente el DTE con un DUI de 9 dígitos.';
-    }
-
-    if (!['13', '36', '37', '03', '02'].includes(tipoDocumento) || !String(dte?.receptor?.numDocumento || '').trim()) {
-      return 'El DTE firmado tiene receptor.tipoDocumento o receptor.numDocumento inválido. Genere nuevamente el DTE.';
-    }
+    const errorDocumento = validarNumeroDocumentoCliente(tipoDocumento, documentoReceptor, 'receptor del DTE firmado');
+    if (errorDocumento) return agregarDetalleDocumentoReceptor(`${errorDocumento} Genere nuevamente el DTE.`, dte);
+    const errorFormatoDocumento = validarFormatoDocumentoRetencionDTE(tipoDocumento, documentoReceptor);
+    if (errorFormatoDocumento) return agregarDetalleDocumentoReceptor(`${errorFormatoDocumento} Genere nuevamente el DTE.`, dte);
 
     if (tipoDocumento === '36' && nitEmisor && numeroReceptor === nitEmisor) {
-      return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+      return agregarDetalleDocumentoReceptor('El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.', dte);
     }
 
     return null;
@@ -2746,12 +3308,12 @@ function validarReceptorDTEParaHacienda(dte, config) {
 
   const nitReceptor = limpiarDocumentoFiscal(dte?.receptor?.nit);
 
-  if (!nitReceptor || nitReceptor.length !== 14) {
-    return 'El DTE firmado tiene receptor.nit inválido. Genere nuevamente el DTE con un receptor contribuyente válido.';
+  if (!nitReceptor || ![9, 14].includes(nitReceptor.length)) {
+    return 'El DTE firmado tiene receptor.nit inválido. Genere nuevamente el DTE con NIT de 14 dígitos o DUI homologado de 9 dígitos.';
   }
 
   if (nitEmisor && nitReceptor === nitEmisor) {
-    return 'El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.';
+    return agregarDetalleDocumentoReceptor('El DTE firmado tiene el mismo NIT en emisor y receptor. Genere una nueva factura con un cliente distinto.', dte);
   }
 
   return null;
@@ -2835,6 +3397,67 @@ function crearBitacoraRechazoHacienda(resultado = {}, mensajeMostrado = '') {
   };
 }
 
+function textoObservacionContieneDocumentoInvalido(valor) {
+  const texto = typeof valor === 'string' ? valor : JSON.stringify(valor || '');
+  return /numDocumento/i.test(texto) && /(VALOR\s+NO\s+VALIDO|VALOR\s+NO\s+V[AÁ]LIDO|NO\s+VALIDO|NO\s+V[AÁ]LIDO|INVALID)/i.test(texto);
+}
+
+function observacionContieneDocumentoInvalido(valor) {
+  if (!valor) return false;
+  if (textoObservacionContieneDocumentoInvalido(valor)) return true;
+
+  if (Array.isArray(valor)) {
+    return valor.some(item => observacionContieneDocumentoInvalido(item));
+  }
+
+  if (typeof valor === 'object') {
+    return Object.values(valor).some(item => observacionContieneDocumentoInvalido(item));
+  }
+
+  return false;
+}
+
+function facturaTieneObservacionDocumentoInvalido(factura) {
+  if (factura?.sello_recepcion) return false;
+  const observaciones = parseObservacionesFactura(factura?.observaciones);
+  return observacionContieneDocumentoInvalido(observaciones);
+}
+
+function obtenerEstadoFacturaVisual(factura) {
+  if (!factura?.sello_recepcion && facturaTieneObservacionDocumentoInvalido(factura)) return 'RECHAZADO';
+  return normalizarEstadoFactura(factura?.estado);
+}
+
+function observacionesMencionanReceptorNumDocumento(resultado = {}) {
+  const detalle = resultado.errorDetalle || {};
+  const observaciones = [
+    detalle.mensaje,
+    detalle.descripcionMsg,
+    resultado.error,
+    ...(Array.isArray(detalle.observacionesDetalle) ? detalle.observacionesDetalle : []),
+    ...(Array.isArray(detalle.observaciones) ? detalle.observaciones : []),
+    ...(Array.isArray(resultado.observaciones) ? resultado.observaciones : [])
+  ];
+
+  return observaciones
+    .map(obs => typeof obs === 'string' ? obs : JSON.stringify(obs || ''))
+    .some(obs => /receptor\.numDocumento|numDocumento/i.test(obs));
+}
+
+function respuestaHaciendaTieneDocumentoInvalido(resultado = {}) {
+  return observacionContieneDocumentoInvalido([
+    resultado.error,
+    resultado.mensaje,
+    resultado.descripcionMsg,
+    resultado.observaciones,
+    resultado.errorDetalle
+  ]);
+}
+
+function respuestaHaciendaEstaRechazada(resultado = {}) {
+  return normalizarEstadoFactura(resultado.estado || resultado.raw?.estado) === 'RECHAZADO';
+}
+
 function esErrorConexionHaciendaTexto(mensaje = '') {
   return /(ENOTFOUND|ENETUNREACH|EAI_AGAIN|ECONNRESET|ECONNREFUSED|EHOSTUNREACH|getaddrinfo|network|internet|conexi[oó]n)/i.test(String(mensaje));
 }
@@ -2848,7 +3471,7 @@ function obtenerBitacoraRechazoFactura(factura) {
   return {
     fecha: factura?.fecha_procesamiento || factura?.updated_at || null,
     origen: 'API Hacienda',
-    estado: normalizarEstadoFactura(factura?.estado),
+    estado: obtenerEstadoFacturaVisual(factura),
     tipo: null,
     codigo: null,
     mensaje: typeof parsed === 'string' ? parsed : 'Documento rechazado por Hacienda',
@@ -2924,7 +3547,7 @@ function renderBitacoraRechazo(factura) {
   const container = document.getElementById('factura-bitacora-rechazo-contenido');
   if (!section || !container) return;
 
-  const estadoFactura = normalizarEstadoFactura(factura?.estado);
+  const estadoFactura = obtenerEstadoFacturaVisual(factura);
   const bitacora = estadoFactura === 'RECHAZADO' ? obtenerBitacoraRechazoFactura(factura) : null;
   if (!bitacora) {
     section.style.display = 'none';
@@ -3058,15 +3681,13 @@ async function registrarDocumentoEnContingencia(facturaId, tipoContingencia, mot
 
 async function convertirRechazoConexionAContingencia(facturaId) {
   const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
-  if (!facturaRechazadaPorConexion(factura) && !facturaRechazadaPorTipoOperacion(factura)) {
+  if (!facturaPuedePasarAContingencia(factura)) {
     showNotification('Este rechazo no parece recuperable como contingencia. Revise la bitácora antes de pasarlo a contingencia.', 'warning');
     return false;
   }
 
   const bitacora = obtenerBitacoraRechazoFactura(factura);
-  const motivo = facturaRechazadaPorConexion(factura)
-    ? (bitacora?.mensaje || 'No se pudo conectar con Hacienda')
-    : 'Reprocesar documento como transmision por contingencia';
+  const motivo = bitacora?.mensaje || 'No se pudo conectar con Hacienda';
   await registrarDocumentoEnContingencia(facturaId, '1', motivo);
   cerrarModalVerFactura();
   showNotification('Documento movido a contingencia para reprocesar.', 'success');
@@ -3089,6 +3710,8 @@ function construirEventoContingencia(factura, contingencia, dte) {
     contingencia?.motivo || identificacion.motivoContin || identificacion.motivoContigencia,
     tipoContingencia
   );
+  const telefonoEmisor = valorTextoNoVacio(emisor.telefono || config.telefono);
+  const correoEmisor = valorTextoNoVacio(emisor.correo || config.email);
 
   return {
     identificacion: {
@@ -3107,8 +3730,8 @@ function construirEventoContingencia(factura, contingencia, dte) {
       tipoEstablecimiento: emisor.tipoEstablecimiento || config.tipo_establecimiento || '01',
       codEstableMH: emisor.codEstableMH || config.codigo_establecimiento || null,
       codPuntoVenta: emisor.codPuntoVenta || config.punto_venta || null,
-      telefono: emisor.telefono || config.telefono || null,
-      correo: emisor.correo || config.email || null
+      telefono: telefonoEmisor,
+      correo: correoEmisor
     },
     detalleDTE: [{
       noItem: 1,
@@ -3737,7 +4360,7 @@ function getTipoProductoNombre(tipo) {
 
 // Funciones globales para botones
 window.verFactura = async function(id) {
-  const factura = state.facturas.find(f => f.id === id);
+  const factura = state.facturas.find(f => Number(f.id) === Number(id));
   if (!factura) {
     showNotification('Factura no encontrada', 'error');
     return;
@@ -3747,7 +4370,7 @@ window.verFactura = async function(id) {
 };
 
 window.enviarFactura = async function(id) {
-  const factura = state.facturas.find(f => f.id === id);
+  const factura = state.facturas.find(f => Number(f.id) === Number(id));
   if (!factura) {
     showNotification('Factura no encontrada', 'error');
     return;
@@ -3808,6 +4431,7 @@ function abrirModalCliente(cliente = null) {
     document.getElementById('cliente-telefono').value = cliente.telefono || '';
     document.getElementById('cliente-email').value = cliente.email || '';
     document.getElementById('cliente-aplica-exportacion').checked = Number(cliente.aplica_exportacion) === 1;
+    document.getElementById('cliente-sujeto-excluido-domiciliado').value = String(cliente.sujeto_excluido_domiciliado === 0 ? 0 : 1);
     document.getElementById('cliente-cod-pais').value = cliente.cod_pais || '';
     document.getElementById('cliente-nombre-pais').value = cliente.nombre_pais || '';
     document.getElementById('cliente-tipo-persona-exportacion').value = String(cliente.tipo_persona_exportacion || inferirTipoPersonaExportacion(cliente.tipo_persona));
@@ -3855,6 +4479,7 @@ function abrirModalCliente(cliente = null) {
     document.getElementById('cliente-plazo-pago').value = '01';
     document.getElementById('cliente-periodo-pago').value = '1';
     document.getElementById('cliente-tipo-persona-exportacion').value = '2';
+    document.getElementById('cliente-sujeto-excluido-domiciliado').value = '1';
   }
 
   actualizarCamposExportacionCliente();
@@ -3873,11 +4498,18 @@ function cerrarModalCliente() {
 function actualizarCamposExportacionCliente() {
   const aplica = document.getElementById('cliente-aplica-exportacion')?.checked;
   const tipoDteDefault = document.getElementById('cliente-tipo-dte-default')?.value;
+  const tipoDocumento = document.getElementById('cliente-tipo-documento')?.value;
   const esExportacionDefault = tipoDteDefault === '11';
   const requiereDatosLocales = tipoDteDefault === '03';
+  const esSujetoExcluido = tipoDteDefault === '14';
+  const esDocumentoExtranjero = ['37', '03', '02'].includes(String(tipoDocumento || ''));
   const section = document.getElementById('cliente-exportacion-section');
+  const domicilioSujetoExcluido = document.getElementById('cliente-sujeto-excluido-domicilio-group');
   const mostrarExportacion = aplica || esExportacionDefault;
   if (section) section.style.display = mostrarExportacion ? 'grid' : 'none';
+  if (domicilioSujetoExcluido) {
+    domicilioSujetoExcluido.style.display = esSujetoExcluido && esDocumentoExtranjero ? '' : 'none';
+  }
 
   ['cliente-cod-pais', 'cliente-nombre-pais', 'cliente-tipo-persona-exportacion', 'cliente-desc-actividad-exportacion'].forEach((id) => {
     const input = document.getElementById(id);
@@ -3972,15 +4604,37 @@ async function guardarCliente() {
       showNotification('Ingrese un correo electrónico válido para el cliente.', 'error');
       return;
     }
+
+    const tipoDocumentoCliente = document.getElementById('cliente-tipo-documento').value;
+    const numeroDocumentoCliente = document.getElementById('cliente-numero-documento').value;
+    const errorDocumentoCliente = validarNumeroDocumentoCliente(tipoDocumentoCliente, numeroDocumentoCliente, 'cliente');
+    if (errorDocumentoCliente) {
+      showNotification(errorDocumentoCliente, 'error');
+      return;
+    }
+
+    if (tipoDteDefault === '03' && !esDocumentoContribuyenteNaturalValido(tipoDocumentoCliente, numeroDocumentoCliente)) {
+      showNotification('Para CCF el cliente debe tener NIT de 14 dígitos o DUI homologado de 9 dígitos.', 'error');
+      return;
+    }
+
+    if (tipoDteDefault === '01' && tipoDocumentoCliente !== '13') {
+      showNotification('Para facturas de $1,095.00 o más este cliente debe tener DUI válido.', 'warning');
+    }
+
+    if (tipoDteDefault === '01' && tipoDocumentoCliente === '13' && giroValue) {
+      showNotification('Para Factura con receptor DUI, la actividad económica guardada no se enviará en el DTE.', 'info');
+    }
     
     const clienteData = {
-      tipo_documento: document.getElementById('cliente-tipo-documento').value,
-      numero_documento: document.getElementById('cliente-numero-documento').value,
+      tipo_documento: tipoDocumentoCliente,
+      numero_documento: normalizarNumeroDocumentoCliente(tipoDocumentoCliente, numeroDocumentoCliente),
       tipo_dte_default: tipoDteDefault,
       nrc: document.getElementById('cliente-nrc').value,
       nombre: document.getElementById('cliente-nombre').value,
       nombre_comercial: document.getElementById('cliente-nombre-comercial').value,
       tipo_persona: document.getElementById('cliente-tipo-persona').value,
+      sujeto_excluido_domiciliado: Number(document.getElementById('cliente-sujeto-excluido-domiciliado')?.value || 1),
       condicion_iva: document.getElementById('cliente-condicion-iva').value || 'GRAVADO',
       plazo_pago: plazoPago,
       periodo_pago: Math.trunc(periodoPago),
@@ -4077,20 +4731,17 @@ async function eliminarCliente(clienteId) {
 // Validar documento según tipo
 function validarDocumento() {
   const tipo = document.getElementById('cliente-tipo-documento').value;
-  const numero = document.getElementById('cliente-numero-documento').value;
-  
-  if (tipo === '36') { // NIT
-    const nitRegex = /^(\d{4}-\d{6}-\d{3}-\d|\d{14}|\d{9})$/;
-    if (!nitRegex.test(numero)) {
-      showNotification('Formato de NIT inválido. Use: 0000-000000-000-0', 'error');
-      return false;
-    }
-  } else if (tipo === '13') { // DUI
-    const duiRegex = /^\d{8}-\d$/;
-    if (!duiRegex.test(numero)) {
-      showNotification('Formato de DUI inválido. Use: 00000000-0', 'error');
-      return false;
-    }
+  const numeroDocInput = document.getElementById('cliente-numero-documento');
+  const numero = numeroDocInput.value;
+  const errorDocumento = validarNumeroDocumentoCliente(tipo, numero, 'cliente');
+
+  if (errorDocumento) {
+    showNotification(errorDocumento, 'error');
+    return false;
+  }
+
+  if (numeroDocInput) {
+    numeroDocInput.value = normalizarNumeroDocumentoCliente(tipo, numero);
   }
   
   return true;
@@ -4561,7 +5212,8 @@ function construirClienteDatosDTE(cliente) {
     cod_pais: cliente.cod_pais,
     nombre_pais: cliente.nombre_pais,
     tipo_persona_exportacion: cliente.tipo_persona_exportacion,
-    desc_actividad_exportacion: cliente.desc_actividad_exportacion
+    desc_actividad_exportacion: cliente.desc_actividad_exportacion,
+    sujeto_excluido_domiciliado: cliente.sujeto_excluido_domiciliado === 0 ? 0 : 1
   };
 }
 
@@ -4579,7 +5231,8 @@ function construirClienteDatosFactura(cliente) {
     direccion: cliente.direccion,
     municipio: cliente.municipio,
     departamento: cliente.departamento,
-    distrito: cliente.distrito
+    distrito: cliente.distrito,
+    sujeto_excluido_domiciliado: cliente.sujeto_excluido_domiciliado === 0 ? 0 : 1
   };
 }
 
@@ -4592,24 +5245,34 @@ function normalizarMunicipioDTE(departamento, municipio) {
   return limpio.padStart(2, '0');
 }
 
-function construirReceptorCorregido(tipoDte, cliente) {
+function construirDireccionReceptorDTE(clienteDte) {
+  const complemento = String(clienteDte?.direccion || '').trim();
+  if (complemento.length < 5) return null;
+
+  return {
+    departamento: clienteDte.departamento,
+    municipio: normalizarMunicipioDTE(clienteDte.departamento, clienteDte.municipio),
+    complemento
+  };
+}
+
+function construirReceptorCorregido(tipoDte, cliente, montoTotalOperacion = 0) {
   const clienteDte = construirClienteDatosDTE(cliente);
   const tipoDocumento = clienteDte.tipo_documento || null;
   const numeroDocumento = limpiarDocumentoFiscal(clienteDte.numero_documento);
-  const direccion = clienteDte.direccion ? {
-    departamento: clienteDte.departamento,
-    municipio: normalizarMunicipioDTE(clienteDte.departamento, clienteDte.municipio),
-    complemento: clienteDte.direccion
-  } : null;
+  const direccion = construirDireccionReceptorDTE(clienteDte);
 
   if (tipoDte === '01') {
+    if (debeOmitirReceptorFactura(clienteDte, montoTotalOperacion)) return null;
+    const esDui = tipoDocumento === '13';
+
     return {
       tipoDocumento,
       numDocumento: normalizarDocumentoReceptorDTE(tipoDocumento, clienteDte.numero_documento),
       nrc: tipoDocumento === '36' ? (limpiarDocumentoFiscal(clienteDte.nrc) || null) : null,
       nombre: clienteDte.nombre || null,
-      codActividad: clienteDte.giro || null,
-      descActividad: clienteDte.desc_actividad || null,
+      codActividad: esDui ? null : (clienteDte.giro || null),
+      descActividad: esDui ? null : (clienteDte.desc_actividad || null),
       direccion,
       telefono: clienteDte.telefono || null,
       correo: clienteDte.email || null
@@ -4633,7 +5296,7 @@ function construirReceptorCorregido(tipoDte, cliente) {
   if (tipoDte === '07') {
     return {
       tipoDocumento,
-      numDocumento: normalizarDocumentoReceptorDTE(tipoDocumento, clienteDte.numero_documento),
+      numDocumento: normalizarDocumentoRetencionDTE(tipoDocumento, clienteDte.numero_documento),
       nrc: limpiarDocumentoFiscal(clienteDte.nrc) || null,
       nombre: clienteDte.nombre,
       codActividad: clienteDte.giro,
@@ -4648,7 +5311,7 @@ function construirReceptorCorregido(tipoDte, cliente) {
   if (tipoDte === '11') {
     return {
       tipoDocumento: tipoDocumento || '37',
-      numDocumento: String(clienteDte.numero_documento || '').trim().toUpperCase().replace(/\s+/g, ''),
+      numDocumento: normalizarDocumentoReceptorDTE(tipoDocumento || '37', clienteDte.numero_documento),
       nombre: clienteDte.nombre,
       nombreComercial: clienteDte.nombre_comercial || null,
       codPais: clienteDte.cod_pais || '9300',
@@ -4672,7 +5335,7 @@ function aplicarClienteCorregidoADTE(dteOriginal, factura, cliente) {
   if (tipoDte === '14') {
     dte.sujetoExcluido = {
       tipoDocumento: cliente.tipo_documento || '36',
-      numDocumento: limpiarDocumentoFiscal(cliente.numero_documento),
+      numDocumento: normalizarDocumentoSujetoExcluidoDTE(cliente.tipo_documento || '36', cliente.numero_documento),
       nombre: cliente.nombre,
       codActividad: cliente.giro || null,
       descActividad: cliente.giro ? obtenerDescripcionActividad(cliente.giro) : null,
@@ -4685,7 +5348,7 @@ function aplicarClienteCorregidoADTE(dteOriginal, factura, cliente) {
       correo: cliente.email || null
     };
   } else {
-    dte.receptor = construirReceptorCorregido(tipoDte, cliente);
+    dte.receptor = construirReceptorCorregido(tipoDte, cliente, dte.resumen?.montoTotalOperacion || dte.resumen?.totalPagar || factura.total);
   }
 
   preservarFechaEmisionDTE(dte, factura, obtenerDTEContenido(dteOriginal));
@@ -4755,6 +5418,21 @@ function construirResumenDteCorreccion(tipoDte, itemsFactura, factura, opciones 
     ? totalExportacion
     : (esDocumentoSinIva ? resumen.subtotalTotal : resumen.total);
   const ivaDte = esDocumentoSinIva ? 0 : resumen.totalIva;
+  const resumenBaseRetencion = {
+    totalGravada: totalGravadoDte,
+    subTotal: subtotalDte,
+    totalCompra: subtotalDte,
+    montoTotalOperacion: roundMoney(totalDte),
+    total: roundMoney(totalDte)
+  };
+  const ivaRete1 = ['01', '03', '14'].includes(tipoDte)
+    ? limitarIvaRete1DTE(tipoDte, resumenBaseRetencion, totalesGuardados.ivaRete1 || 0)
+    : 0;
+  const ivaPerci1 = tipoDte === '03' ? roundMoney(totalesGuardados.ivaPerci1 || 0) : 0;
+  const reteRenta = tipoDte === '14'
+    ? roundMoney(subtotalDte * (obtenerPorcentajeRentaSujetoExcluido(obtenerClienteDataFactura(factura)) / 100))
+    : 0;
+  const totalPagarDte = roundMoney(Math.max(0, totalDte + ivaPerci1 - ivaRete1 - reteRenta));
 
   return {
     subtotal: subtotalDte,
@@ -4777,14 +5455,15 @@ function construirResumenDteCorreccion(tipoDte, itemsFactura, factura, opciones 
       valor: ivaDte
     }] : null,
     subTotal: subtotalDte,
-    ivaRete1: 0,
-    reteRenta: 0,
+    ivaRete1,
+    ivaPerci1: tipoDte === '03' ? ivaPerci1 : undefined,
+    reteRenta,
     montoTotalOperacion: roundMoney(totalDte),
     totalNoGravado: 0,
-    totalPagar: roundMoney(totalDte),
-    totalLetras: numeroALetras(totalDte),
+    totalPagar: totalPagarDte,
+    totalLetras: numeroALetras(totalPagarDte),
     condicionOperacion: Number(totalesGuardados.condicion_operacion || 1),
-    pagos: [obtenerPagoDesdeCliente(obtenerClienteDataFactura(factura), totalDte)],
+    pagos: [obtenerPagoDesdeCliente(obtenerClienteDataFactura(factura), totalPagarDte)],
     flete: tipoDte === '11' ? Number(opciones.flete || 0) : undefined,
     seguro: tipoDte === '11' ? Number(opciones.seguro || 0) : undefined,
     codIncoterms: tipoDte === '11' ? opciones.codIncoterms : undefined,
@@ -4829,9 +5508,82 @@ function obtenerTotalesFacturaDesdeDTE(dte, fallback = {}) {
     iva,
     total: roundMoney(resumen.totalPagar ?? resumen.montoTotalOperacion ?? fallback.total ?? 0),
     descuento: roundMoney(resumen.totalDescu ?? fallback.descuento ?? 0),
-    retencion: roundMoney(resumen.totalIVAretenido ?? fallback.retencion ?? 0),
+    ivaRete1: roundMoney(resumen.ivaRete1 ?? 0),
+    ivaPerci1: roundMoney(resumen.ivaPerci1 ?? 0),
+    reteRenta: roundMoney(resumen.reteRenta ?? 0),
+    retencion: roundMoney(resumen.totalIVAretenido ?? resumen.ivaRete1 ?? fallback.retencion ?? 0),
     condicion_operacion: Number(resumen.condicionOperacion || fallback.condicion_operacion || 1)
   };
+}
+
+function validarIvaRete1DTE(dte, cliente, aplicarRetencion) {
+  const resumen = dte?.resumen || {};
+  if (esClienteGenericoFactura(cliente)) {
+    return {
+      valido: true,
+      ivaRete1: 0,
+      mensaje: aplicarRetencion
+        ? 'CLIENTES VARIOS no admite retención IVA en Factura; se guardará en 0.'
+        : null
+    };
+  }
+
+  const esperado = aplicarRetencion ? calcularIvaRete1DesdeResumenDTE(resumen) : 0;
+  if (aplicarRetencion && esperado <= 0) {
+    return {
+      valido: false,
+      mensaje: 'No se puede aplicar retención IVA porque el DTE no tiene venta gravada.'
+    };
+  }
+
+  return {
+    valido: true,
+    ivaRete1: esperado,
+    mensaje: null
+  };
+}
+
+function aplicarAjustesIvaADTE(dte, ajustes = {}) {
+  const copia = JSON.parse(JSON.stringify(obtenerDTEContenido(dte)));
+  limpiarFirmasDTE(copia);
+
+  const resumen = copia.resumen || {};
+  const tipoDte = String(copia.identificacion?.tipoDte || '').padStart(2, '0');
+  const ivaRete1 = tipoDte === '14' ? 0 : roundMoney(ajustes.ivaRete1 || 0);
+  const errorMaximoIvaRete1 = validarMaximoIvaRete1DTE(tipoDte, resumen, ivaRete1);
+  if (errorMaximoIvaRete1) {
+    throw new Error(errorMaximoIvaRete1);
+  }
+  const ivaPerci1 = tipoDte === '03' ? roundMoney(ajustes.ivaPerci1 || 0) : 0;
+  const montoTotalOperacion = roundMoney(tipoDte === '14'
+    ? (resumen.subTotal ?? resumen.totalCompra ?? resumen.totalPagar ?? 0)
+    : (resumen.montoTotalOperacion ?? resumen.totalPagar ?? 0));
+  const reteRenta = tipoDte === '14' ? roundMoney(ajustes.reteRenta || 0) : roundMoney(resumen.reteRenta || 0);
+  const totalPagar = roundMoney(Math.max(0, montoTotalOperacion + ivaPerci1 - ivaRete1 - reteRenta));
+
+  resumen.ivaRete1 = ivaRete1;
+  resumen.reteRenta = reteRenta;
+  if (tipoDte === '03') {
+    resumen.ivaPerci1 = ivaPerci1;
+  } else {
+    delete resumen.ivaPerci1;
+  }
+  resumen.totalPagar = totalPagar;
+  resumen.totalLetras = numeroALetras(totalPagar);
+
+  if (Array.isArray(resumen.pagos) && resumen.pagos.length > 0) {
+    if (resumen.pagos.length === 1) {
+      resumen.pagos[0].montoPago = totalPagar;
+    } else {
+      resumen.pagos = resumen.pagos.map((pago, index) => ({
+        ...pago,
+        montoPago: index === 0 ? totalPagar : 0
+      }));
+    }
+  }
+
+  copia.resumen = resumen;
+  return copia;
 }
 
 async function regenerarDTEFacturaCorregida(factura, cliente, itemsFactura) {
@@ -4839,6 +5591,10 @@ async function regenerarDTEFacturaCorregida(factura, cliente, itemsFactura) {
   const dteOriginal = obtenerDTEContenido(parseDTEGuardado(factura.json_dte));
   const opciones = obtenerOpcionesCorreccionDesdeDTE(factura, dteOriginal);
   const resumenDte = construirResumenDteCorreccion(tipoDte, itemsFactura, factura, opciones);
+  const errorMaximoIvaRete1 = validarMaximoIvaRete1DTE(tipoDte, resumenDte, resumenDte.ivaRete1);
+  if (errorMaximoIvaRete1) {
+    throw new Error(errorMaximoIvaRete1);
+  }
 
   const resultadoDte = await window.electronAPI.generarDTE({
     tipo: tipoDte,
@@ -4858,6 +5614,7 @@ async function regenerarDTEFacturaCorregida(factura, cliente, itemsFactura) {
 
   const dteCorregido = resultadoDte.dte;
   preservarFechaEmisionDTE(dteCorregido, factura, dteOriginal);
+  normalizarDocumentosReceptorDTE(dteCorregido);
 
   return {
     dte: dteCorregido,
@@ -5008,6 +5765,110 @@ async function guardarItemsFacturaRechazada(facturaId) {
   }
 }
 
+function editarRetencionFacturaRechazada(facturaId) {
+  const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
+  if (!factura) {
+    showNotification('Factura no encontrada', 'error');
+    return;
+  }
+
+  const dte = obtenerDTEContenido(parseDTEGuardado(factura.json_dte));
+  const resumen = dte.resumen || {};
+  const tipoDte = String(factura.tipo_dte || dte.identificacion?.tipoDte || '').padStart(2, '0');
+
+  const retencionEditor = document.getElementById('factura-iva-retenido-editor');
+  const percepcionEditor = document.getElementById('factura-iva-percibido-editor');
+  const rentaEditor = document.getElementById('factura-renta-retenida-editor');
+  const retencionInput = document.getElementById('factura-iva-retenido-input');
+  const percepcionInput = document.getElementById('factura-iva-percibido-input');
+  const rentaInput = document.getElementById('factura-renta-retenida-input');
+  const btnEditar = document.getElementById('btn-editar-retencion-factura');
+  const btnGuardar = document.getElementById('btn-guardar-retencion-factura');
+  const cliente = state.clientes.find(c => Number(c.id) === Number(factura.cliente_id)) || obtenerClienteDataFactura(factura);
+  const porcentajeRenta = obtenerPorcentajeRentaSujetoExcluido(cliente);
+  const montoBaseRenta = roundMoney(resumen.subTotal ?? resumen.totalCompra ?? resumen.montoTotalOperacion ?? 0);
+  const rentaCalculada = tipoDte === '14' ? roundMoney(montoBaseRenta * (porcentajeRenta / 100)) : roundMoney(resumen.reteRenta || 0);
+
+  if (retencionEditor) retencionEditor.style.display = '';
+  if (percepcionEditor) percepcionEditor.style.display = tipoDte === '03' ? '' : 'none';
+  if (rentaEditor) rentaEditor.style.display = tipoDte === '14' ? '' : 'none';
+  if (retencionInput) {
+    const maximoIvaRete1 = obtenerMaximoIvaRete1DTE(tipoDte, resumen);
+    retencionInput.value = String(roundMoney(resumen.ivaRete1 || 0));
+    retencionInput.max = String(maximoIvaRete1);
+    retencionInput.title = maximoIvaRete1 > 0
+      ? `Máximo permitido: ${formatCurrency(maximoIvaRete1)}`
+      : '';
+  }
+  if (percepcionInput) percepcionInput.value = String(roundMoney(resumen.ivaPerci1 || 0));
+  if (rentaInput) {
+    rentaInput.value = String(rentaCalculada);
+    rentaInput.readOnly = tipoDte === '14';
+    rentaInput.title = tipoDte === '14' ? `Calculado automáticamente al ${porcentajeRenta}%` : '';
+  }
+  if (btnEditar) btnEditar.style.display = 'none';
+  if (btnGuardar) {
+    btnGuardar.style.display = 'inline-flex';
+    btnGuardar.onclick = () => guardarRetencionFacturaRechazada(facturaId);
+  }
+}
+
+async function guardarRetencionFacturaRechazada(facturaId) {
+  try {
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
+    if (!factura) {
+      showNotification('Factura no encontrada', 'error');
+      return false;
+    }
+
+    const dte = obtenerDTEContenido(parseDTEGuardado(factura.json_dte));
+    const tipoDte = String(factura.tipo_dte || dte.identificacion?.tipoDte || '').padStart(2, '0');
+    const ajustes = {
+      ivaRete1: roundMoney(Number(document.getElementById('factura-iva-retenido-input')?.value || 0)),
+      ivaPerci1: tipoDte === '03'
+        ? roundMoney(Number(document.getElementById('factura-iva-percibido-input')?.value || 0))
+        : 0,
+      reteRenta: tipoDte === '14'
+        ? roundMoney((dte.resumen?.subTotal ?? dte.resumen?.totalCompra ?? 0) * (obtenerPorcentajeRentaSujetoExcluido(state.clientes.find(c => Number(c.id) === Number(factura.cliente_id)) || obtenerClienteDataFactura(factura)) / 100))
+        : 0
+    };
+
+    if (!['01', '03', '14'].includes(tipoDte)) {
+      showNotification('Este tipo de documento no permite editar retención/percepción desde esta vista.', 'error');
+      return false;
+    }
+
+    const dteCorregido = aplicarAjustesIvaADTE(dte, ajustes);
+    const total = roundMoney(dteCorregido.resumen?.totalPagar ?? factura.total ?? 0);
+
+    await window.electronAPI.updateFacturaCorreccion(facturaId, {
+      estado: 'RECHAZADO',
+      observaciones: tipoDte === '14'
+        ? 'Retenciones de Sujeto Excluido corregidas. Presione Reenviar Documento para firmar y enviar nuevamente.'
+        : tipoDte === '03'
+        ? 'Retención/percepción IVA corregida. Presione Reenviar Documento para firmar y enviar nuevamente.'
+        : 'Retención IVA corregida. Presione Reenviar Documento para firmar y enviar nuevamente.',
+      total,
+      json_dte: dteCorregido
+    });
+
+    await loadFacturas();
+    const actualizada = state.facturas.find(f => Number(f.id) === Number(facturaId));
+    if (actualizada) abrirModalVerFactura(actualizada);
+
+    showNotification(tipoDte === '14'
+      ? 'Retenciones actualizadas. Ahora puede presionar Reenviar Documento.'
+      : tipoDte === '03'
+      ? 'Retención/percepción actualizada. Ahora puede presionar Reenviar Documento.'
+      : 'Retención actualizada. Ahora puede presionar Reenviar Documento.', 'success');
+    return true;
+  } catch (error) {
+    console.error('Error guardando retención corregida:', error);
+    showNotification('Error al guardar retención: ' + error.message, 'error');
+    return false;
+  }
+}
+
 async function reenviarFacturaCorregida(facturaId) {
   try {
     iniciarProcesoEnvio('Reenvío de documento corregido', [
@@ -5034,7 +5895,7 @@ async function reenviarFacturaCorregida(facturaId) {
       return false;
     }
 
-    const errorReceptor = validarReceptorParaHacienda(factura.tipo_dte, cliente, state.configuracion);
+    const errorReceptor = validarReceptorParaHacienda(factura.tipo_dte, cliente, state.configuracion, factura.total);
     if (errorReceptor) {
       await finalizarProcesoEnvio('El cliente corregido aún no cumple validación.', 'error');
       showNotification(errorReceptor, 'error');
@@ -5077,6 +5938,8 @@ async function reenviarFacturaCorregida(facturaId) {
 window.reenviarFacturaCorregida = reenviarFacturaCorregida;
 window.editarItemsFacturaRechazada = editarItemsFacturaRechazada;
 window.guardarItemsFacturaRechazada = guardarItemsFacturaRechazada;
+window.editarRetencionFacturaRechazada = editarRetencionFacturaRechazada;
+window.guardarRetencionFacturaRechazada = guardarRetencionFacturaRechazada;
 
 // Abrir modal para ver detalle de factura
 function abrirModalVerFactura(factura) {
@@ -5101,7 +5964,8 @@ function abrirModalVerFactura(factura) {
   document.getElementById('factura-fecha').textContent = formatDate(factura.fecha_emision);
   
   // Badge de estado
-  const estadoBadge = `<span class="badge badge-${getEstadoBadgeClass(factura.estado)}">${factura.estado}</span>`;
+  const estadoVisual = obtenerEstadoFacturaVisual(factura);
+  const estadoBadge = `<span class="badge badge-${getEstadoBadgeClass(estadoVisual)}">${estadoVisual}</span>`;
   document.getElementById('factura-estado-badge').innerHTML = estadoBadge;
 
   const observacionesRow = document.getElementById('factura-observaciones-row');
@@ -5140,6 +6004,32 @@ function abrirModalVerFactura(factura) {
   const totalesFactura = obtenerTotalesFacturaDesdeDTE(dteFactura, factura);
   document.getElementById('factura-subtotal').textContent = formatCurrency(totalesFactura.subtotal);
   document.getElementById('factura-iva').textContent = formatCurrency(totalesFactura.iva);
+  const ivaRetenidoRow = document.getElementById('factura-iva-retenido-row');
+  const ivaRetenidoElement = document.getElementById('factura-iva-retenido');
+  const ivaRetenidoEditor = document.getElementById('factura-iva-retenido-editor');
+  const ivaPercibidoRow = document.getElementById('factura-iva-percibido-row');
+  const ivaPercibidoElement = document.getElementById('factura-iva-percibido');
+  const ivaPercibidoEditor = document.getElementById('factura-iva-percibido-editor');
+  const rentaRetenidaRow = document.getElementById('factura-renta-retenida-row');
+  const rentaRetenidaElement = document.getElementById('factura-renta-retenida');
+  const rentaRetenidaEditor = document.getElementById('factura-renta-retenida-editor');
+  const tipoDteFacturaDetalle = String(factura.tipo_dte || dteFactura.identificacion?.tipoDte || '').padStart(2, '0');
+  if (ivaRetenidoRow && ivaRetenidoElement) {
+    const mostrarRetencionDetalle = ['01', '03', '14'].includes(tipoDteFacturaDetalle);
+    ivaRetenidoRow.style.display = mostrarRetencionDetalle ? '' : 'none';
+    ivaRetenidoElement.textContent = formatCurrency(totalesFactura.ivaRete1 || 0);
+  }
+  if (ivaPercibidoRow && ivaPercibidoElement) {
+    ivaPercibidoRow.style.display = tipoDteFacturaDetalle === '03' ? '' : 'none';
+    ivaPercibidoElement.textContent = formatCurrency(totalesFactura.ivaPerci1 || 0);
+  }
+  if (rentaRetenidaRow && rentaRetenidaElement) {
+    rentaRetenidaRow.style.display = tipoDteFacturaDetalle === '14' ? '' : 'none';
+    rentaRetenidaElement.textContent = formatCurrency(totalesFactura.reteRenta || 0);
+  }
+  if (ivaRetenidoEditor) ivaRetenidoEditor.style.display = 'none';
+  if (ivaPercibidoEditor) ivaPercibidoEditor.style.display = 'none';
+  if (rentaRetenidaEditor) rentaRetenidaEditor.style.display = 'none';
   document.getElementById('factura-total').textContent = formatCurrency(totalesFactura.total);
   
   // Mostrar botones según el estado
@@ -5154,9 +6044,11 @@ function abrirModalVerFactura(factura) {
   const btnEditarClienteFactura = document.getElementById('btn-editar-cliente-factura');
   const btnEditarItemsFactura = document.getElementById('btn-editar-items-factura');
   const btnGuardarItemsFactura = document.getElementById('btn-guardar-items-factura');
+  const btnEditarRetencionFactura = document.getElementById('btn-editar-retencion-factura');
+  const btnGuardarRetencionFactura = document.getElementById('btn-guardar-retencion-factura');
   const btnReenviarFactura = document.getElementById('btn-reenviar-factura');
-  const estadoFactura = normalizarEstadoFactura(factura.estado);
-  const tieneSelloRecepcion = Boolean(factura.sello_recepcion);
+  const estadoFactura = estadoVisual;
+  const tieneSelloRecepcion = Boolean(factura.sello_recepcion) && !facturaTieneObservacionDocumentoInvalido(factura);
   
   btnFirmar.style.display = 'none';
   btnEnviar.style.display = 'none';
@@ -5169,6 +6061,8 @@ function abrirModalVerFactura(factura) {
   if (btnEditarClienteFactura) btnEditarClienteFactura.style.display = 'none';
   if (btnEditarItemsFactura) btnEditarItemsFactura.style.display = 'none';
   if (btnGuardarItemsFactura) btnGuardarItemsFactura.style.display = 'none';
+  if (btnEditarRetencionFactura) btnEditarRetencionFactura.style.display = 'none';
+  if (btnGuardarRetencionFactura) btnGuardarRetencionFactura.style.display = 'none';
   if (btnReenviarFactura) btnReenviarFactura.style.display = 'none';
   btnEnviar.onclick = null;
   btnEnviar.textContent = '📤 Enviar a Hacienda';
@@ -5189,17 +6083,13 @@ function abrirModalVerFactura(factura) {
     btnEnviar.onclick = () => procesarContingenciaFactura(factura.id);
   }
 
-  if (estadoFactura === 'ENVIADO' && btnAnular) {
+  if (estadoFactura === 'ENVIADO' && btnAnular && facturaPuedeAnularsePorPlazo(factura)) {
     btnAnular.style.display = 'inline-flex';
     btnAnular.onclick = () => anularFacturaHacienda(factura.id);
   }
 
   if (estadoFactura === 'RECHAZADO' && !tieneSelloRecepcion) {
-    if (facturaRechazadaPorTipoOperacionEnLote(factura) || facturaRechazadaPorEventoContingencia(factura)) {
-      btnEnviar.style.display = 'inline-flex';
-      btnEnviar.textContent = 'Procesar Contingencia';
-      btnEnviar.onclick = () => procesarContingenciaFactura(factura.id);
-    } else if (facturaRechazadaPorConexion(factura) || facturaRechazadaPorTipoOperacion(factura)) {
+    if (facturaPuedePasarAContingencia(factura)) {
       btnEnviar.style.display = 'inline-flex';
       btnEnviar.textContent = 'Pasar a Contingencia';
       btnEnviar.onclick = () => convertirRechazoConexionAContingencia(factura.id);
@@ -5211,9 +6101,7 @@ function abrirModalVerFactura(factura) {
     }
 
     if (btnReenviarFactura &&
-      !facturaRechazadaPorConexion(factura) &&
-      !facturaRechazadaPorTipoOperacion(factura) &&
-      !facturaRechazadaPorEventoContingencia(factura)) {
+      !facturaPuedePasarAContingencia(factura)) {
       btnReenviarFactura.style.display = 'inline-flex';
       btnReenviarFactura.onclick = () => reenviarFacturaCorregida(factura.id);
     }
@@ -5221,6 +6109,11 @@ function abrirModalVerFactura(factura) {
     if (btnEditarItemsFactura) {
       btnEditarItemsFactura.style.display = 'inline-flex';
       btnEditarItemsFactura.onclick = () => editarItemsFacturaRechazada(factura.id);
+    }
+
+    if (btnEditarRetencionFactura && ['01', '03', '14'].includes(tipoDteFacturaDetalle)) {
+      btnEditarRetencionFactura.style.display = 'inline-flex';
+      btnEditarRetencionFactura.onclick = () => editarRetencionFacturaRechazada(factura.id);
     }
   }
   
@@ -5237,7 +6130,11 @@ function abrirModalVerFactura(factura) {
       btnDescargarPDF.onclick = () => descargarPDFFactura(factura);
     }
 
-    if (btnEnviarCorreo && ['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estadoFactura)) {
+    if (btnEnviarCorreo && facturaPuedeEnviarsePorCorreo({
+      ...factura,
+      estado: estadoFactura,
+      sello_recepcion: factura.sello_recepcion
+    })) {
       btnEnviarCorreo.style.display = 'inline-flex';
       btnEnviarCorreo.onclick = () => abrirModalCorreo(factura);
     }
@@ -5255,7 +6152,7 @@ function cerrarModalVerFactura() {
 // Firmar factura
 async function firmarFactura(facturaId, opciones = {}) {
   try {
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return false;
@@ -5308,7 +6205,7 @@ async function firmarFactura(facturaId, opciones = {}) {
 // Firmar con certificado local automáticamente
 async function firmarConCertificadoLocal(facturaId, opciones = {}) {
   try {
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return false;
@@ -5351,6 +6248,7 @@ async function firmarConCertificadoLocal(facturaId, opciones = {}) {
     try {
       jsonDte = parseDTEGuardado(factura.json_dte);
       limpiarFirmasDTE(jsonDte);
+      normalizarDocumentosReceptorDTE(jsonDte);
     } catch (e) {
       console.error('Error parseando JSON DTE:', e);
     }
@@ -5399,7 +6297,7 @@ async function firmarConCertificadoLocal(facturaId, opciones = {}) {
 // Firmar con el firmador interno compatible con MH/SVFE
 async function firmarConFirmadorSVFE(facturaId, opciones = {}) {
   try {
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return false;
@@ -5411,6 +6309,7 @@ async function firmarConFirmadorSVFE(facturaId, opciones = {}) {
     try {
       jsonDte = parseDTEGuardado(factura.json_dte);
       limpiarFirmasDTE(jsonDte);
+      normalizarDocumentosReceptorDTE(jsonDte);
     } catch (e) {
       showNotification('Error al parsear DTE: ' + e.message, 'error');
       return false;
@@ -5453,7 +6352,7 @@ async function firmarConFirmadorSVFE(facturaId, opciones = {}) {
 // Firmar con firmador web del MH usando credenciales guardadas
 async function firmarConFirmadorWeb(facturaId, opciones = {}) {
   try {
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return false;
@@ -5466,6 +6365,7 @@ async function firmarConFirmadorWeb(facturaId, opciones = {}) {
     try {
       jsonDte = parseDTEGuardado(factura.json_dte);
       limpiarFirmasDTE(jsonDte);
+      normalizarDocumentosReceptorDTE(jsonDte);
     } catch (e) {
       console.error('Error parseando JSON DTE:', e);
     }
@@ -5517,7 +6417,7 @@ async function procesarFirmaDocumento() {
     const passwordFirmador = document.getElementById('firmador-password').value;
     const pinCertificado = document.getElementById('firmador-pin').value;
     
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return;
@@ -5543,6 +6443,7 @@ async function procesarFirmaDocumento() {
     try {
       jsonDte = parseDTEGuardado(factura.json_dte);
       limpiarFirmasDTE(jsonDte);
+      normalizarDocumentosReceptorDTE(jsonDte);
     } catch (e) {
       showNotification('Error al parsear DTE: ' + e.message, 'error');
       return;
@@ -5738,7 +6639,7 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
       ]);
     }
 
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
     if (!factura) {
       if (usarProgreso) await finalizarProcesoEnvio('No se encontró la factura.', 'error');
       showNotification('Factura no encontrada', 'error');
@@ -5788,6 +6689,26 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
       return false;
     }
 
+    if (dteRetencionNecesitaRefirmaPorDocumento(dteFirmado)) {
+      const dteCorregido = obtenerDTEContenido(dteFirmado);
+      limpiarFirmasDTE(dteCorregido);
+      normalizarDocumentosReceptorDTE(dteCorregido);
+      await window.electronAPI.updateFacturaCorreccion(facturaId, {
+        estado: 'PENDIENTE',
+        observaciones: 'Documento de retención normalizado antes del reenvío.',
+        json_dte: dteCorregido
+      });
+      await loadFacturas();
+      if (usarProgreso) await avanzarProcesoEnvio('Re-firmando retención con DUI en formato aceptado...');
+      const firmada = await firmarFactura(facturaId, { cerrarModal: false, progreso: false });
+      if (!firmada) {
+        if (usarProgreso) await finalizarProcesoEnvio('Se normalizó el DTE, pero no se pudo firmar nuevamente.', 'error');
+        return false;
+      }
+      await loadFacturas();
+      return await enviarFacturaHacienda(facturaId, { ...opciones, confirmar: false });
+    }
+
     if (dteUsaTransmisionContingencia(dteFirmado) && opciones.permitirTransmisionContingencia !== true) {
       if (usarProgreso) {
         await finalizarProcesoEnvio('El DTE está marcado para transmisión por contingencia.', 'warning');
@@ -5816,24 +6737,33 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
     });
     
     if (resultado.success) {
-      if (!resultado.selloRecibido) {
+      const documentoInvalidoMH = respuestaHaciendaTieneDocumentoInvalido(resultado);
+      const estadoRechazadoMH = respuestaHaciendaEstaRechazada(resultado);
+      if (estadoRechazadoMH || !resultado.selloRecibido) {
         const mensajeSinSello = resultado.mensaje ||
           resultado.descripcionMsg ||
-          'Hacienda no devolvió sello de recepción para el documento.';
+          (!resultado.selloRecibido && documentoInvalidoMH
+            ? 'Hacienda rechazó el documento por receptor.numDocumento inválido.'
+            : estadoRechazadoMH
+            ? 'Hacienda rechazó el documento.'
+            : 'Hacienda no devolvió sello de recepción para el documento.');
+        const mensajeRechazo = documentoInvalidoMH
+          ? agregarDetalleDocumentoReceptor(mensajeSinSello, dteFirmado)
+          : mensajeSinSello;
         const bitacoraSinSello = crearBitacoraRechazoHacienda(
           {
             ...resultado,
-            estado: resultado.estado || 'SIN_SELLO',
-            error: mensajeSinSello,
+            estado: 'RECHAZADO',
+            error: mensajeRechazo,
             errorDetalle: {
-              tipo: 'SIN_SELLO_RECEPCION',
+              tipo: !resultado.selloRecibido && documentoInvalidoMH ? 'VALIDACION' : 'SIN_SELLO_RECEPCION',
               codigo: resultado.codigo || null,
-              mensaje: mensajeSinSello,
+              mensaje: mensajeRechazo,
               observaciones: resultado.observaciones || [],
               raw: resultado
             }
           },
-          mensajeSinSello
+          mensajeRechazo
         );
 
         await window.electronAPI.updateFacturaEstado(
@@ -5843,15 +6773,21 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
           JSON.stringify(bitacoraSinSello)
         );
         await loadFacturas();
-        showNotification('Hacienda respondió sin sello de aprobación. Documento marcado con error.', 'error');
+        showNotification(mensajeRechazo, 'error');
         cerrarModalVerFactura();
         if (usarProgreso) {
-          await finalizarProcesoEnvio(mensajeSinSello, 'error');
+          await finalizarProcesoEnvio(mensajeRechazo, 'error');
         }
         return false;
       }
 
-      showNotification('✓ Factura enviada exitosamente a Hacienda', 'success');
+      const enviadaConObservaciones = Array.isArray(resultado.observaciones) && resultado.observaciones.length > 0;
+      showNotification(
+        enviadaConObservaciones
+          ? '✓ Factura recibida por Hacienda con observaciones'
+          : '✓ Factura enviada exitosamente a Hacienda',
+        'success'
+      );
       if (usarProgreso) {
         await avanzarProcesoEnvio('Aprobado por Hacienda. Sello de recepción recibido.');
       }
@@ -5945,6 +6881,10 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
         if (error.codigo) {
           errorMsg += `\n\nCódigo: ${error.codigo}`;
         }
+
+        if (observacionesMencionanReceptorNumDocumento(resultado)) {
+          errorMsg = agregarDetalleDocumentoReceptor(errorMsg, dteFirmado);
+        }
         
       } else {
         // Formato de error antiguo
@@ -5958,6 +6898,9 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
         }
         if (resultado.observaciones && resultado.observaciones.length > 0) {
           errorMsg += '\nObservaciones: ' + formatearObservaciones(resultado.observaciones).join(', ');
+        }
+        if (observacionesMencionanReceptorNumDocumento(resultado)) {
+          errorMsg = agregarDetalleDocumentoReceptor(errorMsg, dteFirmado);
         }
       }
       
@@ -6003,7 +6946,7 @@ async function enviarFacturaHacienda(facturaId, opciones = {}) {
     
     // En caso de error inesperado, intentar registrar en contingencia
     try {
-      const factura = state.facturas.find(f => f.id === facturaId);
+      const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
       if (factura && factura.json_dte) {
         await registrarDocumentoEnContingencia(facturaId, '5', error.message);
         showNotification('⚠️ Error inesperado. Factura guardada en contingencia.', 'warning');
@@ -6035,7 +6978,7 @@ function redondearDos(valor) {
 
 function obtenerDocumentoReceptorParaAnulacion(dte, config) {
   const dteContenido = obtenerDTEContenido(dte);
-  const receptor = dteContenido?.receptor || {};
+  const receptor = dteContenido?.receptor || dteContenido?.sujetoExcluido || {};
   const tieneNumDocumento = Object.prototype.hasOwnProperty.call(receptor, 'numDocumento');
   const tieneNit = Object.prototype.hasOwnProperty.call(receptor, 'nit');
   const tipoDocumento = receptor.tipoDocumento || (receptor.nit ? '36' : null) || null;
@@ -6104,11 +7047,11 @@ function actualizarAyudaTipoAnulacion(tipoDte, factura = null) {
   const tipo = String(tipoDte || '').padStart(2, '0');
   if (tipo === '03') {
     if (ccfSuperaVentanaInvalidacionDirecta(factura)) {
-      contenido.textContent = 'Este CCF ya superó las 24 horas. No puede usarse tipo 2 - Rescindir operación; debe corregirse mediante Nota de Crédito relacionada.';
+      contenido.textContent = 'Este CCF ya superó el plazo de anulación directa de las 23:59 del día siguiente a su emisión; debe corregirse mediante Nota de Crédito relacionada.';
       ayuda.style.display = '';
       return;
     }
-    contenido.textContent = 'El CCF puede invalidarse dentro del plazo permitido. Use tipo 2 si se rescinde toda la operación; use tipo 1 o 3 cuando exista un CCF corregido que reemplaza al anterior.';
+    contenido.textContent = 'El CCF puede invalidarse directamente hasta las 23:59 del día siguiente a su emisión. Use tipo 2 si se rescinde toda la operación; use tipo 1 o 3 cuando exista un CCF corregido que reemplaza al anterior.';
     ayuda.style.display = '';
     return;
   }
@@ -6145,7 +7088,7 @@ function toggleCodigoReemplazoAnulacion(tipoAnulacion, tipoDte = null) {
   if (!grupo || !input) return;
 
   const facturaId = Number(document.getElementById('anulacion-factura-id')?.value || 0);
-  const factura = state.facturas.find(f => f.id === facturaId);
+  const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
   const tipoDocumento = tipoDte || factura?.tipo_dte || '01';
   const requerido = requiereCodigoGeneracionReemplazo(tipoDocumento, tipoAnulacion);
 
@@ -6167,8 +7110,9 @@ function validarEventoAnulacionPrevio(factura, dte, tipoAnulacion, codigoGenerac
     return `Tipo de anulación inválido para DTE ${tipoDte}. Use: ${permitidos.join(', ')}.`;
   }
 
-  if (ccfSuperaVentanaInvalidacionDirecta(factura)) {
-    return 'El CCF ya superó las 24 horas desde su emisión. No puede usar 2 - Rescindir operación; debe corregirse mediante Nota de Crédito relacionada al CCF.';
+  const validacionPlazo = obtenerLimiteAnulacionDirecta(factura);
+  if (!validacionPlazo.permitido) {
+    return validacionPlazo.mensaje;
   }
 
   if (Number(tipoAnulacion) === 2 && !dtePermiteTipoAnulacionRescindir(tipoDte)) {
@@ -6189,14 +7133,16 @@ function crearEventoAnulacion(factura, dte, opciones = {}) {
   dte = obtenerDTEContenido(dte);
   const ahora = new Date();
   const config = state.configuracion || {};
-  const receptor = dte.receptor || {};
+  const receptor = dte.receptor || dte.sujetoExcluido || {};
   const receptorDocumento = obtenerDocumentoReceptorParaAnulacion(dte, config);
   const nitEmisor = limpiarDocumentoFiscal(dte.emisor?.nit || config.nit || config.hacienda_usuario);
   const nombreEmisor = dte.emisor?.nombre || config.nombre_empresa;
-  const telefonoEmisor = dte.emisor?.telefono || config.telefono || null;
-  const correoEmisor = dte.emisor?.correo || config.email || null;
+  const telefonoEmisor = valorTextoNoVacio(dte.emisor?.telefono || config.telefono);
+  const correoEmisor = valorTextoNoVacio(dte.emisor?.correo || config.email);
   const tipDocSolicita = receptorDocumento.tipoDocumento || '36';
   const numDocSolicita = receptorDocumento.numeroDocumento || limpiarDocumentoFiscal(config.nit) || nitEmisor;
+  const telefonoReceptor = valorTextoNoVacio(receptor.telefono);
+  const correoReceptor = valorTextoNoVacio(receptor.correo);
   const tipoAnulacion = Number(opciones.tipoAnulacion || 2);
   const tipoDte = dte.identificacion?.tipoDte || factura.tipo_dte;
   const codigoGeneracionR = requiereCodigoGeneracionReemplazo(tipoDte, tipoAnulacion)
@@ -6234,8 +7180,8 @@ function crearEventoAnulacion(factura, dte, opciones = {}) {
       tipoDocumento: receptorDocumento.tipoDocumento,
       numDocumento: receptorDocumento.numeroDocumento,
       nombre: receptor.nombre || 'CONSUMIDOR FINAL',
-      telefono: receptor.telefono || null,
-      correo: receptor.correo || null
+      ...(telefonoReceptor ? { telefono: telefonoReceptor } : {}),
+      ...(correoReceptor ? { correo: correoReceptor } : {})
     },
     motivo: {
       tipoAnulacion,
@@ -6292,30 +7238,100 @@ function obtenerFechaHoraEmisionDTEParaAnulacion(factura) {
   return Number.isNaN(fechaHora.getTime()) ? null : fechaHora;
 }
 
+function obtenerFechaEmisionLocalParaAnulacion(factura) {
+  let dte = {};
+  try {
+    dte = obtenerDTEContenido(parseDTEGuardado(factura?.json_dte));
+  } catch {
+    dte = {};
+  }
+
+  const fecha = dte?.identificacion?.fecEmi || String(factura?.fecha_emision || factura?.created_at || '').slice(0, 10);
+  const match = String(fecha || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const fechaLocal = new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0);
+  return Number.isNaN(fechaLocal.getTime()) ? null : fechaLocal;
+}
+
+function finDeDiaLocal(fecha) {
+  const fin = new Date(fecha);
+  fin.setHours(23, 59, 59, 999);
+  return fin;
+}
+
+function sumarDiasFechaLocal(fecha, dias) {
+  const resultado = new Date(fecha);
+  resultado.setDate(resultado.getDate() + dias);
+  return resultado;
+}
+
+function obtenerLimiteAnulacionDirecta(factura) {
+  const tipoDte = String(factura?.tipo_dte || '').padStart(2, '0');
+  const fechaEmision = obtenerFechaEmisionLocalParaAnulacion(factura);
+  if (!fechaEmision) {
+    return {
+      permitido: false,
+      limite: null,
+      mensaje: 'No se pudo determinar la fecha de emisión para validar el plazo de anulación.'
+    };
+  }
+
+  if (tipoDte === '03') {
+    const limite = finDeDiaLocal(sumarDiasFechaLocal(fechaEmision, 1));
+    return {
+      permitido: Date.now() <= limite.getTime(),
+      limite,
+      mensaje: 'El CCF solo puede anularse directamente hasta las 23:59 del día siguiente a su emisión. Después de ese plazo debe corregirse mediante Nota de Crédito.'
+    };
+  }
+
+  if (['01', '11', '14'].includes(tipoDte)) {
+    const limite = finDeDiaLocal(sumarDiasFechaLocal(fechaEmision, 90));
+    return {
+      permitido: Date.now() <= limite.getTime(),
+      limite,
+      mensaje: 'Este documento solo puede anularse directamente durante 90 días contados desde su fecha de emisión.'
+    };
+  }
+
+  return {
+    permitido: true,
+    limite: null,
+    mensaje: null
+  };
+}
+
+function facturaPuedeAnularsePorPlazo(factura) {
+  return obtenerLimiteAnulacionDirecta(factura).permitido;
+}
+
 function ccfSuperaVentanaInvalidacionDirecta(factura) {
   if (String(factura?.tipo_dte || '').padStart(2, '0') !== '03') return false;
-
-  const fechaHoraEmision = obtenerFechaHoraEmisionDTEParaAnulacion(factura);
-  if (!fechaHoraEmision) return false;
-
-  const horasTranscurridas = (Date.now() - fechaHoraEmision.getTime()) / (1000 * 60 * 60);
-  return horasTranscurridas > 24;
+  return !obtenerLimiteAnulacionDirecta(factura).permitido;
 }
 
 async function anularFacturaHacienda(facturaId) {
-  const factura = state.facturas.find(f => f.id === facturaId);
+  const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
   if (!factura) {
     showNotification('Factura no encontrada', 'error');
     return;
   }
 
-  if (normalizarEstadoFactura(factura.estado) !== 'ENVIADO') {
+  if (obtenerEstadoFacturaVisual(factura) !== 'ENVIADO' || facturaTieneObservacionDocumentoInvalido(factura)) {
     showNotification('Solo se pueden anular facturas enviadas a Hacienda', 'warning');
     return;
   }
 
   if (!factura.sello_recepcion) {
     showNotification('La factura no tiene sello de recepción de Hacienda', 'error');
+    return;
+  }
+
+  const validacionPlazo = obtenerLimiteAnulacionDirecta(factura);
+  if (!validacionPlazo.permitido) {
+    showNotification(validacionPlazo.mensaje, 'warning');
     return;
   }
 
@@ -6342,20 +7358,26 @@ async function procesarAnulacionFactura() {
     const tipo = Number(document.getElementById('anulacion-tipo').value);
     const motivo = document.getElementById('anulacion-motivo').value.trim();
     const codigoGeneracionR = normalizarCodigoGeneracion(document.getElementById('anulacion-codigo-reemplazo')?.value);
-    const factura = state.facturas.find(f => f.id === facturaId);
+    const factura = state.facturas.find(f => Number(f.id) === Number(facturaId));
 
     if (!factura) {
       showNotification('Factura no encontrada', 'error');
       return;
     }
 
-    if (normalizarEstadoFactura(factura.estado) !== 'ENVIADO') {
+    if (obtenerEstadoFacturaVisual(factura) !== 'ENVIADO' || facturaTieneObservacionDocumentoInvalido(factura)) {
       showNotification('Solo se pueden anular facturas enviadas a Hacienda', 'warning');
       return;
     }
 
     if (!factura.sello_recepcion) {
       showNotification('La factura no tiene sello de recepción de Hacienda', 'error');
+      return;
+    }
+
+    const validacionPlazo = obtenerLimiteAnulacionDirecta(factura);
+    if (!validacionPlazo.permitido) {
+      showNotification(validacionPlazo.mensaje, 'warning');
       return;
     }
 
@@ -6560,7 +7582,7 @@ function obtenerFacturaActualizadaParaPDF(factura) {
   return {
     ...factura,
     ...facturaActualizada,
-    estado: normalizarEstadoFactura(facturaActualizada.estado || factura.estado)
+    estado: obtenerEstadoFacturaVisual(facturaActualizada)
   };
 }
 
@@ -6585,6 +7607,11 @@ function construirJsonDTEConRespuestaHacienda(dteFirmado, respuestaHacienda = {}
 
 function abrirModalCorreo(factura) {
   const facturaPDF = obtenerFacturaActualizadaParaPDF(factura);
+  if (!facturaPuedeEnviarsePorCorreo(facturaPDF)) {
+    showNotification('No se puede enviar por correo un documento rechazado o sin sello de aprobación.', 'warning');
+    return;
+  }
+
   const clienteData = typeof facturaPDF.cliente_datos === 'string'
     ? JSON.parse(facturaPDF.cliente_datos)
     : facturaPDF.cliente_datos || {};
@@ -6619,8 +7646,15 @@ async function enviarCorreoAutomaticoDocumentoAprobado(facturaId, dteFirmado, se
 
     const facturaCorreo = obtenerFacturaActualizadaParaPDF({
       ...factura,
+      estado: selloRecepcion || factura.sello_recepcion ? 'ACEPTADO' : factura.estado,
       sello_recepcion: selloRecepcion || factura.sello_recepcion
     });
+
+    if (facturaTieneError(facturaCorreo)) {
+      showNotification('No se enviará correo porque el documento está rechazado por Hacienda.', 'warning');
+      return false;
+    }
+
     if (!facturaCorreo.sello_recepcion) {
       showNotification('No se enviará correo porque Hacienda no devolvió sello de aprobación.', 'warning');
       return false;
@@ -6740,19 +7774,13 @@ async function procesarEnvioCorreoFactura() {
       return;
     }
 
+    if (!facturaPuedeEnviarsePorCorreo(facturaPDF)) {
+      showNotification('No se puede enviar por correo un documento rechazado o sin sello de aprobación.', 'warning');
+      return;
+    }
+
     if (!state.configuracion?.correo_usuario || !state.configuracion?.correo_password) {
       showNotification('Configure el correo Gmail y la contraseña de aplicación en Configuración.', 'error');
-      return;
-    }
-
-    const estadoFactura = normalizarEstadoFactura(facturaPDF.estado);
-    if (!['ENVIADO', 'ACEPTADO', 'ANULADO'].includes(estadoFactura)) {
-      showNotification('Solo puede enviar por correo documentos ya enviados a Hacienda.', 'warning');
-      return;
-    }
-
-    if (estadoFactura !== 'ANULADO' && !facturaPDF.sello_recepcion) {
-      showNotification('Solo puede enviar por correo documentos con sello de aprobación de Hacienda.', 'warning');
       return;
     }
 

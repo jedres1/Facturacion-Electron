@@ -1,11 +1,13 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const crypto = require('crypto');
 const { app } = require('electron');
 
 class DatabaseManager {
   constructor() {
     const userDataPath = app.getPath('userData');
     const dbPath = path.join(userDataPath, 'facturacion.db');
+    this.dbPath = dbPath;
     this.db = new Database(dbPath);
     this.initDatabase();
   }
@@ -45,12 +47,31 @@ class DatabaseManager {
         correo_password TEXT,
         correo_remitente TEXT,
         correo_nombre TEXT,
+        backup_url TEXT,
+        backup_token TEXT,
+        backup_encryption_key TEXT,
+        backup_automatico INTEGER DEFAULT 0,
+        backup_ultimo_at DATETIME,
         tipos_dte_habilitados TEXT DEFAULT '["01","03","05","06","07","11","14"]',
         logo_path TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        nombre TEXT,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        activo INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    this.seedUsuarioInicial();
 
     // Tabla de clientes
     this.db.exec(`
@@ -74,6 +95,7 @@ class DatabaseManager {
         plazo_pago TEXT NOT NULL DEFAULT '01',
         periodo_pago INTEGER NOT NULL DEFAULT 1,
         aplica_exportacion INTEGER DEFAULT 0,
+        sujeto_excluido_domiciliado INTEGER DEFAULT 1,
         cod_pais TEXT,
         nombre_pais TEXT,
         tipo_persona_exportacion INTEGER,
@@ -113,7 +135,8 @@ class DatabaseManager {
       [`cod_pais`, `TEXT`],
       [`nombre_pais`, `TEXT`],
       [`tipo_persona_exportacion`, `INTEGER`],
-      [`desc_actividad_exportacion`, `TEXT`]
+      [`desc_actividad_exportacion`, `TEXT`],
+      [`sujeto_excluido_domiciliado`, `INTEGER DEFAULT 1`]
     ].forEach(([columna, tipo]) => {
       try {
         this.db.exec(`ALTER TABLE clientes ADD COLUMN ${columna} ${tipo}`);
@@ -198,6 +221,11 @@ class DatabaseManager {
       [`correo_password`, `TEXT`],
       [`correo_remitente`, `TEXT`],
       [`correo_nombre`, `TEXT`],
+      [`backup_url`, `TEXT`],
+      [`backup_token`, `TEXT`],
+      [`backup_encryption_key`, `TEXT`],
+      [`backup_automatico`, `INTEGER DEFAULT 0`],
+      [`backup_ultimo_at`, `DATETIME`],
       [`tipos_dte_habilitados`, `TEXT DEFAULT '["01","03","05","06","07","11","14"]'`],
       [`logo_path`, `TEXT`]
     ].forEach(([columna, tipo]) => {
@@ -467,6 +495,102 @@ class DatabaseManager {
     return stmt.get();
   }
 
+  normalizarDocumento(valor) {
+    return String(valor || '').replace(/[^0-9A-Za-z]/g, '').toLowerCase();
+  }
+
+  normalizarEmail(valor) {
+    return String(valor || '').trim().toLowerCase();
+  }
+
+  crearPasswordHash(password, salt = crypto.randomBytes(16).toString('hex')) {
+    const hash = crypto
+      .pbkdf2Sync(String(password || ''), salt, 120000, 64, 'sha512')
+      .toString('hex');
+
+    return { hash, salt };
+  }
+
+  verificarPassword(password, usuario) {
+    if (!usuario?.password_hash || !usuario?.password_salt) return false;
+
+    const { hash } = this.crearPasswordHash(password, usuario.password_salt);
+    const esperado = Buffer.from(usuario.password_hash, 'hex');
+    const recibido = Buffer.from(hash, 'hex');
+
+    return esperado.length === recibido.length && crypto.timingSafeEqual(esperado, recibido);
+  }
+
+  seedUsuarioInicial() {
+    const email = 'jandres.gerardo@outlook.com';
+    const existente = this.db.prepare('SELECT id FROM usuarios WHERE lower(email) = lower(?)').get(email);
+    if (existente) return;
+
+    const salt = '2a1d55381ad6575f0edcd545837f728b';
+    const hash = 'dc751c2a942e83f141afd0d0df98352e52ce0dcb1cf3c2a54bb9625fc8cfaa5ed2ebd41d7933243710d19254b419042e9f849f4e52d2de5fe2b9c643062423c5';
+    this.db.prepare(`
+      INSERT INTO usuarios (email, nombre, password_hash, password_salt, activo)
+      VALUES (?, ?, ?, ?, 1)
+    `).run(email, 'Administrador', hash, salt);
+  }
+
+  getUsuarioParaLogin(identificador) {
+    const email = this.normalizarEmail(identificador);
+    const documento = this.normalizarDocumento(identificador);
+    const config = this.getConfiguracion();
+
+    let usuario = null;
+    const coincideCorreoUsuario = email.includes('@');
+
+    if (coincideCorreoUsuario) {
+      usuario = this.db.prepare(`
+        SELECT * FROM usuarios
+        WHERE lower(email) = lower(?) AND activo = 1
+        LIMIT 1
+      `).get(email);
+    }
+
+    const correosEmisor = [
+      config?.email,
+      config?.correo_usuario,
+      config?.correo_remitente
+    ].map(correo => this.normalizarEmail(correo)).filter(Boolean);
+
+    const documentoEmisor = this.normalizarDocumento(config?.nit || config?.hacienda_usuario);
+    const coincideEmisor = Boolean(
+      (documento && documentoEmisor && documento === documentoEmisor) ||
+      (email && correosEmisor.includes(email))
+    );
+
+    if (!usuario && coincideEmisor) {
+      usuario = this.db.prepare(`
+        SELECT * FROM usuarios
+        WHERE activo = 1
+        ORDER BY id ASC
+        LIMIT 1
+      `).get();
+    }
+
+    return usuario || null;
+  }
+
+  loginUsuario({ identificador, password }) {
+    const usuario = this.getUsuarioParaLogin(identificador);
+
+    if (!usuario || !this.verificarPassword(password, usuario)) {
+      return { success: false, error: 'Credenciales inválidas' };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: usuario.id,
+        email: usuario.email,
+        nombre: usuario.nombre || usuario.email
+      }
+    };
+  }
+
   updateConfiguracion(config) {
     const existing = this.getConfiguracion();
     
@@ -482,6 +606,7 @@ class DatabaseManager {
             certificado_path = ?, certificado_password = ?,
             correo_smtp_host = ?, correo_smtp_port = ?, correo_smtp_secure = ?,
             correo_usuario = ?, correo_password = ?, correo_remitente = ?, correo_nombre = ?,
+            backup_url = ?, backup_token = ?, backup_encryption_key = ?, backup_automatico = ?,
             tipos_dte_habilitados = ?,
             logo_path = ?,
             updated_at = CURRENT_TIMESTAMP
@@ -502,6 +627,10 @@ class DatabaseManager {
         config.correo_password,
         config.correo_remitente,
         config.correo_nombre,
+        config.backup_url,
+        config.backup_token,
+        config.backup_encryption_key,
+        config.backup_automatico ? 1 : 0,
         this.normalizarTiposDteHabilitados(config.tipos_dte_habilitados),
         config.logo_path,
         existing.id
@@ -515,8 +644,9 @@ class DatabaseManager {
          hacienda_password, hacienda_ambiente, tipo_firma, firmador_usuario, 
          firmador_password, firmador_pin, certificado_path, certificado_password,
          correo_smtp_host, correo_smtp_port, correo_smtp_secure, correo_usuario,
-         correo_password, correo_remitente, correo_nombre, tipos_dte_habilitados, logo_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         correo_password, correo_remitente, correo_nombre, backup_url, backup_token,
+         backup_encryption_key, backup_automatico, tipos_dte_habilitados, logo_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       return stmt.run(
         config.nit, config.nrc, config.nombre_empresa, config.nombre_comercial, config.tipo_persona,
@@ -533,10 +663,25 @@ class DatabaseManager {
         config.correo_password,
         config.correo_remitente,
         config.correo_nombre,
+        config.backup_url,
+        config.backup_token,
+        config.backup_encryption_key,
+        config.backup_automatico ? 1 : 0,
         this.normalizarTiposDteHabilitados(config.tipos_dte_habilitados),
         config.logo_path
       );
     }
+  }
+
+  registrarBackupServidor(fecha = new Date()) {
+    const existing = this.getConfiguracion();
+    if (!existing) return null;
+
+    return this.db.prepare(`
+      UPDATE configuracion
+      SET backup_ultimo_at = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(fecha.toISOString(), existing.id);
   }
 
   normalizarTiposDteHabilitados(tipos) {
@@ -721,8 +866,8 @@ class DatabaseManager {
       INSERT INTO clientes 
       (tipo_documento, numero_documento, nrc, nombre, nombre_comercial, tipo_persona,
        telefono, email, direccion, departamento, municipio, distrito, giro,
-       tipo_dte_default, condicion_iva, plazo_pago, periodo_pago, aplica_exportacion, cod_pais, nombre_pais, tipo_persona_exportacion, desc_actividad_exportacion)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       tipo_dte_default, condicion_iva, plazo_pago, periodo_pago, aplica_exportacion, sujeto_excluido_domiciliado, cod_pais, nombre_pais, tipo_persona_exportacion, desc_actividad_exportacion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     return stmt.run(
       cliente.tipo_documento, cliente.numero_documento, cliente.nrc, cliente.nombre,
@@ -733,6 +878,7 @@ class DatabaseManager {
       cliente.plazo_pago || '01',
       Number(cliente.periodo_pago || 1),
       cliente.aplica_exportacion ? 1 : 0,
+      cliente.sujeto_excluido_domiciliado === 0 ? 0 : 1,
       cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
       cliente.desc_actividad_exportacion
     );
@@ -744,7 +890,7 @@ class DatabaseManager {
       UPDATE clientes 
       SET tipo_documento = ?, numero_documento = ?, nrc = ?, nombre = ?, nombre_comercial = ?,
           tipo_persona = ?, telefono = ?, email = ?, direccion = ?, departamento = ?, 
-          municipio = ?, distrito = ?, giro = ?, tipo_dte_default = ?, condicion_iva = ?, plazo_pago = ?, periodo_pago = ?, aplica_exportacion = ?, cod_pais = ?,
+          municipio = ?, distrito = ?, giro = ?, tipo_dte_default = ?, condicion_iva = ?, plazo_pago = ?, periodo_pago = ?, aplica_exportacion = ?, sujeto_excluido_domiciliado = ?, cod_pais = ?,
           nombre_pais = ?, tipo_persona_exportacion = ?, desc_actividad_exportacion = ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -758,6 +904,7 @@ class DatabaseManager {
       cliente.plazo_pago || '01',
       Number(cliente.periodo_pago || 1),
       cliente.aplica_exportacion ? 1 : 0,
+      cliente.sujeto_excluido_domiciliado === 0 ? 0 : 1,
       cliente.cod_pais, cliente.nombre_pais, cliente.tipo_persona_exportacion,
       cliente.desc_actividad_exportacion, id
     );

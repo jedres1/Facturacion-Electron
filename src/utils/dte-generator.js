@@ -11,7 +11,8 @@ class DTEGenerator {
   constructor() {
     // Códigos de unidades de medida según catálogo MH
     this.unidadesMedida = {
-      'UND': 99,  // Unidad
+      'UND': 59,  // Unidad
+      'UNIDAD': 59,
       'KG': 14,   // Kilogramo
       'LT': 20,   // Litro
       'MT': 25,   // Metro
@@ -67,16 +68,19 @@ class DTEGenerator {
     const correlativo = opciones.correlativo || 1;
     const numeroControl = this.generarNumeroControl('01', config.codigo_establecimiento, config.punto_venta, correlativo);
     const cuerpoDocumento = this.construirCuerpoDocumentoFactura(items);
+    const resumenFactura = this.construirResumenFactura(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '01'));
 
     return {
       identificacion: this.construirIdentificacion(config, '01', 1, numeroControl, codigoGeneracion, now, opciones),
       documentoRelacionado: opciones.documentoRelacionado || null,
       emisor: this.construirEmisor(config),
-      receptor: this.construirReceptorFactura(cliente),
+      receptor: this.debeOmitirReceptorFactura(cliente, resumenFactura.montoTotalOperacion)
+        ? null
+        : this.construirReceptorFactura(cliente),
       otrosDocumentos: opciones.otrosDocumentos || null,
       ventaTercero: opciones.ventaTercero || null,
       cuerpoDocumento,
-      resumen: this.construirResumenFactura(this.ajustarResumenDesdeCuerpo(resumen, cuerpoDocumento, '01')),
+      resumen: resumenFactura,
       extension: opciones.extension || null,
       apendice: opciones.apendice || null
     };
@@ -242,6 +246,9 @@ class DTEGenerator {
    * Construir objeto Emisor
    */
   construirEmisor(config) {
+    const tipoPersona = String(config.tipo_persona || '').toLowerCase();
+    const tipoEstablecimiento = config.tipo_establecimiento || (tipoPersona.includes('natural') ? '02' : '01');
+
     return {
       nit: this.limpiarDocumento(config.nit),
       nrc: this.limpiarDocumento(config.nrc),
@@ -249,7 +256,7 @@ class DTEGenerator {
       codActividad: this.normalizarCodigoActividad(config.actividad_economica),
       descActividad: this.normalizarDescripcionActividad(config.actividad_economica, config.desc_actividad),
       nombreComercial: config.nombre_comercial || null,
-      tipoEstablecimiento: '01',
+      tipoEstablecimiento,
       direccion: {
         departamento: config.departamento,
         municipio: this.normalizarMunicipio(config.departamento, config.municipio),
@@ -258,9 +265,9 @@ class DTEGenerator {
       telefono: config.telefono,
       correo: config.email,
       codEstableMH: config.codigo_establecimiento || null,
-      codEstable: config.codigo_establecimiento || null,
+      codEstable: config.codigo_estable || null,
       codPuntoVentaMH: config.punto_venta || null,
-      codPuntoVenta: config.punto_venta || null
+      codPuntoVenta: config.cod_punto_venta || null
     };
   }
 
@@ -322,25 +329,42 @@ class DTEGenerator {
     return limpio ? limpio.padStart(2, '0') : null;
   }
 
+  construirDireccionReceptor(cliente, requerida = false) {
+    const complemento = String(cliente?.direccion || '').trim();
+    if (complemento.length < 5) {
+      return requerida
+        ? {
+            departamento: cliente?.departamento,
+            municipio: this.normalizarMunicipio(cliente?.departamento, cliente?.municipio),
+            complemento
+          }
+        : null;
+    }
+
+    return {
+      departamento: cliente.departamento,
+      municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
+      complemento
+    };
+  }
+
   /**
    * Construir objeto Receptor para Factura
    */
   construirReceptorFactura(cliente) {
     if (!cliente) return null;
     const tipoDocumento = cliente.tipo_documento || null;
+    const esDui = String(tipoDocumento) === '13';
+    const direccion = this.construirDireccionReceptor(cliente, false);
 
     return {
       tipoDocumento,
       numDocumento: this.normalizarDocumentoReceptor(tipoDocumento, cliente.numero_documento) || null,
       nrc: tipoDocumento === '36' ? (this.limpiarDocumento(cliente.nrc) || null) : null,
       nombre: cliente.nombre || null,
-      codActividad: cliente.giro ? this.normalizarCodigoActividad(cliente.giro) : null,
-      descActividad: cliente.giro ? this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad) : null,
-      direccion: cliente.direccion ? {
-        departamento: cliente.departamento,
-        municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
-        complemento: cliente.direccion
-      } : null,
+      codActividad: !esDui && cliente.giro ? this.normalizarCodigoActividad(cliente.giro) : null,
+      descActividad: !esDui && cliente.giro ? this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad) : null,
+      direccion,
       telefono: cliente.telefono || null,
       correo: cliente.email || null
     };
@@ -350,6 +374,8 @@ class DTEGenerator {
    * Construir objeto Receptor para CCF/NC (todos los campos requeridos)
    */
   construirReceptorCCF(cliente) {
+    const direccion = this.construirDireccionReceptor(cliente, true);
+
     return {
       nit: this.limpiarDocumento(cliente.numero_documento),
       nrc: this.limpiarDocumento(cliente.nrc),
@@ -357,11 +383,7 @@ class DTEGenerator {
       codActividad: this.normalizarCodigoActividad(cliente.giro),
       descActividad: this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad),
       nombreComercial: cliente.nombre_comercial || null,
-      direccion: {
-        departamento: cliente.departamento,
-        municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
-        complemento: cliente.direccion
-      },
+      direccion,
       telefono: cliente.telefono || null,
       correo: cliente.email
     };
@@ -372,6 +394,7 @@ class DTEGenerator {
    */
   construirReceptorRetencion(cliente) {
     const tipoDocumento = cliente.tipo_documento || '36';
+    const direccion = this.construirDireccionReceptor(cliente, true);
 
     return {
       tipoDocumento,
@@ -381,11 +404,7 @@ class DTEGenerator {
       codActividad: this.normalizarCodigoActividad(cliente.giro),
       descActividad: this.normalizarDescripcionActividad(cliente.giro, cliente.desc_actividad),
       nombreComercial: cliente.nombre_comercial || null,
-      direccion: {
-        departamento: cliente.departamento,
-        municipio: this.normalizarMunicipio(cliente.departamento, cliente.municipio),
-        complemento: cliente.direccion
-      },
+      direccion,
       telefono: cliente.telefono || null,
       correo: cliente.email
     };
@@ -535,6 +554,11 @@ class DTEGenerator {
     const total = esFacturaConsumidorFinal
       ? this.redondear(subTotalNeto + totalNoGravado)
       : this.redondear(subTotalNeto + totalIva + totalNoGravado);
+    const ivaRete1 = this.redondear(resumen.ivaRete1 || 0);
+    this.validarMaximoIvaRete1(tipoDte, totalGravadaNeto, ivaRete1);
+    const ivaPerci1 = tipoDte === '03' ? this.redondear(resumen.ivaPerci1 || 0) : 0;
+    const reteRenta = this.redondear(resumen.reteRenta || 0);
+    const totalPagar = this.redondear(Math.max(0, total + ivaPerci1 - ivaRete1 - reteRenta));
 
     return {
       ...resumen,
@@ -557,8 +581,11 @@ class DTEGenerator {
       total,
       montoTotalOperacion: total,
       totalNoGravado,
-      totalPagar: total,
-      pagos: this.ajustarPagosAlTotal(resumen.pagos, total)
+      ivaRete1,
+      ivaPerci1,
+      reteRenta,
+      totalPagar,
+      pagos: this.ajustarPagosAlTotal(resumen.pagos, totalPagar)
     };
   }
 
@@ -593,6 +620,9 @@ class DTEGenerator {
     const descuNoSuj = this.redondear(resumen.descuNoSuj || 0);
     const descuExenta = this.redondear(resumen.descuExenta || 0);
     const descuGravada = this.redondear(resumen.descuGravada || 0);
+    const ivaRete1 = this.redondear(resumen.ivaRete1 || 0);
+    const reteRenta = this.redondear(resumen.reteRenta || 0);
+    const totalPagar = this.redondear(resumen.totalPagar ?? Math.max(0, total - ivaRete1 - reteRenta));
 
     return {
       totalNoSuj: 0,
@@ -606,16 +636,16 @@ class DTEGenerator {
       totalDescu,
       tributos: null,
       subTotal: subtotal,
-      ivaRete1: 0,
-      reteRenta: 0,
+      ivaRete1,
+      reteRenta,
       montoTotalOperacion,
       totalNoGravado: 0,
-      totalPagar: total,
-      totalLetras: this.numeroALetras(total),
+      totalPagar,
+      totalLetras: this.numeroALetras(totalPagar),
       totalIva: totalIva,
       saldoFavor: 0,
       condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1, // 1=Contado, 2=Crédito, 3=Otro
-      pagos: this.normalizarPagos(resumen.pagos, total),
+      pagos: this.normalizarPagos(resumen.pagos, totalPagar),
       numPagoElectronico: null
     };
   }
@@ -627,11 +657,19 @@ class DTEGenerator {
     const resultado = this.construirResumenFactura(resumen);
     const totalIva = this.redondear(resumen.iva || 0);
     const total = this.redondear(resumen.total || 0);
+    const ivaRete1 = this.redondear(resumen.ivaRete1 || 0);
+    const ivaPerci1 = this.redondear(resumen.ivaPerci1 || 0);
+    const reteRenta = this.redondear(resumen.reteRenta || 0);
+    const totalPagar = this.redondear(Math.max(0, total + ivaPerci1 - ivaRete1 - reteRenta));
     resultado.tributos = totalIva > 0
       ? [{ codigo: '20', descripcion: 'Impuesto al Valor Agregado 13%', valor: totalIva }]
       : null;
-    resultado.ivaPerci1 = 0; // IVA percibido
+    resultado.ivaRete1 = ivaRete1;
+    resultado.ivaPerci1 = ivaPerci1;
     resultado.montoTotalOperacion = total;
+    resultado.totalPagar = totalPagar;
+    resultado.totalLetras = this.numeroALetras(totalPagar);
+    resultado.pagos = this.normalizarPagos(resumen.pagos, totalPagar);
     delete resultado.totalIva; // No existe en CCF
     return resultado;
   }
@@ -713,9 +751,35 @@ class DTEGenerator {
     return String(valor || '').replace(/[^0-9]/g, '');
   }
 
+  limpiarDocumentoAlfanumerico(valor) {
+    return String(valor || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  normalizarTexto(valor) {
+    return String(valor || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  }
+
+  esClienteGenericoFactura(cliente) {
+    const nombre = this.normalizarTexto(cliente?.nombre);
+    return [
+      'CLIENTES VARIOS',
+      'CLIENTE VARIOS',
+      'CONSUMIDOR FINAL',
+      'PUBLICO EN GENERAL'
+    ].includes(nombre);
+  }
+
+  debeOmitirReceptorFactura(cliente, montoTotalOperacion = 0) {
+    return this.esClienteGenericoFactura(cliente) && Number(montoTotalOperacion || 0) < 1095;
+  }
+
   normalizarDocumentoReceptor(tipoDocumento, valor) {
     if (!['13', '36'].includes(String(tipoDocumento || ''))) {
-      return String(valor || '').trim().toUpperCase().replace(/\s+/g, '');
+      return this.limpiarDocumentoAlfanumerico(valor);
     }
 
     const limpio = this.limpiarDocumento(valor);
@@ -828,6 +892,22 @@ class DTEGenerator {
 
   redondear(valor, decimales = 2) {
     return Number(Number(valor || 0).toFixed(decimales));
+  }
+
+  validarMaximoIvaRete1(tipoDte, base, ivaRete1) {
+    const tipo = String(tipoDte || '').padStart(2, '0');
+    if (!['01', '03', '14'].includes(tipo)) return;
+
+    const porcentajeMaximo = tipo === '14' ? 0 : 0.01;
+    const maximo = this.redondear(Number(base || 0) * porcentajeMaximo);
+    const valor = this.redondear(ivaRete1 || 0);
+
+    if (valor > maximo + 0.000001) {
+      const regla = tipo === '14'
+        ? 'Sujeto Excluido no aplica IVA retenido; use Retención Renta'
+        : '1% de la venta gravada';
+      throw new Error(`resumen.ivaRete1 excede el máximo permitido: ${valor.toFixed(2)} > ${maximo.toFixed(2)} (${regla})`);
+    }
   }
 
   obtenerCodigoAmbiente(ambiente) {
@@ -1054,9 +1134,9 @@ class DTEGenerator {
 
   normalizarTipoDteRelacionadoRetencion(tipoDocumento) {
     const tipoDte = String(tipoDocumento || '').padStart(2, '0');
-    const tiposPermitidos = ['01', '03'];
+    const tiposPermitidos = ['01', '03', '14'];
     if (!tiposPermitidos.includes(tipoDte)) {
-      throw new Error(`El Comprobante de Retención solo admite Factura tipo 01 o CCF tipo 03 como documento relacionado. Valor recibido: ${tipoDte || 'vacío'}.`);
+      throw new Error(`El Comprobante de Retención solo admite Factura tipo 01, CCF tipo 03 o Sujeto Excluido tipo 14 como documento relacionado. Valor recibido: ${tipoDte || 'vacío'}.`);
     }
     return tipoDte;
   }
@@ -1104,20 +1184,25 @@ class DTEGenerator {
    * Construir resumen FSE
    */
   construirResumenFSE(resumen) {
-    const total = parseFloat(resumen.total || 0);
-    const descuento = parseFloat(resumen.descuento || 0);
+    const total = this.redondear(resumen.total || 0);
+    const descuento = this.redondear(resumen.descuento || 0);
+    const subTotal = this.redondear(resumen.subTotal ?? Math.max(0, total - descuento));
+    const ivaRete1 = 0;
+    this.validarMaximoIvaRete1('14', subTotal, ivaRete1);
+    const reteRenta = this.redondear(resumen.reteRenta || 0);
+    const totalPagar = this.redondear(Math.max(0, subTotal - ivaRete1 - reteRenta));
 
     return {
       totalCompra: total,
       descu: descuento,
       totalDescu: descuento,
-      subTotal: total - descuento,
-      ivaRete1: 0,
-      reteRenta: 0,
-      totalPagar: total,
-      totalLetras: this.numeroALetras(total),
+      subTotal,
+      ivaRete1,
+      reteRenta,
+      totalPagar,
+      totalLetras: this.numeroALetras(totalPagar),
       condicionOperacion: resumen.condicion_operacion || resumen.condicionOperacion || 1,
-      pagos: this.normalizarPagos(resumen.pagos, total),
+      pagos: this.ajustarPagosAlTotal(resumen.pagos, totalPagar),
       observaciones: resumen.observaciones || null
     };
   }

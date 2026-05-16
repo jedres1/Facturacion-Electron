@@ -7,7 +7,32 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-container">
+  <section id="login-screen" class="login-screen">
+    <form id="form-login" class="login-card">
+      <div class="login-brand">
+        <span class="login-icon">FE</span>
+        <div>
+          <h1>Facturación SV</h1>
+          <p>Acceso del emisor</p>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="login-identificador">NIT, DUI o correo registrado</label>
+        <input type="text" id="login-identificador" autocomplete="username" value="jandres.gerardo@outlook.com" required>
+      </div>
+
+      <div class="form-group">
+        <label for="login-password">Clave</label>
+        <input type="password" id="login-password" autocomplete="current-password" required>
+      </div>
+
+      <p id="login-error" class="login-error" aria-live="polite"></p>
+      <button type="submit" class="btn btn-primary login-submit">Ingresar</button>
+    </form>
+  </section>
+
+  <div id="app-container" class="app-container hidden">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="logo">
@@ -48,6 +73,7 @@
         <div class="header-actions">
           <span id="estado-conexion" class="badge badge-warning">Sin conexión</span>
           <span id="usuario-actual">Usuario</span>
+          <button type="button" class="btn btn-small btn-secondary" id="btn-logout">Salir</button>
         </div>
       </header>
 
@@ -361,6 +387,28 @@
                   <span id="resumen-iva-label">IVA (13%):</span>
                   <span id="resumen-iva">$0.00</span>
                 </div>
+                <div class="resumen-row" id="resumen-retencion-iva-row" style="display: none;">
+                  <span>IVA Retenido:</span>
+                  <span>
+                    <input type="number" id="retencion-iva-factura" class="summary-input" min="0" step="0.01" value="0">
+                  </span>
+                </div>
+                <div class="resumen-row" id="resumen-percepcion-iva-row" style="display: none;">
+                  <span>IVA Percibido:</span>
+                  <span>
+                    <input type="number" id="percepcion-iva-factura" class="summary-input" min="0" step="0.01" value="0">
+                  </span>
+                </div>
+                <div class="resumen-row" id="resumen-retencion-renta-row" style="display: none;">
+                  <span>Retención Renta:</span>
+                  <span>
+                    <input type="number" id="retencion-renta-factura" class="summary-input" min="0" step="0.01" value="0">
+                  </span>
+                </div>
+                <div class="resumen-row" id="resumen-monto-operacion-row" style="display: none;">
+                  <span>Monto Total de la operación:</span>
+                  <span id="resumen-monto-operacion">$0.00</span>
+                </div>
                 <div class="resumen-row total">
                   <span id="resumen-total-label">Total a Pagar:</span>
                   <span id="resumen-total">$0.00</span>
@@ -392,17 +440,16 @@
         <div id="facturas-view" class="view">
           <div class="view-header">
             <div class="filters">
-              <input type="search" id="buscar-facturas" class="form-control search-input" placeholder="Buscar factura o cliente...">
+              <input type="search" id="buscar-facturas" class="form-control search-input" placeholder="Buscar por factura, cliente, documento, sello o estado...">
               <input type="date" id="fecha-desde" class="form-control">
               <input type="date" id="fecha-hasta" class="form-control">
               <select id="filtro-estado" class="form-control">
                 <option value="">Todos los estados</option>
-                <option value="PENDIENTE">Pendiente</option>
-                <option value="FIRMADO">Firmado</option>
+                <option value="PENDIENTE">Pendientes / acción</option>
                 <option value="CONTINGENCIA">Contingencia</option>
                 <option value="ENVIADO">Enviado</option>
-                <option value="ACEPTADO">Aceptado</option>
                 <option value="RECHAZADO">Rechazado</option>
+                <option value="ANULADO">Anulado</option>
               </select>
               <select id="filtro-tipo-dte" class="form-control">
                 <option value="">Todos los documentos</option>
@@ -509,7 +556,7 @@
                   <p class="form-hint" id="config-lock-help">Los campos permanecen bloqueados para evitar cambios accidentales.</p>
                 </div>
                 <label class="config-switch" for="switch-config-edicion">
-                  <span id="config-switch-label">Bloqueada</span>
+                  <span id="config-switch-label" class="config-lock-icon" aria-label="Configuración bloqueada"></span>
                   <input type="checkbox" id="switch-config-edicion">
                   <span class="config-switch-track" aria-hidden="true"></span>
                 </label>
@@ -520,8 +567,8 @@
               <h3>Información de la Empresa</h3>
               <div class="form-grid">
                 <div class="form-group">
-                  <label>NIT *</label>
-                  <input type="text" id="config-nit" placeholder="0000-000000-000-0" required>
+                  <label>NIT o DUI *</label>
+                  <input type="text" id="config-nit" placeholder="NIT o DUI del emisor" required>
                 </div>
                 <div class="form-group">
                   <label>NRC (Número de Registro de Contribuyente)</label>
@@ -837,6 +884,45 @@
             </div>
 
             <div class="form-section">
+              <h3>Backup en Servidor</h3>
+              <div class="alert alert-info" style="margin-bottom: 1rem;">
+                <small>
+                  La app subirá un backup comprimido de la base local. El servidor debe sobrescribir el último archivo recibido.
+                </small>
+              </div>
+              <div class="form-grid">
+                <div class="form-group full-width">
+                  <label>URL del servidor</label>
+                  <input type="url" id="config-backup-url" placeholder="https://tudominio.com/api/backups/latest">
+                </div>
+                <div class="form-group">
+                  <label>Token de seguridad</label>
+                  <input type="password" id="config-backup-token" placeholder="Token Bearer del servidor">
+                </div>
+                <div class="form-group">
+                  <label>Clave de cifrado</label>
+                  <input type="password" id="config-backup-encryption-key" placeholder="Clave privada para cifrar backup">
+                </div>
+                <div class="form-group">
+                  <label>Backup automático</label>
+                  <select id="config-backup-automatico">
+                    <option value="0">Manual</option>
+                    <option value="1">Diario al abrir la app</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Último backup</label>
+                  <input type="text" id="config-backup-ultimo" value="Sin backup" readonly>
+                </div>
+              </div>
+              <div class="form-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" id="btn-subir-backup">
+                  Subir Backup Ahora
+                </button>
+              </div>
+            </div>
+
+            <div class="form-section">
               <h3>Correlativos</h3>
               <div class="correlativos-toolbar">
                 <button type="button" class="btn btn-secondary" id="btn-recargar-correlativos">Actualizar</button>
@@ -989,6 +1075,36 @@
               <span class="info-label">IVA (13%):</span>
               <span id="factura-iva" class="info-value"></span>
             </div>
+            <div class="info-row" id="factura-iva-retenido-row" style="display: none;">
+              <span class="info-label">IVA Retenido:</span>
+              <span id="factura-iva-retenido" class="info-value"></span>
+            </div>
+            <div class="info-row" id="factura-iva-retenido-editor" style="display: none;">
+              <span class="info-label">IVA Retenido:</span>
+              <span class="info-value">
+                <input type="number" id="factura-iva-retenido-input" class="summary-input" min="0" step="0.01" value="0">
+              </span>
+            </div>
+            <div class="info-row" id="factura-iva-percibido-row" style="display: none;">
+              <span class="info-label">IVA Percibido:</span>
+              <span id="factura-iva-percibido" class="info-value"></span>
+            </div>
+            <div class="info-row" id="factura-iva-percibido-editor" style="display: none;">
+              <span class="info-label">IVA Percibido:</span>
+              <span class="info-value">
+                <input type="number" id="factura-iva-percibido-input" class="summary-input" min="0" step="0.01" value="0">
+              </span>
+            </div>
+            <div class="info-row" id="factura-renta-retenida-row" style="display: none;">
+              <span class="info-label">Retención Renta:</span>
+              <span id="factura-renta-retenida" class="info-value"></span>
+            </div>
+            <div class="info-row" id="factura-renta-retenida-editor" style="display: none;">
+              <span class="info-label">Retención Renta:</span>
+              <span class="info-value">
+                <input type="number" id="factura-renta-retenida-input" class="summary-input" min="0" step="0.01" value="0">
+              </span>
+            </div>
             <div class="info-row total-row">
               <span class="info-label">Total:</span>
               <span id="factura-total" class="info-value"></span>
@@ -1011,8 +1127,14 @@
           <button type="button" class="btn btn-secondary" id="btn-editar-items-factura" style="display: none;">
             Editar Ítems
           </button>
+          <button type="button" class="btn btn-secondary" id="btn-editar-retencion-factura" style="display: none;">
+            Editar Retención
+          </button>
           <button type="button" class="btn btn-success" id="btn-guardar-items-factura" style="display: none;">
             Guardar Ítems
+          </button>
+          <button type="button" class="btn btn-success" id="btn-guardar-retencion-factura" style="display: none;">
+            Guardar Retención
           </button>
           <button type="button" class="btn btn-primary" id="btn-reenviar-factura" style="display: none;">
             Reenviar Documento
@@ -1267,6 +1389,14 @@
           </select>
         </div>
 
+        <div class="form-group" id="cliente-sujeto-excluido-domicilio-group" style="display: none;">
+          <label>Domicilio fiscal para Sujeto Excluido</label>
+          <select id="cliente-sujeto-excluido-domiciliado">
+            <option value="1">Domiciliado - retención renta 10%</option>
+            <option value="0">No domiciliado / extranjero - retención renta 20%</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label>Tratamiento IVA *</label>
           <select id="cliente-condicion-iva" required>
@@ -1514,8 +1644,7 @@
         <div class="form-group">
           <label>Unidad de Medida</label>
           <select id="producto-unidad">
-            <option value="99">Unidad</option>
-            <option value="59">Caja</option>
+            <option value="59">Unidad</option>
             <option value="11">Kilogramo</option>
             <option value="14">Gramo</option>
             <option value="22">Metro</option>

@@ -1,5 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs/promises');
+const os = require('os');
+const zlib = require('zlib');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const Database = require('../database/database');
 const HaciendaAPI = require('../api/hacienda');
@@ -33,6 +37,126 @@ function obtenerFechaLocalISO(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function crearNombreBackup() {
+  const ahora = new Date();
+  const stamp = [
+    ahora.getFullYear(),
+    String(ahora.getMonth() + 1).padStart(2, '0'),
+    String(ahora.getDate()).padStart(2, '0'),
+    String(ahora.getHours()).padStart(2, '0'),
+    String(ahora.getMinutes()).padStart(2, '0'),
+    String(ahora.getSeconds()).padStart(2, '0')
+  ].join('');
+
+  return `facturacion-${stamp}.db`;
+}
+
+function obtenerClaveBackup(config) {
+  const clave = String(config.backup_encryption_key || '').trim();
+  if (!clave) {
+    throw new Error('Configure la clave de cifrado del backup.');
+  }
+
+  return crypto.createHash('sha256').update(clave, 'utf8').digest();
+}
+
+function cifrarBackup(buffer, config) {
+  const key = obtenerClaveBackup(config);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return Buffer.concat([
+    Buffer.from('FESVBK1', 'utf8'),
+    iv,
+    authTag,
+    encrypted
+  ]);
+}
+
+async function subirBackupServidor({ manual = false } = {}) {
+  const config = db.getConfiguracion() || {};
+  const backupUrl = String(config.backup_url || '').trim();
+
+  if (!backupUrl) {
+    return { success: false, error: 'Configure la URL del servidor de backup.' };
+  }
+
+  const tempDir = path.join(os.tmpdir(), 'facturacion-electron-backups');
+  const nombreDb = crearNombreBackup();
+  const backupDbPath = path.join(tempDir, nombreDb);
+
+  try {
+    await fs.mkdir(tempDir, { recursive: true });
+    await db.db.backup(backupDbPath);
+
+    const dbBuffer = await fs.readFile(backupDbPath);
+    const gzipBuffer = zlib.gzipSync(dbBuffer, { level: 9 });
+    const encryptedBuffer = cifrarBackup(gzipBuffer, config);
+    const checksum = crypto.createHash('sha256').update(encryptedBuffer).digest('hex');
+    const generadoAt = new Date().toISOString();
+
+    const formData = new FormData();
+    formData.append('backup', new Blob([encryptedBuffer], { type: 'application/octet-stream' }), 'facturacion-latest.db.gz.enc');
+    formData.append('filename', 'facturacion-latest.db.gz.enc');
+    formData.append('mode', 'overwrite-latest');
+    formData.append('checksum', checksum);
+    formData.append('compression', 'gzip');
+    formData.append('encryption', 'aes-256-gcm');
+    formData.append('generatedAt', generadoAt);
+    formData.append('manual', manual ? '1' : '0');
+    formData.append('empresaNit', config.nit || '');
+    formData.append('empresaNombre', config.nombre_empresa || '');
+
+    const headers = {};
+    if (config.backup_token) {
+      headers.Authorization = `Bearer ${config.backup_token}`;
+    }
+
+    const response = await fetch(backupUrl, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    const responseText = await response.text();
+    let responseData = null;
+    try {
+      responseData = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      responseData = { message: responseText };
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: responseData?.error || responseData?.message || `Servidor respondió HTTP ${response.status}`,
+        status: response.status
+      };
+    }
+
+    db.registrarBackupServidor(new Date(generadoAt));
+
+    return {
+      success: true,
+      filename: 'facturacion-latest.db.gz.enc',
+      checksum,
+      sizeBytes: encryptedBuffer.length,
+      generatedAt: generadoAt,
+      server: responseData
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  } finally {
+    try {
+      await fs.rm(backupDbPath, { force: true });
+    } catch {
+      // No se pudo limpiar temporal; no afecta el resultado del backup.
+    }
+  }
 }
 
 function createWindow() {
@@ -86,6 +210,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+// IPC Handlers de autenticación local
+ipcMain.handle('auth:login', async (event, credenciales) => {
+  return db.loginUsuario(credenciales || {});
 });
 
 // IPC Handlers para la base de datos
@@ -173,6 +302,10 @@ ipcMain.handle('db:updateConfiguracion', async (event, config) => {
   return db.updateConfiguracion(config);
 });
 
+ipcMain.handle('backup:subirUltimo', async (event, opciones = {}) => {
+  return subirBackupServidor(opciones);
+});
+
 // IPC Handlers para Hacienda
 ipcMain.handle('hacienda:autenticar', async (event, credenciales) => {
   const api = new HaciendaAPI(credenciales);
@@ -239,6 +372,20 @@ ipcMain.handle('hacienda:anularDTE', async (event, { eventoFirmado }) => {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
     }
 
+    const validacion = dteValidator.validarEvento('anulacion', eventoFirmado);
+    if (!validacion.valido) {
+      return {
+        success: false,
+        error: `Evento de anulación no cumple el schema oficial: ${validacion.errores.slice(0, 8).join(' | ')}`,
+        errorDetalle: {
+          tipo: 'VALIDACION',
+          codigo: 'SCHEMA_ANULACION',
+          mensaje: 'Evento de anulación no cumple el schema oficial',
+          observacionesDetalle: validacion.errores
+        }
+      };
+    }
+
     api = new HaciendaAPI({
       ambiente: config.hacienda_ambiente || 'pruebas',
       usuario: config.hacienda_usuario,
@@ -258,6 +405,20 @@ ipcMain.handle('hacienda:enviarContingencia', async (event, { eventoFirmado, nit
     const config = db.getConfiguracion();
     if (!config || !config.hacienda_usuario || !config.hacienda_password) {
       return { success: false, error: 'Configuración de Hacienda incompleta' };
+    }
+
+    const validacion = dteValidator.validarEvento('contingencia', eventoFirmado);
+    if (!validacion.valido) {
+      return {
+        success: false,
+        error: `Evento de contingencia no cumple el schema oficial: ${validacion.errores.slice(0, 8).join(' | ')}`,
+        errorDetalle: {
+          tipo: 'VALIDACION',
+          codigo: 'SCHEMA_CONTINGENCIA',
+          mensaje: 'Evento de contingencia no cumple el schema oficial',
+          observacionesDetalle: validacion.errores
+        }
+      };
     }
 
     api = new HaciendaAPI({

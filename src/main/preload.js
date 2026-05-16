@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Exponer API segura al renderer
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Autenticación local
+  login: (credenciales) => ipcRenderer.invoke('auth:login', credenciales),
+
   // Base de datos
   getClientes: () => ipcRenderer.invoke('db:getClientes'),
   addCliente: (cliente) => ipcRenderer.invoke('db:addCliente', cliente),
@@ -27,6 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateCorrelativoDte: (datos) => ipcRenderer.invoke('db:updateCorrelativoDte', datos),
   getConfiguracion: () => ipcRenderer.invoke('db:getConfiguracion'),
   updateConfiguracion: (config) => ipcRenderer.invoke('db:updateConfiguracion', config),
+  subirBackupServidor: (opciones) => ipcRenderer.invoke('backup:subirUltimo', opciones),
   
   // API de Hacienda
   autenticar: (credenciales) => ipcRenderer.invoke('hacienda:autenticar', credenciales),
